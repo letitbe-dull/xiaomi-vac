@@ -3,10 +3,11 @@
   "name": "Xiaomi Vacuum",
   "codeowners": ["@letitbe-dull"],
   "config_flow": true,
+  "dependencies": ["http", "lovelace"],
   "documentation": "https://github.com/letitbe-dull/xiaomi-vac",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "dependencies": ["http", "lovelace"],
+  "issue_tracker": "https://github.com/letitbe-dull/xiaomi-vac/issues",
   "requirements": [
     "python-miio==0.5.12",
     "vacuum-map-parser-ijai==0.1.1",
@@ -17,6 +18,5 @@
     "pycryptodome==3.23.0",
     "Pillow==12.2.0"
   ],
-  "version": "1.0.0",
-  "issue_tracker": "https://github.com/letitbe-dull/xiaomi-vac/issues"
+  "version": "1.0.0"
 }
