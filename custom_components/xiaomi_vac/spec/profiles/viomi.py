@@ -40,9 +40,9 @@ VIOMI_V12_CORE = CoreCapability(
     charge=Action(2, 4),  # start-charge — "Start Return to Charge"
     locate=Action(8, 2),  # find-device — "Find Robot Vacuum"
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning'},
-    modes={'Silent': 0, 'Basic': 1, 'Medium': 2, 'Strong': 3},
-    sweep_types={'Global': 0, 'Mop': 1, 'Edge': 2, 'Area': 3, 'Point': 4, 'Control': 5},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Medium Gear': 2, 'Strong': 3},
+    modes={'silent': 0, 'basic': 1, 'medium': 2, 'strong': 3},
+    sweep_types={'global': 0, 'mop': 1, 'edge': 2, 'area': 3, 'point': 4, 'control': 5},
+    fan_speeds={'quiet': 0, 'standard': 1, 'medium_gear': 2, 'strong': 3},
     water_levels={'1': 0, '2': 1, '3': 2},
 )
 
@@ -172,10 +172,10 @@ VIOMI_V13_CORE = CoreCapability(
     charge=Action(2, 4),  # start-charge — "Start Return to Charge"
     locate=Action(8, 2),  # find-device — "Find Robot Vacuum"
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning'},
-    modes={'Silent': 0, 'Basic': 1, 'Medium': 2, 'Strong': 3},
-    sweep_types={'Global': 0, 'Mop': 1, 'Edge': 2, 'Area': 3, 'Point': 4, 'Control': 5},
+    modes={'silent': 0, 'basic': 1, 'medium': 2, 'strong': 3},
+    sweep_types={'global': 0, 'mop': 1, 'edge': 2, 'area': 3, 'point': 4, 'control': 5},
     fan_speeds={'0': 0, '1': 1, '2': 2, '3': 3},
-    water_levels={'Gear 1': 0, 'Gear 2': 1, 'Gear 3': 2},
+    water_levels={'gear_1': 0, 'gear_2': 1, 'gear_3': 2},
 )
 
 
@@ -304,10 +304,10 @@ VIOMI_V15_CORE = CoreCapability(
     charge=Action(2, 4),  # start-charge — "Start Return to Charge"
     locate=Action(8, 2),  # find-device — "Find Robot Vacuum"
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning'},
-    modes={'Silent': 0, 'Basic': 1, 'Medium': 2, 'Strong': 3},
-    sweep_types={'Total': 0, 'Wall': 2, 'Zone': 3, 'Point': 4, 'Control': 5},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Medium Gear': 2, 'Strong': 3},
-    water_levels={'Gear 1': 0, 'Gear 2': 1, 'Gear 3': 2},
+    modes={'silent': 0, 'basic': 1, 'medium': 2, 'strong': 3},
+    sweep_types={'total': 0, 'wall': 2, 'zone': 3, 'point': 4, 'control': 5},
+    fan_speeds={'quiet': 0, 'standard': 1, 'medium_gear': 2, 'strong': 3},
+    water_levels={'gear_1': 0, 'gear_2': 1, 'gear_3': 2},
 )
 
 
@@ -437,10 +437,10 @@ VIOMI_V45_CORE = CoreCapability(
     stop=Action(2, 2),  # stop-sweeping — "Stop"
     charge=Action(3, 1),  # start-charge — "Start Return to Charge"
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Slient': 0, 'Standard': 1, 'Medium': 2, 'Turbo': 3},
-    water_levels={'Low': 0, 'Mid': 1, 'High': 2},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Mop': 1, 'Edge': 2, 'Area': 3, 'Point': 4, 'Remote': 5, 'Explore': 6, 'Room': 7, 'Floor': 8},
+    fan_speeds={'slient': 0, 'standard': 1, 'medium': 2, 'turbo': 3},
+    water_levels={'low': 0, 'mid': 1, 'high': 2},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'mop': 1, 'edge': 2, 'area': 3, 'point': 4, 'remote': 5, 'explore': 6, 'room': 7, 'floor': 8},
 )
 
 

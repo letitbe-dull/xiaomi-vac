@@ -52,10 +52,10 @@ XIAOMI_CORE_C101 = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Silent': 0, 'Standard': 1, 'Medium': 2, 'Turbo': 3},
-    water_levels={'Low': 0, 'Mid': 1, 'Hig': 2},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2, 'Sweep Then Mop': 3},
-    sweep_types={'Global': 0, 'Mop': 1, 'Edge': 2, 'Area': 3, 'Point': 4, 'Remote': 5, 'Explore': 6, 'Room': 7, 'Floor': 8},
+    fan_speeds={'silent': 0, 'standard': 1, 'medium': 2, 'turbo': 3},
+    water_levels={'low': 0, 'mid': 1, 'hig': 2},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2, 'sweep_then_mop': 3},
+    sweep_types={'global': 0, 'mop': 1, 'edge': 2, 'area': 3, 'point': 4, 'remote': 5, 'explore': 6, 'room': 7, 'floor': 8},
 )
 
 # b106bk/b106eu/c104
@@ -74,10 +74,10 @@ XIAOMI_CORE_B106BK = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Slient': 0, 'Standard': 1, 'Medium': 2, 'Turbo': 3},
-    water_levels={'Low': 0, 'Mid': 1, 'High': 2},
-    modes={'Sweep': 0, 'SweepAndMop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Mop': 1, 'Corner': 2, 'Area': 3, 'Point': 4, 'Man': 5, 'Explore': 6, 'RoomPrefer': 7, 'MaterialPrefer': 8},
+    fan_speeds={'slient': 0, 'standard': 1, 'medium': 2, 'turbo': 3},
+    water_levels={'low': 0, 'mid': 1, 'high': 2},
+    modes={'sweep': 0, 'sweepandmop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'mop': 1, 'corner': 2, 'area': 3, 'point': 4, 'man': 5, 'explore': 6, 'roomprefer': 7, 'materialprefer': 8},
 )
 
 # b112/b112bk/b112gl
@@ -96,10 +96,10 @@ XIAOMI_CORE_B112 = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Close': 0, 'One': 1, 'Two': 2, 'Three': 3, 'Forth': 4},
-    water_levels={'Close': 0, 'One': 1, 'Two': 2, 'Three': 3},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Edge': 2, 'Point': 4, 'Remote': 5},
+    fan_speeds={'close': 0, 'one': 1, 'two': 2, 'three': 3, 'forth': 4},
+    water_levels={'close': 0, 'one': 1, 'two': 2, 'three': 3},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'edge': 2, 'point': 4, 'remote': 5},
 )
 
 # c102cn/c102gl/d103cn — lean core (no fan/water/sweep value tables in spec).
@@ -112,7 +112,7 @@ XIAOMI_CORE_C102CN = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
 )
 
 # b108gl — mode/sweep on siid 2 (different slots than the b/c-engine).
@@ -128,8 +128,8 @@ XIAOMI_CORE_B108GL = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    modes={'Silent': 1, 'Basic': 2, 'Strong': 3},
-    sweep_types={'Global': 1, 'Maping': 5, 'GoCharging': 6, 'RemoteControl': 7, 'SelectRoom': 8, 'CustomClean': 9, 'Area': 4},
+    modes={'silent': 1, 'basic': 2, 'strong': 3},
+    sweep_types={'global': 1, 'maping': 5, 'gocharging': 6, 'remotecontrol': 7, 'selectroom': 8, 'customclean': 9, 'area': 4},
 )
 
 # d110ch — shares C102CN's rich layout but alarm/volume live on siid 22.
@@ -144,7 +144,7 @@ XIAOMI_CORE_D110CH = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
 )
 
 

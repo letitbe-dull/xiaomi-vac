@@ -50,10 +50,10 @@ IJAI_CORE_STD = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Slient': 0, 'Standard': 1, 'Medium': 2, 'Turbo': 3},
-    water_levels={'Low': 0, 'Mid': 1, 'High': 2},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Mop': 1, 'Edge': 2, 'Area': 3, 'Point': 4, 'Remote': 5, 'Explore': 6, 'Room': 7, 'Floor': 8},
+    fan_speeds={'slient': 0, 'standard': 1, 'medium': 2, 'turbo': 3},
+    water_levels={'low': 0, 'mid': 1, 'high': 2},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'mop': 1, 'edge': 2, 'area': 3, 'point': 4, 'remote': 5, 'explore': 6, 'room': 7, 'floor': 8},
 )
 
 # v1/v2/v3 — early engine (different fan/water label text than STD).
@@ -72,10 +72,10 @@ IJAI_CORE_LEGACY = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Off': 0, 'Energy Saving': 1, 'Standard': 2, 'Powerful': 3},
-    water_levels={'Low': 0, 'Medium': 1, 'High': 2},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Mop': 1, 'Edge': 2, 'Area': 3, 'Point': 4, 'Remote': 5, 'Explore': 6, 'Room': 7, 'Floor': 8},
+    fan_speeds={'off': 0, 'energy_saving': 1, 'standard': 2, 'powerful': 3},
+    water_levels={'low': 0, 'medium': 1, 'high': 2},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'mop': 1, 'edge': 2, 'area': 3, 'point': 4, 'remote': 5, 'explore': 6, 'room': 7, 'floor': 8},
 )
 
 # v10 — legacy labels but a trimmed sweep-type set.
@@ -94,10 +94,10 @@ IJAI_CORE_V10 = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Off': 0, 'Energy Saving': 1, 'Standard': 2, 'Powerful': 3},
-    water_levels={'Low': 0, 'Medium': 1, 'High': 2},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Edge': 2, 'Point': 4, 'Remote': 5},
+    fan_speeds={'off': 0, 'energy_saving': 1, 'standard': 2, 'powerful': 3},
+    water_levels={'low': 0, 'medium': 1, 'high': 2},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'edge': 2, 'point': 4, 'remote': 5},
 )
 
 # v16 — shares v10's RICH layout but STD-style fan/water labels (hence split).
@@ -116,10 +116,10 @@ IJAI_CORE_V16 = CoreCapability(
     stop=Action(2, 2),
     charge=Action(3, 1),
     status_map={0: 'idle', 1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    fan_speeds={'Slient': 0, 'Standard': 1, 'Medium': 2, 'Turbo': 3},
-    water_levels={'Low': 0, 'Mid': 1, 'High': 2},
-    modes={'Sweep': 0, 'Sweep And Mop': 1, 'Mop': 2},
-    sweep_types={'Global': 0, 'Edge': 2, 'Point': 4, 'Remote': 5},
+    fan_speeds={'slient': 0, 'standard': 1, 'medium': 2, 'turbo': 3},
+    water_levels={'low': 0, 'mid': 1, 'high': 2},
+    modes={'sweep': 0, 'sweep_and_mop': 1, 'mop': 2},
+    sweep_types={'global': 0, 'edge': 2, 'point': 4, 'remote': 5},
 )
 
 

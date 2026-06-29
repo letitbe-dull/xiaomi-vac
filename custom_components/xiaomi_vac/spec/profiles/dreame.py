@@ -39,9 +39,9 @@ DREAME_P2008_CORE = CoreCapability(
     charge=Action(3, 1),  # start-charge — "Return to Charge"
     locate=Action(7, 1),  # position — "Locate My Robot"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Medium Gear': 2, 'Strong': 3},
-    water_levels={'Low Water Level': 1, 'Medium Water Level': 2, 'High Water Level': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    fan_speeds={'quiet': 0, 'standard': 1, 'medium_gear': 2, 'strong': 3},
+    water_levels={'low_water_level': 1, 'medium_water_level': 2, 'high_water_level': 3},
 )
 
 
@@ -153,9 +153,9 @@ DREAME_P2009_CORE = CoreCapability(
     charge=Action(3, 1),  # start-charge — "Return to Charge"
     locate=Action(7, 1),  # position — "Locate My Robot"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Medium Gear': 2, 'Strong': 3},
-    water_levels={'Low': 1, 'Medium': 2, 'High': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    fan_speeds={'quiet': 0, 'standard': 1, 'medium_gear': 2, 'strong': 3},
+    water_levels={'low': 1, 'medium': 2, 'high': 3},
 )
 
 
@@ -463,9 +463,9 @@ DREAME_P2114A_CORE = CoreCapability(
     charge=Action(3, 1),  # start-charge — "Return to Charge"
     locate=Action(7, 1),  # position — "Locate My Robot"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Medium': 2, 'Strong': 3},
-    water_levels={'Low': 1, 'Medium': 2, 'High': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    fan_speeds={'quiet': 0, 'standard': 1, 'medium': 2, 'strong': 3},
+    water_levels={'low': 1, 'medium': 2, 'high': 3},
 )
 
 
@@ -681,9 +681,9 @@ DREAME_P2149O_CORE = CoreCapability(
     charge=Action(3, 1),  # start-charge — "Return to Charge"
     locate=Action(7, 1),  # position — "Locate My Robot"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
-    fan_speeds={'ModeQuiet': 0, 'ModeStandard': 1, 'ModeMedium': 2, 'ModeStrong': 3},
-    water_levels={'Low': 1, 'Medium': 2, 'High': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    fan_speeds={'mode_quiet': 0, 'mode_standard': 1, 'mode_medium': 2, 'mode_strong': 3},
+    water_levels={'low': 1, 'medium': 2, 'high': 3},
 )
 
 
@@ -797,9 +797,9 @@ DREAME_P2150A_CORE = CoreCapability(
     charge=Action(3, 1),  # start-charge — "Return to Charge"
     locate=Action(7, 1),  # position — "Locate My Robot"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Strong': 2, 'Ultra Strong': 3},
-    water_levels={'Low': 1, 'Medium': 2, 'High': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    fan_speeds={'quiet': 0, 'standard': 1, 'strong': 2, 'ultra_strong': 3},
+    water_levels={'low': 1, 'medium': 2, 'high': 3},
 )
 
 
@@ -1303,9 +1303,9 @@ DREAME_R2215_CORE = CoreCapability(
     charge=Action(3, 1),  # start-charge — "Return to Charge"
     locate=Action(7, 1),  # position — "Locate My Robot"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked'},
-    modes={'Silent': 0, 'Basic': 1, 'Strong': 2, 'Full Speed': 3},
-    fan_speeds={'Quiet': 0, 'Standard': 1, 'Medium': 2, 'Strong': 3},
-    water_levels={'Low': 1, 'Middle': 2, 'Height': 3},
+    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    fan_speeds={'quiet': 0, 'standard': 1, 'medium': 2, 'strong': 3},
+    water_levels={'low': 1, 'middle': 2, 'height': 3},
 )
 
 
@@ -1618,7 +1618,7 @@ DREAME_R2235A_CORE = CoreCapability(
     stop=Action(2, 2),  # stop-sweeping — "Stop Cleaning"
     charge=Action(3, 1),  # start-charge — "Start Charging"
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused'},
-    modes={'Auto': 0},
+    modes={'auto': 0},
 )
 
 
@@ -1751,7 +1751,7 @@ DREAME_R2257O_CORE = CoreCapability(
     stop=Action(2, 2),  # stop-sweeping — "Stop Cleaning"
     charge=Action(3, 1),  # start-charge — "Start Charging"
     status_map={1: 'cleaning', 2: 'idle'},
-    modes={'Auto': 0},
+    modes={'auto': 0},
 )
 
 

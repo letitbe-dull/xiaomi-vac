@@ -6,7 +6,7 @@
   "documentation": "https://github.com/letitbe-dull/xiaomi-vac",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "dependencies": ["lovelace"],
+  "dependencies": ["http", "lovelace"],
   "requirements": [
     "python-miio==0.5.12",
     "vacuum-map-parser-ijai==0.1.1",
