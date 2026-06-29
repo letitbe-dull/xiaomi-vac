@@ -1,0 +1,238 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add your Xiaomi vacuum",
+        "description": "Sign in by email for the live map.",
+        "menu_options": {
+          "credentials": "Email & password (gets the live map)",
+          "local": "Device IP & token (control only, no map)"
+        }
+      },
+      "credentials": {
+        "title": "Sign in to Mi Home",
+        "description": "Sign in once. It stays logged in after that.",
+        "data": {
+          "username": "Email, phone number or Mi account ID",
+          "password": "Password"
+        }
+      },
+      "local": {
+        "title": "Local connection",
+        "description": "IP address and 32-character token. Control and sensors, no map.",
+        "data": {
+          "host": "IP address",
+          "token": "Token"
+        }
+      },
+      "captcha": {
+        "title": "Quick human check",
+        "description": "Xiaomi wants to know you're real. Type the characters below:\n\n![captcha]({captcha_url})",
+        "data": {
+          "code": "Characters from the image"
+        }
+      },
+      "twofa": {
+        "title": "Enter the code",
+        "description": "Xiaomi just emailed you a code. Put it in below.",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "devices": {
+        "title": "Choose your vacuum",
+        "description": "There's more than one vacuum on this account. Pick the one to add.",
+        "data": {
+          "device": "Vacuum"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to Xiaomi again",
+        "description": "Your session ran out and couldn't renew on its own. Sign in again to bring the live map back.",
+        "data": {
+          "username": "Email, phone number or Mi account ID",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "unsupported_model": "This model isn't supported yet.",
+      "cannot_connect": "Couldn't reach the vacuum at that IP with that token."
+    },
+    "abort": {
+      "already_configured": "This vacuum is already set up.",
+      "reauth_successful": "You're back in. The live map's restored.",
+      "login_failed": "Xiaomi wouldn't accept that. Check your email and password, then try again.",
+      "no_devices": "No supported vacuums on this account.",
+      "unsupported_model": "This model isn't supported yet (ijai / Xiaomi-branded ijai vacuums only)."
+    }
+  },
+  "entity": {
+    "camera": {
+      "map": {
+        "name": "Map"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "cleaning": "Cleaning",
+          "paused": "Paused",
+          "idle": "Idle",
+          "returning": "Returning to dock",
+          "docked": "Docked",
+          "error": "Error"
+        }
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "clean_area": {
+        "name": "Clean area"
+      },
+      "clean_time": {
+        "name": "Clean time"
+      },
+      "main_brush_life": {
+        "name": "Main brush life"
+      },
+      "side_brush_life": {
+        "name": "Side brush life"
+      },
+      "filter_life": {
+        "name": "Filter life"
+      },
+      "mop_life": {
+        "name": "Mop life"
+      }
+    },
+    "select": {
+      "fan_speed": {
+        "name": "Fan speed",
+        "state": {
+          "Quiet": "Quiet",
+          "Standard": "Standard",
+          "Medium Gear": "Medium Gear",
+          "Strong": "Strong",
+          "Medium": "Medium",
+          "ModeQuiet": "ModeQuiet",
+          "ModeStandard": "ModeStandard",
+          "ModeMedium": "ModeMedium",
+          "ModeStrong": "ModeStrong",
+          "Ultra Strong": "Ultra Strong",
+          "Off": "Off",
+          "Energy Saving": "Energy Saving",
+          "Powerful": "Powerful",
+          "Slient": "Silent",
+          "Turbo": "Turbo",
+          "0": "Quiet",
+          "1": "Energy Saving",
+          "2": "Standard",
+          "3": "Powerful",
+          "Close": "Close",
+          "One": "One",
+          "Two": "Two",
+          "Three": "Three",
+          "Forth": "Forth",
+          "Silent": "Silent"
+        }
+      },
+      "water_level": {
+        "name": "Water level",
+        "state": {
+          "Low Water Level": "Low Water Level",
+          "Medium Water Level": "Medium Water Level",
+          "High Water Level": "High Water Level",
+          "Low": "Low",
+          "Medium": "Medium",
+          "High": "High",
+          "Middle": "Middle",
+          "Height": "Height",
+          "Mid": "Mid",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "Gear 1": "Gear 1",
+          "Gear 2": "Gear 2",
+          "Gear 3": "Gear 3",
+          "Close": "Close",
+          "One": "One",
+          "Two": "Two",
+          "Three": "Three",
+          "Hig": "High"
+        }
+      },
+      "mode": {
+        "name": "Cleaning mode",
+        "state": {
+          "Silent": "Quiet/Silent",
+          "Basic": "Standard",
+          "Strong": "Strong",
+          "Full Speed": "Full Speed Mode (Max)",
+          "Auto": "Auto",
+          "Sweep": "Sweeping",
+          "Sweep And Mop": "Sweep and Mop",
+          "Mop": "Mopping",
+          "Medium": "Medium Gear",
+          "SweepAndMop": "Sweep and Mop",
+          "Sweep Then Mop": "Sweep Then Mop"
+        }
+      },
+      "sweep_type": {
+        "name": "Sweep type",
+        "state": {
+          "Global": "Global",
+          "Mop": "Mopping",
+          "Edge": "Edge Following",
+          "Area": "Region",
+          "Point": "Spot",
+          "Remote": "Remote Control",
+          "Explore": "Mapping",
+          "Room": "Room Customization",
+          "Floor": "Floor Customization",
+          "Control": "Remote Control",
+          "Total": "Global Cleaning",
+          "Wall": "Edge Cleaning",
+          "Zone": "Zone Cleaning",
+          "Corner": "Edge Following",
+          "Man": "Remote Control",
+          "RoomPrefer": "Room Customization",
+          "MaterialPrefer": "Floor Customization",
+          "Maping": "Mapping in Progress",
+          "GoCharging": "Return to Charge",
+          "RemoteControl": "Remote Control",
+          "SelectRoom": "Room",
+          "CustomClean": "Custom Cleaning",
+          "Costum": "Custom",
+          "Custom Area": "Custom Area"
+        }
+      }
+    },
+    "switch": {
+      "repeat": {
+        "name": "Repeat clean"
+      },
+      "alarm": {
+        "name": "Find vacuum (beep)"
+      }
+    },
+    "number": {
+      "volume": {
+        "name": "Volume"
+      }
+    }
+  },
+  "services": {
+    "clean_segment": {
+      "name": "Clean room(s)",
+      "description": "Start cleaning one or more rooms by their map room id.",
+      "fields": {
+        "segments": {
+          "name": "Rooms",
+          "description": "List of room ids to clean (from the map camera's \"rooms\" attribute)."
+        }
+      }
+    }
+  }
+}

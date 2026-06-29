@@ -1,0 +1,15 @@
+clean_segment:
+  name: Clean room(s)
+  description: Start cleaning one or more rooms by their map room id.
+  target:
+    entity:
+      domain: vacuum
+      integration: xiaomi_vac
+  fields:
+    segments:
+      name: Rooms
+      description: List of room ids to clean (from the map camera's "rooms" attribute).
+      required: true
+      example: "[11, 12]"
+      selector:
+        object:
