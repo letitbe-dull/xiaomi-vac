@@ -5,6 +5,7 @@
 .assets/
 .design/
 .tools/
+.scripts/
 venv/
 
 .pytest_cache/
