@@ -1,8 +1,6 @@
 """Config flow for Xiaomi Vacuum.
 
-Single entry screen: Mi email + password. If Xiaomi demands it, a captcha
-and/or an emailed 2FA code follow. Then the vacuum (and its IP/token/wifi_sn/
-server) is discovered automatically from the cloud.
+See docs/dev/module-notes.md for design rationale.
 """
 from __future__ import annotations
 

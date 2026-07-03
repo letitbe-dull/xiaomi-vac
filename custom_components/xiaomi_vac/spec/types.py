@@ -186,7 +186,7 @@ class VoiceCapability:
 # these mirror the ijai-shaped caps above but match dreame's MIoT vocabulary.
 # All fields Optional; an absent member stays None. Nothing consumes these yet
 # (only map/room_clean are read at runtime) — they carry the spec data forward
-# for the per-brand map decode (TODO 8) and card-parity baseline (TODO 10).
+# for the per-brand map decode and card-parity baseline.
 
 
 @dataclass(frozen=True)
@@ -243,7 +243,12 @@ class DreameDndCapability:
 class DreameSettingsCapability:
     """vacuum-extend service: cleaning/mop modes + feature toggles. cleaning_mode
     (suction) and mop_mode (water) also feed the dreame fan/water selects in the
-    card-parity baseline (TODO 10b)."""
+    card-parity baseline.
+
+    cleaning_mode duplicates core.fan_speed and mop_mode duplicates
+    core.water_level in every dreame profile (verified 02-07-2026): the
+    runtime intentionally drives fan/water via core.* only, and these fields
+    stay as spec mirrors (see tests/pure/test_dreame_redundancy.py)."""
     service: int
     cleaning_mode: Prop | None = None
     mop_mode: Prop | None = None
@@ -267,7 +272,12 @@ class DreameCleanHistoryCapability:
 @dataclass(frozen=True)
 class DreameAudioCapability:
     """audio service: voice-pack props + locate (position) / play-sound. Carries
-    the dreame locate path for TODO 10a (ijai locates via the alarm prop)."""
+    the dreame locate path (ijai locates via the alarm prop).
+
+    locate duplicates core.locate in every dreame profile that has it
+    (verified 02-07-2026): the runtime drives locate via core.locate only,
+    and this field stays as a spec mirror (see
+    tests/pure/test_dreame_redundancy.py)."""
     service: int
     voice_packet_id: Prop | None = None
     voice_change_state: Prop | None = None

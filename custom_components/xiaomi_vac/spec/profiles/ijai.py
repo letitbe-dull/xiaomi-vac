@@ -1,10 +1,6 @@
 """Ijai runtime profiles.
 
-One profile per distinct spec layout (the ijai family has 7). Promoted from the
-spec-accurate output of tools/specs/generate_runtime_specs.py and verified
-byte-identical to it; see assets/spec_library/reports/capability_matrix.md for
-which models share each layout. IJAI_V17 (Xiaomi Robot Vacuum S10) is the only
-layout verified against real hardware.
+See docs/dev/module-notes.md for design rationale and verification status.
 """
 
 from __future__ import annotations

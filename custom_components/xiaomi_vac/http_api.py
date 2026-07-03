@@ -1,9 +1,6 @@
 """Authenticated HTTP endpoint that serves the vector map to the card.
 
-The vector contract (grid RLE + overlays, ~20 KB) is too big to publish as a
-state attribute (it would bloat the recorder and the state machine), so the card
-fetches it on demand from here instead. Auth is required: the HA frontend sends
-the user's token automatically.
+See docs/dev/module-notes.md for design rationale.
 """
 from __future__ import annotations
 

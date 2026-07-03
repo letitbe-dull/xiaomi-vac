@@ -16,7 +16,19 @@ from vacuum_map_parser_ijai.map_data_parser import IjaiMapDataParser
 
 from . import map_vector
 from .cloud.connector import XiaomiCloud
-from .map_parsers import brand_of, has_ijai_grid, make_parser, unpack_kwargs
+from .map_parsers import (
+    dreame_decrypt_cloud_blob,
+    dreame_extract_enckey,
+    has_ijai_grid,
+    make_parser,
+    map_url_endpoint,
+    unpack_kwargs,
+)
+
+# MIoT property that carries `<object_path>,<enckey>` for cloud-encrypted dreame maps.
+# Verified against Tasshack's dreame-vacuum 2026-07-03 (siid=6/piid=3 = OBJECT_NAME).
+_DREAME_ENCKEY_SIID = 6
+_DREAME_ENCKEY_PIID = 3
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +112,8 @@ class MapFetcher:
     """Owns the map parser; pulls the active map and builds the contract."""
 
     def __init__(self, cloud: XiaomiCloud, *, server: str, user_id: str,
-                 device_id: str, model: str, mac: str, wifi_sn: str):
+                 device_id: str, model: str, mac: str, wifi_sn: str, parser_brand: str,
+                 upload_action: tuple[int, int] | None):
         self._cloud = cloud
         self._server = server
         self._user_id = str(user_id)
@@ -108,21 +121,53 @@ class MapFetcher:
         self._model = model
         self._mac = mac
         self._wifi_sn = wifi_sn
-        self._brand = brand_of(model)
+        self._brand = parser_brand
+        # (siid, aiid) of the profile's own upload-by-mapid action, or None if the
+        # profile has none with a usable single input (e.g. viomi v15 — E4).
+        self._upload_action = upload_action
         self._parser = make_parser(
             self._brand, model, ColorsPalette(), Sizes(), _DRAWABLES, ImageConfig(), []
         )
-        # Inputs for parser.unpack_map; the brand decides which are used. enckey
-        # (encrypted dreame maps) has no verified source yet -> None (best-effort).
+        # Inputs for parser.unpack_map; the brand decides which are used.
         self._unpack_kw = unpack_kwargs(
             self._brand, wifi_sn=self._wifi_sn, owner_id=self._user_id,
             device_id=self._device_id, model=self._model, device_mac=self._mac,
         )
+        self._endpoint = map_url_endpoint(self._brand)
         self._ijai_grid = has_ijai_grid(self._brand)
+        # Dreame cloud enckey polled from siid=6/piid=3 on first fetch; None for
+        # unencrypted models or until the property is successfully read.
+        self._enckey: str | None = None
+        self._enckey_polled = False
         # Non-active map vectors are static; fetch each at most once per fetcher
         # lifetime (keyed by map id, caches None on failure) so the timer never
         # spams the cloud. Cleared on integration reload.
         self._inactive_cache: dict[int, dict | None] = {}
+
+    def _get_dreame_enckey(self) -> str | None:
+        """Poll siid=6/piid=3 for the dreame cloud map encryption key."""
+        resp = self._cloud.cloud_get_prop(
+            self._server, self._device_id, _DREAME_ENCKEY_SIID, _DREAME_ENCKEY_PIID)
+        try:
+            val = resp["result"][0]["value"]
+            return dreame_extract_enckey(val)
+        except (TypeError, KeyError, IndexError):
+            return None
+
+    def _unpack(self, raw: bytes) -> bytes:
+        """Brand-dispatch: return decompressed map bytes ready for parser.parse().
+
+        dreame with enckey: if the parser has a model-specific IV, delegate to
+        parser.unpack_map (it applies AES-CBC with that IV). Otherwise use the
+        Tasshack zero-IV chain via dreame_decrypt_cloud_blob.
+        All other paths go through parser.unpack_map normally.
+        """
+        if self._brand == "dreame" and self._enckey is not None:
+            from vacuum_map_parser_dreame.map_data_parser import DreameMapDataParser
+            if DreameMapDataParser.IVs.get(self._model) is not None:
+                return self._parser.unpack_map(raw, enckey=self._enckey)
+            return dreame_decrypt_cloud_blob(raw, self._enckey)
+        return self._parser.unpack_map(raw, **self._unpack_kw)
 
     def fetch_all(self, maps_meta: list[dict] | None = None) -> MapResult | None:
         """Fetch the active map plus best-effort vectors for any OTHER maps the
@@ -157,11 +202,15 @@ class MapFetcher:
         active one. Safe to fail; result (incl. None) is cached."""
         if map_id in self._inactive_cache:
             return self._inactive_cache[map_id]
+        if self._upload_action is None:
+            self._inactive_cache[map_id] = None
+            return None
         vec = None
         try:
-            self._cloud.cloud_action(self._server, self._device_id, 10, 2, [map_id])
+            siid, aiid = self._upload_action
+            self._cloud.cloud_action(self._server, self._device_id, siid, aiid, [map_id])
             for slot in ("1", str(map_id)):
-                url = self._cloud.map_url(self._server, self._device_id, slot)
+                url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
                 raw = self._cloud.download(url) if url else None
                 if not raw or raw == b"[]":
                     continue
@@ -177,7 +226,7 @@ class MapFetcher:
     def _decode_vector(self, raw: bytes) -> dict | None:
         """Decrypt+parse a blob to just the vector contract (no PNG render)."""
         try:
-            unpacked = self._parser.unpack_map(raw, **self._unpack_kw)
+            unpacked = self._unpack(raw)
             md = self._parser.parse(unpacked)
             return map_vector.vector_map(md, unpacked, ijai_grid=self._ijai_grid)
         except Exception as ex:  # noqa: BLE001
@@ -185,7 +234,12 @@ class MapFetcher:
             return None
 
     def fetch(self, map_name: str = "0") -> MapResult | None:
-        url = self._cloud.map_url(self._server, self._device_id, map_name)
+        if self._brand == "dreame" and not self._enckey_polled:
+            self._enckey = self._get_dreame_enckey()
+            self._enckey_polled = True
+            _LOGGER.debug("dreame enckey poll: %s",
+                          "found" if self._enckey else "not found (unencrypted or unavailable)")
+        url = self._cloud.map_url(self._server, self._device_id, map_name, self._endpoint)
         if not url:
             # No URL usually means the cloud session expired; let the
             # coordinator try a token refresh.
@@ -196,12 +250,16 @@ class MapFetcher:
             return None
 
         try:
-            unpacked = self._parser.unpack_map(raw, **self._unpack_kw)
+            unpacked = self._unpack(raw)
             md = self._parser.parse(unpacked)
             vector = map_vector.vector_map(md, unpacked, ijai_grid=self._ijai_grid)
         except Exception as ex:  # noqa: BLE001
             # A corrupt / incomplete map (e.g. after a vacuum wifi reset) fails
             # to decrypt or parse. Don't crash the coordinator over it.
+            if self._brand == "dreame" and self._enckey is not None:
+                _LOGGER.debug("dreame decrypt failed; will re-poll enckey next fetch: %s", ex)
+                self._enckey = None
+                self._enckey_polled = False
             _LOGGER.warning(
                 "Could not decode the vacuum map (corrupt or unsupported map "
                 "data — try running a fresh clean): %s", ex)

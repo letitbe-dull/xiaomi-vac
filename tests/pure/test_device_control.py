@@ -57,14 +57,14 @@ def test_set_fan_speed_uses_value_table(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
 
-    device.set_fan_speed("Standard")
+    device.set_fan_speed("standard")
 
     assert _last_calls() == [
         (
             "set",
             device.core.fan_speed.siid,
             device.core.fan_speed.piid,
-            device.core.fan_speeds["Standard"],
+            device.core.fan_speeds["standard"],
         )
     ]
 
@@ -124,6 +124,44 @@ def test_map_list_returns_empty_for_non_list_map_capability(monkeypatch):
 
     assert device.map_list() == []
     assert _last_calls() == []
+
+
+def test_map_list_reads_viomi_out_piid_11(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "viomi.vacuum.v12")
+    action = device.profile.map.get_map_list
+    assert action.out_piids == (11,)
+    FakeMiotDevice.action_results = {
+        (action.siid, action.aiid): {
+            "out": [{"piid": 11, "value": '[{"name": "Home", "id": 1, "cur": true}]'}]
+        }
+    }
+
+    assert device.map_list() == [{"name": "Home", "id": 1, "cur": True}]
+
+
+def test_map_list_rejects_viomi_v15_array_of_arrays(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "viomi.vacuum.v15")
+    action = device.profile.map.get_map_list
+    FakeMiotDevice.action_results = {
+        (action.siid, action.aiid): {
+            "out": [{"piid": 11, "value": '[["bkmap", "record", 1620954322, "Map 1", 1]]'}]
+        }
+    }
+
+    assert device.map_list() == []
+
+
+def test_map_list_rejects_non_dict_items(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
+    action = device.profile.map.get_map_list
+    FakeMiotDevice.action_results = {
+        (action.siid, action.aiid): {"out": [{"piid": 4, "value": '["Home", "Office"]'}]}
+    }
+
+    assert device.map_list() == []
 
 
 def test_unsupported_property_and_action_raise_value_error(monkeypatch):

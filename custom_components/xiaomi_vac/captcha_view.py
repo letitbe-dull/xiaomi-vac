@@ -1,9 +1,6 @@
 """Serves login images (captcha, QR) same-origin for the config-flow dialog.
 
-HA config-flow markdown strips data: URIs and the translation validator rejects
-custom tags like <ha-qr-code> (INVALID_TAG). But a plain <img> with an http src
-from a same-origin endpoint renders fine, so we stash the PNG bytes in
-hass.data and serve them here. These images aren't sensitive, so no auth.
+See docs/dev/module-notes.md for design rationale.
 """
 from __future__ import annotations
 

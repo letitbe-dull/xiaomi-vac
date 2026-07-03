@@ -7,6 +7,7 @@
 .tools/
 .scripts/
 venv/
+xiamoi_images/
 
 .pytest_cache/
 *.pyc
@@ -18,3 +19,6 @@ requirements-dev-wsl.txt
 requirements-dev-win.txt
 
 CLAUDE.md
+.claudeignore
+
+.mi_session.json

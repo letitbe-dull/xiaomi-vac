@@ -200,18 +200,33 @@ class IjaiVacuumDevice:
         """Return [{'name', 'id', 'cur'}...] via get-map-list action.
 
         List-style maps only (ijai/viomi). dreame's blob map is a different shape
-        (DreameMapCapability) with no map list — its decode is TODO 8.
+        (DreameMapCapability) with no map list — its decode is not yet implemented.
+
+        The output piid varies by profile (ijai: siid 10/piid 4; viomi v12/v13/v15:
+        siid 7/piid 11; viomi v45: siid 10/piid 4) — read from the profile's own
+        `get_map_list.out_piids` rather than hardcoding ijai's value.
         """
         cap = self.profile.map
         if not isinstance(cap, MapCapability) or cap.get_map_list is None:
             return []
+        out_piid = cap.get_map_list.out_piids[0] if cap.get_map_list.out_piids else 4
         res = self._action(cap.get_map_list)
         for out in res.get("out", []):
-            if out.get("piid") == 4:  # map-list (siid 10, piid 4)
+            if out.get("piid") == out_piid:
                 try:
-                    return json.loads(out["value"])
+                    payload = json.loads(out["value"])
                 except (ValueError, KeyError):
                     return []
+                # viomi v15's map-list is an array-of-arrays, not a list of dicts
+                # (spec/profiles/viomi.py VIOMI_V15_MAP) — reject any shape whose
+                # items aren't {"id": ...} dicts rather than crashing fetch_all's
+                # m.get("cur")/m["id"] reads downstream.
+                if not isinstance(payload, list) or not all(
+                    isinstance(m, dict) and "id" in m for m in payload
+                ):
+                    _LOGGER.debug("map-list payload has unsupported shape: %r", payload)
+                    return []
+                return payload
         return []
 
     def request_map_upload(self, map_id: int) -> dict:

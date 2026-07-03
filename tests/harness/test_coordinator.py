@@ -111,6 +111,8 @@ async def test_map_coordinator_build_ijai_raises_without_wifi_sn(
     """ijai _build must raise UpdateFailed when wifi_sn is unavailable."""
     entry = _map_entry("ijai.vacuum.v17")
     device = MagicMock()
+    device.profile.brand = "ijai"          # drives parser_key() -> required key inputs
+    device.profile.map = None              # no upload action to derive
     device.get_wifi_sn.return_value = ""   # live read fails
     device.get_mac.return_value = "aa:bb:cc:dd:ee:ff"
     control = MagicMock()

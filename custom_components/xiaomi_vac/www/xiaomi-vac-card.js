@@ -40,7 +40,7 @@ const modelShort = (m) => {
 };
 // shape 1 is the default fallback for unmapped models
 const MODEL_SHAPE = Object.fromEntries([
-  [1, ["dreame.mb1808","dreame.mc1808","dreame.md1808","dreame.p2008","dreame.p2140a","dreame.p2140o","dreame.p2140p","ijai.v10","ijai.v14"]],
+  [1, ["dreame.mb1808","dreame.mc1808","xiaomi.vacuum.ov21gl","dreame.md1808","dreame.p2008","dreame.p2140a","dreame.p2140o","dreame.p2140p","ijai.v10","ijai.v14"]],
   [2, ["dreame.p2029","dreame.p2028","dreame.p2028a","dreame.p2150b","dreame.p2150o"]],
   [3, ["ijai.v2","ijai.v3","vacuum.c104","rockrobo.v1","xiaomi.d110ch","xiaomi.d103cn","xiaomi.d102gl","xiaomi.d102ev","xiaomi.d101","xiaomi.c107","xiaomi.c102gl","xiaomi.c102cn","xiaomi.c101eu","xiaomi.c101","dreame.p2114a","dreame.p2114o","dreame.r2210","dreame.r2209","dreame.r2211o","dreame.r2228","dreame.r228o","dreame.r2228o","dreame.r2228z","dreame.r2232a","dreame.r2233","dreame.r2246","dreame.r2247","dreame.r2254","dreame.s5"]],
   [4, ["ijai.v17","ijai.v18","ijai.v19","xiaomi.b106eu"]],
@@ -50,7 +50,7 @@ const MODEL_SHAPE = Object.fromEntries([
   [8, ["ijai.v13","ijai.v1","viomi.v24"]],
   [9, ["dreame.p1248o"]],
   [10, ["xiaomi.d106gl","xiaomi.c103","xiaomi.b108gl"]],
-  [11, ["viomi.v12","viomi.v13","xiaomi.b106bk","xiaomi.d109gl","dreame.r2215","dreame.r2216o","dreame.r2235"]],
+  [11, ["viomi.v12","xiaomi.vacuum.ov71gl","viomi.v13","xiaomi.b106bk","xiaomi.d109gl","dreame.r2215","dreame.r2216o","dreame.r2235"]],
   [12, ["xiaomi.b112","xiaomi.b112gl","xiaomi.c108","viomi.v45"]],
   [13, ["xiaomi.b112bk"]],
   [14, ["viomi.v19"]],
@@ -127,7 +127,6 @@ class XiaomiVacCard extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
     this._sel = new Set();        // selected room ids
-    this._pendFan = null;         // optimistic fan-speed while the device catches up
     this._pendSel = {};           // optimistic select values, keyed by entity_id
     this._pendSelT = {};
     this._mapsData = [];          // list of map vectors from the endpoint
@@ -155,6 +154,7 @@ class XiaomiVacCard extends HTMLElement {
       this._config.vacuum,
       `sensor.${this._base()}_battery`,
       this._config.water || `select.${this._base()}_water_level`,
+      this._config.fan || `select.${this._base()}_fan_speed`,
     ];
     return eids.some((e) => (a.states[e]) !== (b.states[e]));
   }
@@ -642,20 +642,7 @@ class XiaomiVacCard extends HTMLElement {
   }
 
   /* ---------------- controls ---------------- */
-  _cycleFan() {
-    const st = this._st(this._config.vacuum); if (!st) return;
-    const list = st.attributes.fan_speed_list || []; if (!list.length) return;
-    // Cycle from the last *intended* value, not the device's (which lags the
-    // round-trip): otherwise rapid taps all read the same stale state and
-    // recompute the same "next", so only the first tap appears to do anything.
-    const cur = this._pendFan != null ? this._pendFan : st.attributes.fan_speed;
-    const next = list[(list.indexOf(cur) + 1) % list.length];
-    this._pendFan = next;
-    clearTimeout(this._pendFanT);
-    this._pendFanT = setTimeout(() => { this._pendFan = null; }, 6000);
-    this._toast(cap(next));
-    this._svc("vacuum", "set_fan_speed", { entity_id: this._config.vacuum, fan_speed: next });
-  }
+  _cycleFan() { this._cycleSelect(this._config.fan || `select.${this._base()}_fan_speed`); }
   _cycleSelect(eid) {
     const e = this._st(eid); if (!e) return;
     const opts = e.attributes.options || []; if (!opts.length) return;
@@ -750,9 +737,6 @@ class XiaomiVacCard extends HTMLElement {
     q(".tray").style.display = this._enabled("show_controls") ? "" : "none";
     q(".cyc-fan").style.display = this._enabled("show_fan") ? "" : "none";
     q(".cyc-water").style.display = this._enabled("show_water") ? "" : "none";
-    const realFan = (vac && vac.attributes.fan_speed) || "";
-    if (this._pendFan != null && realFan === this._pendFan) this._pendFan = null;
-
     // keep image-page name fresh if it was a placeholder
     const nm = q(".pg-img .nm");
     if (nm && vac) nm.textContent = vac.attributes.friendly_name || "Vacuum";
@@ -774,6 +758,8 @@ class XiaomiVacCardEditor extends HTMLElement {
         ({
           vacuum: "Vacuum",
           map: "Map camera",
+          fan: "Fan speed select entity",
+          water: "Water level select entity",
           show_vacuum_page: "Show vacuum page",
           show_map: "Show map",
           show_controls: "Show controls",
@@ -791,6 +777,8 @@ class XiaomiVacCardEditor extends HTMLElement {
     this._form.schema = [
       { name: "vacuum", required: true, selector: { entity: { domain: "vacuum" } } },
       { name: "map", selector: { entity: { domain: "camera" } } },
+      { name: "fan", selector: { entity: { domain: "select" } } },
+      { name: "water", selector: { entity: { domain: "select" } } },
       { name: "show_vacuum_page", selector: { boolean: {} } },
       { name: "show_map", selector: { boolean: {} } },
       { name: "show_controls", selector: { boolean: {} } },

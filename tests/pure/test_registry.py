@@ -23,15 +23,15 @@ def test_registry_counts_match_card_baseline() -> None:
     supported = [model for model in MODEL_PROFILES if is_supported(model)]
     rejected = [model for model in MODEL_PROFILES if not is_supported(model)]
 
-    assert len(MODEL_PROFILES) == 83
-    assert len(supported) == 65
+    assert len(MODEL_PROFILES) == 85
+    assert len(supported) == 67
     assert len(rejected) == 18
 
 
 def test_distinct_core_count_matches_promoted_profiles() -> None:
     cores = {repr(profile.core) for profile in MODEL_PROFILES.values() if profile.core}
 
-    assert len(cores) == 21
+    assert len(cores) == 22
 
 
 @pytest.mark.parametrize(("model", "profile"), sorted(MODEL_PROFILES.items()))

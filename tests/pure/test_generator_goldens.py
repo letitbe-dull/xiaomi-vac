@@ -65,5 +65,5 @@ def test_registry_profiles_are_value_equal_to_generated_drafts() -> None:
 
 
 def test_v17_core_keeps_spec_accurate_labels() -> None:
-    assert "Slient" in IJAI_V17.core.fan_speeds
-    assert "Sweep And Mop" in IJAI_V17.core.modes
+    assert "slient" in IJAI_V17.core.fan_speeds
+    assert "sweep_and_mop" in IJAI_V17.core.modes

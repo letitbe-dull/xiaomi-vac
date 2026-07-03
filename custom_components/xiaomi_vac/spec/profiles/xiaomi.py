@@ -1,13 +1,6 @@
 """Xiaomi runtime profiles.
 
-One profile per distinct spec layout. Promoted from the spec-accurate output of
-tools/specs/generate_runtime_specs.py and verified byte-identical to it; see
-assets/spec_library/reports/capability_matrix.md for which models share each
-layout. NONE of these layouts are hardware-verified.
-
-NOTE: xiaomi exposes capabilities (newest models use the vacuum-map / no-disturb / voice-management tree) that the ijai-shaped
-ModelProfile does not yet model, so these profiles cover only what the shared
-vocabulary maps. See the UNMAPPED blocks in the generated drafts for the rest.
+See docs/dev/module-notes.md for design rationale and verification status.
 """
 
 from __future__ import annotations
@@ -805,3 +798,87 @@ XIAOMI_C104 = ModelProfile(
 # xiaomi.vacuum.d110ch — identical RICH layout to C102CN, distinct core
 # (alarm/volume on siid 22). Split so it doesn't inherit C102CN's slots.
 XIAOMI_D110CH = replace(XIAOMI_C102CN, profile_id='xiaomi.d110ch', core=XIAOMI_CORE_D110CH)
+
+# ov21gl / ov71gl — new-generation layout: mode/fan_speed/water_level on siid 2
+# (no siid 7 at all), charging_state on siid 3, alarm/volume on siid 4,
+# locate on siid 6. ov71gl is byte-identical in every CoreCapability field.
+# Map format: vacuum-map-parser-xiaomi (JSON). ov71gl/ov31gl/ov81gl/e101gb
+# are explicitly listed in the upstream README (PiotrMachowski, verified
+# 2026-07-03). ov21gl is absent from both parser READMEs but is assumed
+# xiaomi-JSON by spec-generation family resemblance; see map_parsers.py.
+# None of these are hardware-verified.
+XIAOMI_CORE_OV21GL = CoreCapability(
+    status=Prop(2, 2),
+    fault=Prop(2, 3),
+    mode=Prop(2, 4),
+    sweep_type=Prop(2, 5),
+    fan_speed=Prop(2, 9),
+    water_level=Prop(2, 10),
+    battery=Prop(3, 1),
+    charging_state=Prop(3, 2),
+    alarm=Prop(4, 1),
+    volume=Prop(4, 2),
+    start=Action(2, 1),
+    stop=Action(2, 2),
+    pause=Action(2, 7),
+    charge=Action(3, 1),
+    locate=Action(6, 1),
+    status_map={
+        1: 'idle',
+        2: 'docked',
+        3: 'docked',
+        4: 'cleaning',
+        5: 'paused',
+        6: 'returning',
+        7: 'returning',
+        8: 'cleaning',
+        9: 'docked',
+        10: 'cleaning',
+        11: 'idle',
+        12: 'docked',
+        13: 'returning',
+        14: 'docked',
+        15: 'error',
+        16: 'cleaning',
+        17: 'cleaning',
+        18: 'paused',
+        19: 'returning',
+        20: 'returning',
+        21: 'returning',
+        22: 'cleaning',
+        23: 'docked',
+        24: 'returning',
+    },
+    fan_speeds={'silent': 1, 'basic': 2, 'strong': 3, 'full_speed': 4},
+    water_levels={'off': 0, 'level1': 1, 'level2': 2, 'level3': 3},
+    modes={'sweep': 1, 'mop': 2, 'sweep_mop': 3, 'sweep_before_mopping': 4},
+    sweep_types={
+        'global': 1,
+        'zone': 2,
+        'area': 3,
+        'edge': 4,
+        'costum': 5,
+        'point': 6,
+        'custom_area': 7,
+        'appointment': 8,
+        'linkage': 9,
+        'fast': 10,
+        'ai_hosting': 11,
+    },
+)
+
+# xiaomi.vacuum.ov21gl
+# No `map=` MapCapability: multi-map is unsupported by design for this
+# generation — device.map_list() returns [] (see map_parsers.py / device.py).
+XIAOMI_OV21GL = ModelProfile(
+    profile_id='xiaomi.ov21gl',
+    brand='xiaomi',
+    core=XIAOMI_CORE_OV21GL,
+    room_clean=RoomCleanCapability(
+        room_ids=Prop(2, 15),
+        start=Action(2, 16, in_piid=15),
+    ),
+)
+
+# xiaomi.vacuum.ov71gl — identical spec layout to ov21gl
+XIAOMI_OV71GL = replace(XIAOMI_OV21GL, profile_id='xiaomi.ov71gl')
