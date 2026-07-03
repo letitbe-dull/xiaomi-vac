@@ -19,5 +19,5 @@
     "pycryptodome==3.23.0",
     "Pillow==12.2.0"
   ],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
