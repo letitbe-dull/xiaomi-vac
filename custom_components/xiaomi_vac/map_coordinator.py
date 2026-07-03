@@ -28,7 +28,8 @@ from .const import (
 from .coordinator import XiaomiVacuumCoordinator
 from .device import IjaiVacuumDevice
 from .map import MapFetcher, MapResult, SessionExpired
-from .map_parsers import brand_of, required_map_key_inputs
+from .map_parsers import parser_key, required_map_key_inputs
+from .spec.types import MapCapability
 
 # activities where the map is actually changing
 _ACTIVE = {"cleaning", "returning"}
@@ -80,8 +81,17 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                               d.get(CONF_PASS_TOKEN))
         self._cloud = cloud
 
-        brand = brand_of(d[CONF_MODEL])
+        brand = parser_key(self._device.profile)
         required = required_map_key_inputs(brand)
+
+        cap = self._device.profile.map
+        upload_action = None
+        if (
+            isinstance(cap, MapCapability)
+            and cap.upload_by_mapid is not None
+            and cap.upload_by_mapid.in_piid is not None
+        ):
+            upload_action = (cap.upload_by_mapid.siid, cap.upload_by_mapid.aiid)
 
         wifi_sn = ""
         mac = ""
@@ -110,6 +120,8 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             model=d[CONF_MODEL],
             mac=mac,
             wifi_sn=wifi_sn,
+            parser_brand=brand,
+            upload_action=upload_action,
         )
 
     async def _async_update_data(self) -> MapResult:

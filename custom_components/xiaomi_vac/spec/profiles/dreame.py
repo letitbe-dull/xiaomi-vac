@@ -1,10 +1,6 @@
 """Dreame runtime profiles.
 
-One profile per distinct spec layout, shared by every model with a
-byte-identical resolved layout. Promoted verbatim (value-preserving) from
-tools/specs/generate_runtime_specs.py via tools/specs/promote_profiles.py;
-see assets/spec_library/reports/capability_matrix.md. Cores shared across
-layouts are de-duplicated. NONE of these layouts are hardware-verified.
+See docs/dev/module-notes.md for design rationale and verification status.
 """
 
 from __future__ import annotations

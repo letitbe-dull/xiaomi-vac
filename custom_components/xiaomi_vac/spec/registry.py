@@ -1,18 +1,6 @@
 """Model to runtime profile registry.
 
-One profile per distinct spec layout, shared by every model with a byte-identical
-layout (see assets/spec_library/reports/capability_matrix.md). Profiles are the
-spec-accurate output of tools/specs/generate_runtime_specs.py; only ijai.v17 is
-hardware-verified.
-
-ijai and its rebrands map via the ijai vocabulary; dreame and viomi map via
-brand-native vocabularies (dreame's blob map / per-accessory consumables / etc.,
-viomi's vacuum-extend + combined order service). roidmi has no core and stays
-rich-reference only. So every launch model carries its rich families now.
-
-Out of launch scope and intentionally absent (TODO 7): the newest dreame
-mb/mc/md1808 + p2041/p2041o/p2140o and xiaomi c107/c108/d10x, which sit on a
-different vacuum-map/no-disturb/voice tree. get_profile returns None for them.
+See docs/dev/module-notes.md for design rationale and verification status.
 """
 
 from __future__ import annotations
@@ -58,6 +46,8 @@ from .profiles.xiaomi import (
     XIAOMI_C102CN,
     XIAOMI_C104,
     XIAOMI_D110CH,
+    XIAOMI_OV21GL,
+    XIAOMI_OV71GL,
 )
 from .types import ModelProfile
 
@@ -91,6 +81,8 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "xiaomi.vacuum.d103cn": XIAOMI_C102CN,
     "xiaomi.vacuum.d106gl": XIAOMI_C101EU,
     "xiaomi.vacuum.d110ch": XIAOMI_D110CH,
+    "xiaomi.vacuum.ov21gl": XIAOMI_OV21GL,
+    "xiaomi.vacuum.ov71gl": XIAOMI_OV71GL,
     # --- viomi --------------------------------------------------------------
     "viomi.vacuum.v12": VIOMI_V12,
     "viomi.vacuum.v13": VIOMI_V13,

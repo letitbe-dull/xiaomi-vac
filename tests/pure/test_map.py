@@ -1,4 +1,4 @@
-"""Pure-tier tests for per-brand map decode (TODO 8).
+"""Pure-tier tests for per-brand map decode.
 
 No homeassistant import — runs on native Windows. Covers:
   - the ijai labelled-grid vector contract (`map_vector.extract_grid` /
@@ -127,42 +127,63 @@ def test_vector_map_non_ijai_empty_grid():
 
 
 # --- brand dispatch ------------------------------------------------------
+def _profile(brand: str, profile_id: str):
+    return SimpleNamespace(brand=brand, profile_id=profile_id)
+
+
 @pytest.mark.parametrize(
-    "model, brand",
+    "brand, profile_id, expected",
     [
-        ("ijai.vacuum.v17", "ijai"),
-        ("xiaomi.vacuum.c101", "xiaomi"),
-        ("dreame.vacuum.p2008", "dreame"),
-        ("viomi.vacuum.v18", "viomi"),
+        ("ijai", "ijai.v17", "ijai"),
+        ("xiaomi", "xiaomi.c101", "ijai"),
+        ("xiaomi", "xiaomi.b106bk", "ijai"),
+        ("xiaomi", "xiaomi.e101gb", "xiaomi"),
+        ("xiaomi", "xiaomi.ov21gl", "xiaomi"),
+        ("xiaomi", "xiaomi.ov31gl", "xiaomi"),
+        ("xiaomi", "xiaomi.ov71gl", "xiaomi"),
+        ("xiaomi", "xiaomi.ov81gl", "xiaomi"),
+        ("dreame", "dreame.p2008", "dreame"),
+        ("viomi", "viomi.v12", "viomi"),
+        ("roidmi", "roidmi.s10", "roidmi"),
     ],
 )
-def test_brand_of(model, brand):
-    assert map_parsers.brand_of(model) == brand
+def test_parser_key(brand, profile_id, expected):
+    assert map_parsers.parser_key(_profile(brand, profile_id)) == expected
+
+
+def test_required_map_key_inputs_for_xiaomi_rebrand():
+    from spec.registry import get_profile
+
+    profile = get_profile("xiaomi.vacuum.c101")
+    key = map_parsers.parser_key(profile)
+    assert key == "ijai"
+    assert map_parsers.required_map_key_inputs(key) == {"wifi_sn", "device_mac"}
 
 
 def test_has_ijai_grid_only_ijai():
     assert map_parsers.has_ijai_grid("ijai") is True
-    for brand in ("xiaomi", "dreame", "viomi"):
+    for brand in ("xiaomi", "dreame", "viomi", "roidmi"):
         assert map_parsers.has_ijai_grid(brand) is False
 
 
 @pytest.mark.parametrize(
-    "model, expected_cls",
+    "brand, profile_id, model, expected_cls",
     [
-        ("ijai.vacuum.v17", "IjaiMapDataParser"),
-        ("xiaomi.vacuum.c101", "XiaomiMapDataParser"),
-        ("dreame.vacuum.p2008", "DreameMapDataParser"),
-        ("viomi.vacuum.v18", "ViomiMapDataParser"),
+        ("ijai", "ijai.v17", "ijai.vacuum.v17", "IjaiMapDataParser"),
+        ("xiaomi", "xiaomi.ov21gl", "xiaomi.vacuum.ov21gl", "XiaomiMapDataParser"),
+        ("dreame", "dreame.p2008", "dreame.vacuum.p2008", "DreameMapDataParser"),
+        ("viomi", "viomi.v18", "viomi.vacuum.v18", "ViomiMapDataParser"),
+        ("roidmi", "roidmi.r1b", "roidmi.vacuum.r1b", "RoidmiMapDataParser"),
     ],
 )
-def test_make_parser_picks_right_class(model, expected_cls):
+def test_make_parser_picks_right_class(brand, profile_id, model, expected_cls):
     from vacuum_map_parser_base.config.color import ColorsPalette
     from vacuum_map_parser_base.config.image_config import ImageConfig
     from vacuum_map_parser_base.config.size import Sizes
 
-    brand = map_parsers.brand_of(model)
+    key = map_parsers.parser_key(_profile(brand, profile_id))
     parser = map_parsers.make_parser(
-        brand, model, ColorsPalette(), Sizes(), [], ImageConfig(), [])
+        key, model, ColorsPalette(), Sizes(), [], ImageConfig(), [])
     assert type(parser).__name__ == expected_cls
 
 
@@ -179,7 +200,7 @@ def test_required_map_key_inputs_ijai():
     assert "device_mac" in keys
 
 
-@pytest.mark.parametrize("brand", ["xiaomi", "dreame", "viomi"])
+@pytest.mark.parametrize("brand", ["xiaomi", "dreame", "viomi", "roidmi"])
 def test_required_map_key_inputs_non_ijai_empty(brand):
     """Non-ijai brands need no local key material from the device."""
     assert map_parsers.required_map_key_inputs(brand) == frozenset()
@@ -188,6 +209,48 @@ def test_required_map_key_inputs_non_ijai_empty(brand):
 def test_required_map_key_inputs_unknown_raises():
     with pytest.raises(ValueError):
         map_parsers.required_map_key_inputs("roborock")
+
+
+@pytest.mark.parametrize(
+    "key, expected",
+    [
+        ("ijai", "get_interim_file_url_pro"),
+        ("xiaomi", "get_interim_file_url"),
+        ("dreame", "get_interim_file_url"),
+        ("viomi", "get_interim_file_url"),
+        ("roidmi", "get_interim_file_url"),
+    ],
+)
+def test_map_url_endpoint(key, expected):
+    assert map_parsers.map_url_endpoint(key) == expected
+
+
+def test_dreame_extract_enckey():
+    assert map_parsers.dreame_extract_enckey("user/did/map,THEKEY") == "THEKEY"
+    assert map_parsers.dreame_extract_enckey("no_comma") is None
+    assert map_parsers.dreame_extract_enckey("") is None
+    # split on first comma only; key is parts[1], not everything after first comma
+    assert map_parsers.dreame_extract_enckey("path,KEY123") == "KEY123"
+
+
+def test_dreame_decrypt_cloud_blob_roundtrip():
+    """Encrypt with the Tasshack chain, verify dreame_decrypt_cloud_blob inverts it."""
+    import base64
+    import hashlib
+    import zlib
+
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad
+
+    plaintext = b"synthetic dreame map data " * 4
+    enckey = "test_enckey_xyz"
+    compressed = zlib.compress(plaintext)
+    key = hashlib.sha256(enckey.encode()).hexdigest()[:32].encode("utf8")
+    encrypted = AES.new(key, AES.MODE_CBC, iv=b"\x00" * 16).encrypt(pad(compressed, 16))
+    raw = base64.b64encode(encrypted)
+
+    result = map_parsers.dreame_decrypt_cloud_blob(raw, enckey)
+    assert result == plaintext
 
 
 def test_unpack_kwargs_per_brand():
@@ -201,3 +264,4 @@ def test_unpack_kwargs_per_brand():
     assert map_parsers.unpack_kwargs("dreame", **kw) == {}
     assert map_parsers.unpack_kwargs("dreame", **{**kw, "enckey": "K"}) == {"enckey": "K"}
     assert map_parsers.unpack_kwargs("viomi", **kw) == {}
+    assert map_parsers.unpack_kwargs("roidmi", **kw) == {}

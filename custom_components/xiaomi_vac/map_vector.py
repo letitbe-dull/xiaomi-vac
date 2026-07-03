@@ -1,18 +1,6 @@
 """Extract a vector/grid map representation from the decoded ijai blob.
 
-The cloud blob (after decrypt+inflate) is a protobuf carrying a labelled
-occupancy grid plus vector geometry. `map.py` renders that to a PNG; this module
-instead pulls the RAW data out so the card can render its own crisp map:
-
-  - the labelled grid (one byte/cell): 0 outside, 1 floor, 2 new-area, 0xFF wall,
-    10-59 room id, 60-109 room id (currently selected). See IjaiImageParser.
-  - the cell<->metre transform (bounds + size), so the card converts a tap to a
-    vacuum coordinate (metres) for goto/zone, and overlays vector data on the grid.
-  - vector overlays already in metres: path, charger, vacuum, walls, no-go/no-mop,
-    zones, goto, and (when present) room boundary chains (roomChain).
-
-Grid is run-length encoded (mostly 0x00 outside) into a flat [value,count,...]
-array so the card needs no inflate library. Everything is JSON-serialisable.
+See docs/dev/map-pipeline.md for the per-brand map pipeline details.
 """
 from __future__ import annotations
 

@@ -135,7 +135,9 @@
           "two": "Two",
           "three": "Three",
           "forth": "Forth",
-          "silent": "Silent"
+          "silent": "Silent",
+          "basic": "Basic",
+          "full_speed": "Full Speed"
         }
       },
       "water_level": {
@@ -160,7 +162,11 @@
           "one": "One",
           "two": "Two",
           "three": "Three",
-          "hig": "High"
+          "hig": "High",
+          "off": "Off",
+          "level1": "Level 1",
+          "level2": "Level 2",
+          "level3": "Level 3"
         }
       },
       "mode": {
@@ -176,7 +182,9 @@
           "mop": "Mopping",
           "medium": "Medium Gear",
           "sweepandmop": "Sweep and Mop",
-          "sweep_then_mop": "Sweep Then Mop"
+          "sweep_then_mop": "Sweep Then Mop",
+          "sweep_mop": "Sweep and Mop",
+          "sweep_before_mopping": "Sweep Before Mopping"
         }
       },
       "sweep_type": {
@@ -205,7 +213,11 @@
           "selectroom": "Room",
           "customclean": "Custom Cleaning",
           "costum": "Custom",
-          "custom_area": "Custom Area"
+          "custom_area": "Custom Area",
+          "appointment": "Scheduled",
+          "linkage": "Linkage",
+          "fast": "Fast",
+          "ai_hosting": "AI Hosting"
         }
       }
     },

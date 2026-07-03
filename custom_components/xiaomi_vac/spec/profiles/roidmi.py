@@ -1,13 +1,6 @@
 """Roidmi runtime profiles.
 
-One profile per distinct spec layout. Promoted from the spec-accurate output of
-tools/specs/generate_runtime_specs.py and verified byte-identical to it; see
-assets/spec_library/reports/capability_matrix.md for which models share each
-layout. NONE of these layouts are hardware-verified.
-
-NOTE: roidmi exposes capabilities (roidmi-specific service families) that the ijai-shaped
-ModelProfile does not yet model, so these profiles cover only what the shared
-vocabulary maps. See the UNMAPPED blocks in the generated drafts for the rest.
+See docs/dev/module-notes.md for design rationale and verification status.
 """
 
 from __future__ import annotations

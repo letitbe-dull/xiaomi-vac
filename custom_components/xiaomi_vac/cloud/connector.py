@@ -1,9 +1,6 @@
 """Synchronous Xiaomi cloud connector (login + map blob download).
 
-Login (password + captcha + email-2FA) is ported from PiotrMachowski's
-Xiaomi-cloud-tokens-extractor (MIT). Captcha/2FA codes are supplied by
-callbacks so the same flow drives both the config flow and CLI tests.
-Run blocking methods in an executor under Home Assistant.
+See docs/dev/module-notes.md for design rationale.
 """
 from __future__ import annotations
 
@@ -409,13 +406,27 @@ class XiaomiCloud:
         body = {"params": [{"did": str(did), "siid": siid, "piid": piid}]}
         return self._call(url, {"data": json.dumps(body)})
 
-    def map_url(self, server: str, did: str, map_name: str = "0") -> str | None:
-        url = self._api_url(server) + "/v2/home/get_interim_file_url_pro"
-        resp = self._call(url, {"data": f'{{"obj_name":"{self.user_id}/{did}/{map_name}"}}'})
+    def map_url(self, server: str, did: str, map_name: str = "0",
+                endpoint: str = "get_interim_file_url_pro") -> str | None:
+        obj = f"{self.user_id}/{did}/{map_name}"
+        resp = self._call(self._api_url(server) + f"/v2/home/{endpoint}",
+                          {"data": f'{{"obj_name":"{obj}"}}'})
         try:
             return resp["result"]["url"]
         except (TypeError, KeyError):
-            return None
+            pass
+        if isinstance(resp, dict) and resp.get("code") == -8:
+            alt = ("get_interim_file_url" if endpoint == "get_interim_file_url_pro"
+                   else "get_interim_file_url_pro")
+            resp2 = self._call(self._api_url(server) + f"/v2/home/{alt}",
+                               {"data": f'{{"obj_name":"{obj}"}}'})
+            try:
+                url = resp2["result"]["url"]
+                _LOGGER.debug("map_url: %s rejected (code -8), succeeded with %s", endpoint, alt)
+                return url
+            except (TypeError, KeyError):
+                pass
+        return None
 
     def download(self, url: str) -> bytes | None:
         r = self._s.get(url, timeout=15)

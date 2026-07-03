@@ -37,7 +37,11 @@ Maps are the main reason this integration exists.
 - **Card-facing API** - `/api/xiaomi_vac/map/{target}` serves authenticated vector-map JSON for the bundled card and local dashboard clients.
 - **Recorder-friendly camera** - large map geometry is kept out of Home Assistant history while still being available to the card and camera attributes.
 - **Adaptive polling** - maps refresh faster while the vacuum is cleaning or returning, and slower while it is idle or docked.
+- **Encryption support** - dreame models with encrypted cloud maps are decrypted automatically.
 - **Best-effort recovery** - if a map decode fails because temporary live-key inputs are stale or missing, the coordinator rebuilds the map fetcher on the next cycle.
+
+> [!NOTE]
+> Maps are verified on ijai.v17 hardware only. For other models, map handling follows what upstream projects have proven on real hardware - but we can't test it ourselves. **If you own a Dreame, Viomi, or Xiaomi-labelled model, your feedback is the only way map support gets confirmed.** Whether it works or not, please [open an issue](https://github.com/letitbe-dull/xiaomi-vac/issues) saying your model and what you saw - a working map is as useful to hear about as a broken one.
 
 | Cleaning | Paused | Charging | Select rooms |
 |----------|--------|----------|--------------|
@@ -156,16 +160,18 @@ action:
 
 ## Supported models
 
-These are the [65 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
+These are the [67 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
 
 | Brand | Models |
 |-------|--------|
 | **ijai** | v1, v2, v3, v13, v14, v15, v17, v18, v19 |
-| **Xiaomi** | b106bk/eu, c101/eu, c103, c104, d106gl |
+| **Xiaomi** | b106bk/eu, c101/eu, c103, c104, d106gl, ov21gl, ov71gl |
 | **Viomi** | v12, v13, v15, v17, v18, v19, v22, v23, v24, v35, v38, v40, v45 |
 | **Dreame** | p2008, p2009, p2027/28/28a/29/36, p2114a/o, p2140/a/p, p2148o, p2149o, p2150a/b/o, p2157, p2187, p2259, r2104, r2205, r2209, r2210, r2211o, r2215, r2216o, r2228/o/z, r2232a, r2233, r2235, r2246, r2247, r2254 |
 
 Not sure of your model string? Check the device label, the Mi Home app device info screen, or Home Assistant's device registry after a local-token setup attempt.
+
+Dreame's only stop-family action is spec-labelled "Pause" — its HA stop and pause buttons both pause the clean rather than stopping outright.
 
 ## Debugging
 

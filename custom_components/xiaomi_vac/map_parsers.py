@@ -1,41 +1,90 @@
-"""Per-brand map parser dispatch.
+"""Per-brand map parser dispatch (construction, key derivation, unpack kwargs).
 
-`map.py` was hard-wired to ijai. Each launch brand ships its own parser in the
-Piotr Machowski family (all on the same `vacuum-map-parser-base`). They share the
-`parse()` output — the base `MapData` (image/rooms/charger/vacuum/path/walls/
-zones) — so the PNG + attribute contract in `map.py` is already brand-agnostic.
-They differ in three places, handled here:
-
-  - the constructor (dreame also takes `model`, to pick its per-model AES IV);
-  - `unpack_map()` inputs — the cloud blob's key derivation differs per brand
-    (verified against each parser's source):
-      ijai   : wifi_sn + owner_id + device_id + model + device_mac  (AES-ECB)
-      xiaomi : model + device_id                                    (AES-CBC)
-      dreame : enckey (optional) + a built-in per-model IV; no enckey -> the
-               parser falls back to plain zlib (works for UNENCRYPTED dreame
-               maps only)
-      viomi  : none — the blob is plain zlib;
-  - whether the unpacked blob is an ijai `RobotMap` protobuf. Only ijai is, and
-    that's what `map_vector.extract_grid()` needs for the crisp labelled grid.
-    Other brands have no equivalent raw grid, so they ship vector overlays
-    (in metres) + the rendered PNG, and `ijai_grid=False` (best-effort, see TODO
-    8 — core control never depends on the map).
-
-Parsers are imported lazily so a brand whose dep isn't installed degrades to an
-"unsupported map" error at fetch time rather than breaking module import.
+See docs/dev/map-pipeline.md for the per-brand map pipeline details.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import zlib
 from typing import Any
 
-# Launch brands with a wired map parser. roidmi's parser exists on PyPI but is
-# post-launch (its profile has no core, so the device never builds anyway).
-SUPPORTED_BRANDS = ("ijai", "xiaomi", "dreame", "viomi")
+SUPPORTED_BRANDS = ("ijai", "xiaomi", "dreame", "viomi", "roidmi")
 
 
-def brand_of(model: str) -> str:
-    """First dotted segment of a model id, e.g. ``ijai.vacuum.v17`` -> ``ijai``."""
-    return model.split(".")[0]
+def dreame_extract_enckey(prop_value: str) -> str | None:
+    """Extract the enckey from MIoT property siid=6/piid=3 value `<object_path>,<enckey>`.
+
+    Returns None when the value contains no comma (unencrypted dreame model).
+    Verified against Tasshack's dreame-vacuum 2026-07-03.
+    """
+    if not prop_value or "," not in prop_value:
+        return None
+    parts = prop_value.split(",")
+    return parts[1] if len(parts) > 1 else None
+
+
+def dreame_decrypt_cloud_blob(raw: bytes, enckey: str) -> bytes:
+    """Decrypt and decompress a dreame cloud map blob.
+
+    Implements the Tasshack-verified decode chain (dreame/map.py ~L1883-1907):
+      1. URL-safe base64 normalise (replace _ and -)
+      2. base64 decode
+      3. AES-256-CBC: key = SHA256(enckey)[:32], IV = 16 zero bytes
+      4. zlib decompress
+
+    Returns decompressed map bytes ready for parser.parse(). Call directly
+    instead of parser.unpack_map() for models not in the parser's built-in
+    IVs dict (those use a zero IV, not a model-specific IV).
+    """
+    try:
+        from Crypto.Cipher import AES
+    except ModuleNotFoundError:  # pragma: no cover
+        from Cryptodome.Cipher import AES
+
+    raw_str = raw.decode().replace("_", "/").replace("-", "+")
+    raw_bytes = base64.decodebytes(raw_str.encode("utf8"))
+    key = hashlib.sha256(enckey.encode()).hexdigest()[:32].encode("utf8")
+    decrypted = AES.new(key, AES.MODE_CBC, iv=b"\x00" * 16).decrypt(raw_bytes)
+    return zlib.decompress(decrypted)
+
+
+# New-generation xiaomi profiles whose cloud map is the JSON format that
+# vacuum-map-parser-xiaomi handles. Confirmed models per the upstream README
+# (github.com/PiotrMachowski/Python-package-vacuum-map-parser-xiaomi, verified
+# 2026-07-03): e101gb, ov31gl, ov71gl, ov81gl. ov21gl is absent from both
+# parser READMEs; assumed xiaomi-JSON by family resemblance — route to ijai
+# only if hardware testing contradicts this. Every other xiaomi.* profile is
+# an ijai-engine rebrand (RobotMap protobuf: c103/c104/b106eu etc.).
+_XIAOMI_JSON_MAP_PROFILES = frozenset({
+    "xiaomi.e101gb",
+    "xiaomi.ov21gl",
+    "xiaomi.ov31gl",
+    "xiaomi.ov71gl",
+    "xiaomi.ov81gl",
+})
+
+
+def map_url_endpoint(key: str) -> str:
+    """Cloud endpoint path segment for fetching a map blob.
+
+    ijai is the only confirmed _pro user (ijai.v17 hardware-verified; Tasshack
+    uses _pro when device v3 flag is True). All other brands use the plain
+    variant, per PiotrMachowski's extractor (verified 2026-07-03).
+    Connector falls back to the other variant on a code -8 response.
+    """
+    return "get_interim_file_url_pro" if key == "ijai" else "get_interim_file_url"
+
+
+def parser_key(profile) -> str:
+    """Which parser family decodes ``profile``'s cloud map blob.
+
+    Untyped (duck-types `.brand`/`.profile_id`) so tests/pure can import this
+    module standalone without pulling in `spec.types.ModelProfile`.
+    """
+    if profile.brand == "xiaomi":
+        return "xiaomi" if profile.profile_id in _XIAOMI_JSON_MAP_PROFILES else "ijai"
+    return profile.brand
 
 
 def has_ijai_grid(brand: str) -> bool:
@@ -60,6 +109,9 @@ def make_parser(brand: str, model: str, palette, sizes, drawables, image_config,
     if brand == "viomi":
         from vacuum_map_parser_viomi.map_data_parser import ViomiMapDataParser
         return ViomiMapDataParser(palette, sizes, drawables, image_config, texts)
+    if brand == "roidmi":
+        from vacuum_map_parser_roidmi.map_data_parser import RoidmiMapDataParser
+        return RoidmiMapDataParser(palette, sizes, drawables, image_config, texts)
     raise ValueError(f"no map parser for brand {brand!r}")
 
 
@@ -68,14 +120,15 @@ def required_map_key_inputs(brand: str) -> frozenset[str]:
 
     ijai   : wifi_sn + device_mac (both feed the AES-ECB key derivation)
     xiaomi : model + device_id   (AES-CBC IV derivation; both always present)
-    dreame : none required        (best-effort; encrypted maps have no verified
-                                   enckey source, so the parser falls back to
-                                   plain zlib for unencrypted models)
+    dreame : none required        (enckey is polled from the cloud at fetch time,
+                                   not from the device; plain zlib fallback for
+                                   unencrypted models when no enckey is found)
     viomi  : none                 (plain zlib; no local key material needed)
+    roidmi : none                 (gzip decompress; no key material needed)
     """
     if brand == "ijai":
         return frozenset({"wifi_sn", "device_mac"})
-    if brand in ("xiaomi", "dreame", "viomi"):
+    if brand in ("xiaomi", "dreame", "viomi", "roidmi"):
         return frozenset()
     raise ValueError(f"no map parser for brand {brand!r}")
 
@@ -103,9 +156,10 @@ def unpack_kwargs(
     if brand == "xiaomi":
         return {"model": model, "device_id": device_id}
     if brand == "dreame":
-        # enckey is None for unencrypted dreame maps (most launch models) and for
-        # the IV-protected models until a verified enckey source is wired (TODO 8).
+        # enckey from siid=6/piid=3 cloud property; None for unencrypted models.
+        # Only passed to parser.unpack_map for models in its built-in IVs dict.
+        # Zero-IV models are decrypted by dreame_decrypt_cloud_blob before parse.
         return {"enckey": enckey} if enckey is not None else {}
-    if brand == "viomi":
+    if brand in ("viomi", "roidmi"):
         return {}
     raise ValueError(f"no map parser for brand {brand!r}")

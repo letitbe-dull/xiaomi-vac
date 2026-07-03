@@ -46,15 +46,15 @@ def test_dreame_core_lifts_card_controls():
     assert core.water_level == Prop(4, 5)
     assert core.locate == Action(7, 1)
     assert core.fan_speeds == {
-        "Quiet": 0,
-        "Standard": 1,
-        "Medium Gear": 2,
-        "Strong": 3,
+        "quiet": 0,
+        "standard": 1,
+        "medium_gear": 2,
+        "strong": 3,
     }
     assert core.water_levels == {
-        "Low Water Level": 1,
-        "Medium Water Level": 2,
-        "High Water Level": 3,
+        "low_water_level": 1,
+        "medium_water_level": 2,
+        "high_water_level": 3,
     }
 
 
