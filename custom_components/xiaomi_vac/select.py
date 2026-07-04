@@ -1,4 +1,4 @@
-"""Selects: fan speed, water level, cleaning mode, sweep type."""
+"""Selects: fan speed, water level, cleaning mode, sweep type, active map."""
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
@@ -10,6 +10,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import XiaomiConfigEntry
 from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
+from .map_coordinator import XiaomiMapCoordinator
+from .spec.types import MapCapability
 
 # Serialise commands to the device (one MIoT write at a time).
 PARALLEL_UPDATES = 1
@@ -30,11 +32,23 @@ async def async_setup_entry(
     core = coordinator.device.core
     # Build only the selects whose core value table exists for this model —
     # no empty "sweep type" dropdown on a model that lacks it (e.g. dreame).
-    async_add_entities(
+    entities: list[SelectEntity] = [
         XiaomiVacuumSelect(coordinator, entry, *cfg)
         for cfg in SELECTS
         if getattr(core, cfg[1])
-    )
+    ]
+
+    map_coordinator = entry.runtime_data.map
+    cap = coordinator.device.profile.map
+    if (
+        map_coordinator is not None
+        and isinstance(cap, MapCapability)
+        and cap.set_current_map is not None
+        and cap.get_map_list is not None
+    ):
+        entities.append(XiaomiActiveMapSelect(map_coordinator, entry))
+
+    async_add_entities(entities)
 
 
 class XiaomiVacuumSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntity):
@@ -60,4 +74,43 @@ class XiaomiVacuumSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntit
     async def async_select_option(self, option: str) -> None:
         setter = getattr(self.coordinator.device, self._setter)
         await self.hass.async_add_executor_job(setter, option)
+        await self.coordinator.async_request_refresh()
+
+
+def _map_label(m: dict) -> str:
+    return m.get("map_name") or f"Map {m['map_id']}"
+
+
+class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntity):
+    """Switch the vacuum's active map; the new map serves from cache
+    immediately (map-reliability Phase 2), no wait on a decryptable upload."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "active_map"
+
+    def __init__(self, coordinator: XiaomiMapCoordinator, entry: XiaomiConfigEntry) -> None:
+        super().__init__(coordinator)
+        base = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{base}_active_map"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
+
+    def _maps(self) -> list[dict]:
+        data = self.coordinator.data
+        return data.maps if data else []
+
+    @property
+    def options(self) -> list[str]:
+        return [_map_label(m) for m in self._maps()]
+
+    @property
+    def current_option(self) -> str | None:
+        return next((_map_label(m) for m in self._maps() if m.get("active")), None)
+
+    async def async_select_option(self, option: str) -> None:
+        target = next((m for m in self._maps() if _map_label(m) == option), None)
+        if target is None:
+            return
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_current_map, target["map_id"]
+        )
         await self.coordinator.async_request_refresh()

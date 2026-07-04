@@ -219,6 +219,9 @@
           "fast": "Veloce",
           "ai_hosting": "Hosting IA"
         }
+      },
+      "active_map": {
+        "name": "Mappa attiva"
       }
     },
     "switch": {
@@ -233,6 +236,29 @@
       "volume": {
         "name": "Volume"
       }
+    },
+    "button": {
+      "refresh_map": {
+        "name": "Aggiorna mappa"
+      }
+    }
+  },
+  "issues": {
+    "map_encrypted": {
+      "title": "Impossibile visualizzare la mappa",
+      "description": "La mappa attiva è cifrata dal dispositivo e non può essere decifrata. Esegui una pulizia completa per generare una copia leggibile, quindi ricarica. Se viene mostrata una mappa dalla cache, potrebbe essere obsoleta — le modifiche alle stanze in Mi Home appariranno solo dopo la prossima pulizia.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Aggiorna mappa",
+            "description": "L'aspirapolvere lascerà brevemente la base e tornerà per forzare una mappa leggibile aggiornata. Continuare?"
+          }
+        }
+      }
+    },
+    "map_refreshing": {
+      "title": "Aggiornamento mappa…",
+      "description": "L'aspirapolvere ha brevemente lasciato la base per forzare una mappa leggibile aggiornata. Tornerà automaticamente."
     }
   },
   "services": {

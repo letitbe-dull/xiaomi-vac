@@ -236,6 +236,13 @@ class IjaiVacuumDevice:
             raise ValueError(f"{self.model} has no map-upload capability")
         return self._action(cap.upload_by_mapid, [int(map_id)])
 
+    def set_current_map(self, map_id: int) -> None:
+        """Switch the vacuum's active map (multi-map devices)."""
+        cap = self.profile.map
+        if not isinstance(cap, MapCapability) or cap.set_current_map is None:
+            raise ValueError(f"{self.model} has no map-switch capability")
+        self._action(cap.set_current_map, [int(map_id)])
+
     def get_mac(self) -> str | None:
         """Device MAC (used in the map AES key). From local miIO info()."""
         try:

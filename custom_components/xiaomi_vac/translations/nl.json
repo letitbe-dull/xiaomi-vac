@@ -219,6 +219,9 @@
           "fast": "Snel",
           "ai_hosting": "AI-hosting"
         }
+      },
+      "active_map": {
+        "name": "Actieve kaart"
       }
     },
     "switch": {
@@ -233,6 +236,29 @@
       "volume": {
         "name": "Volume"
       }
+    },
+    "button": {
+      "refresh_map": {
+        "name": "Kaart vernieuwen"
+      }
+    }
+  },
+  "issues": {
+    "map_encrypted": {
+      "title": "Kaart kan niet worden weergegeven",
+      "description": "De actieve kaart is door het apparaat versleuteld en kan niet worden ontsleuteld. Start een volledige schoonmaakbeurt om een leesbare kopie te maken en laad daarna opnieuw. Een weergegeven gecachede kaart kan verouderd zijn — wijzigingen aan kamers in Mi Home verschijnen pas na de volgende schoonmaakbeurt.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Kaart verversen",
+            "description": "De stofzuiger verlaat kort het dock en keert terug om een verse leesbare kaart af te dwingen. Doorgaan?"
+          }
+        }
+      }
+    },
+    "map_refreshing": {
+      "title": "Kaart wordt ververst…",
+      "description": "De stofzuiger heeft kort het dock verlaten om een verse leesbare kaart af te dwingen. Hij keert automatisch terug."
     }
   },
   "services": {

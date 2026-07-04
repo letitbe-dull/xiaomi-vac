@@ -219,6 +219,9 @@
           "fast": "Rápido",
           "ai_hosting": "Hospedagem de IA"
         }
+      },
+      "active_map": {
+        "name": "Mapa ativo"
       }
     },
     "switch": {
@@ -233,6 +236,29 @@
       "volume": {
         "name": "Volume"
       }
+    },
+    "button": {
+      "refresh_map": {
+        "name": "Atualizar mapa"
+      }
+    }
+  },
+  "issues": {
+    "map_encrypted": {
+      "title": "O mapa não pode ser exibido",
+      "description": "O mapa ativo está criptografado pelo dispositivo e não pode ser descriptografado. Execute uma limpeza completa para gerar uma cópia legível e, em seguida, recarregue. Se um mapa em cache for exibido, ele pode estar desatualizado — edições de cômodos no Mi Home não aparecerão até após a próxima limpeza.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Atualizar mapa",
+            "description": "O aspirador sairá brevemente da base e voltará para forçar um mapa legível atualizado. Continuar?"
+          }
+        }
+      }
+    },
+    "map_refreshing": {
+      "title": "Atualizando mapa…",
+      "description": "O aspirador saiu brevemente da base para forçar um mapa legível atualizado. Ele voltará automaticamente."
     }
   },
   "services": {

@@ -219,6 +219,9 @@
           "fast": "快速",
           "ai_hosting": "AI托管"
         }
+      },
+      "active_map": {
+        "name": "当前地图"
       }
     },
     "switch": {
@@ -233,6 +236,29 @@
       "volume": {
         "name": "音量"
       }
+    },
+    "button": {
+      "refresh_map": {
+        "name": "刷新地图"
+      }
+    }
+  },
+  "issues": {
+    "map_encrypted": {
+      "title": "地图无法显示",
+      "description": "当前地图已由设备加密，无法解密。请执行完整清扫以生成可读副本，然后重新加载。若显示的是缓存地图，可能已过时——在 Mi Home 中对房间所做的编辑将在下次清扫后才会显示。",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "刷新地图",
+            "description": "扫地机器人将短暂离开充电座并返回，以强制生成一份最新的可读地图。是否继续？"
+          }
+        }
+      }
+    },
+    "map_refreshing": {
+      "title": "正在刷新地图…",
+      "description": "扫地机器人已短暂离开充电座以强制生成一份最新的可读地图，将自动返回充电座。"
     }
   },
   "services": {

@@ -184,3 +184,60 @@ def load_sensor_module(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "xiaomi_vac.spec.types", spec_types)
 
     return importlib.import_module("xiaomi_vac.sensor")
+
+
+class FakeStore:
+    """Stand-in for homeassistant.helpers.storage.Store.
+
+    Backed by a shared class-level dict keyed by storage key, so a test can
+    simulate a fresh load, a persisted round-trip, or a corrupt file by
+    poking `FakeStore.backing` directly before constructing MapCache.
+    """
+
+    backing: dict[str, object] = {}
+
+    def __init__(self, hass, version: int, key: str) -> None:  # noqa: ARG002
+        self.key = key
+
+    async def async_load(self):
+        return self.backing.get(self.key)
+
+    async def async_save(self, data) -> None:
+        self.backing[self.key] = data
+
+    @classmethod
+    def reset(cls) -> None:
+        cls.backing = {}
+
+
+def load_map_cache_module(monkeypatch: pytest.MonkeyPatch):
+    """Load xiaomi_vac.map_cache with HA's Store replaced by FakeStore."""
+
+    def _make(name: str, **attrs) -> ModuleType:
+        m = ModuleType(name)
+        m.__dict__.update(attrs)
+        return m
+
+    FakeStore.reset()
+    for mod_name, mod in [
+        ("homeassistant", ModuleType("homeassistant")),
+        ("homeassistant.core", _make("homeassistant.core", HomeAssistant=object)),
+        ("homeassistant.helpers", ModuleType("homeassistant.helpers")),
+        ("homeassistant.helpers.storage", _make("homeassistant.helpers.storage", Store=FakeStore)),
+    ]:
+        monkeypatch.setitem(sys.modules, mod_name, mod)
+
+    pkg_root = Path(__file__).resolve().parents[2] / "custom_components" / "xiaomi_vac"
+    pkg = ModuleType("xiaomi_vac")
+    pkg.__path__ = [str(pkg_root)]
+    monkeypatch.setitem(sys.modules, "xiaomi_vac", pkg)
+
+    const_stub = _make("xiaomi_vac.const", DOMAIN="xiaomi_vac")
+    monkeypatch.setitem(sys.modules, "xiaomi_vac.const", const_stub)
+
+    for name in list(sys.modules):
+        if name == "xiaomi_vac.map_cache":
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    module = importlib.import_module("xiaomi_vac.map_cache")
+    return module, FakeStore

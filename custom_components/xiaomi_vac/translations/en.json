@@ -219,6 +219,9 @@
           "fast": "Fast",
           "ai_hosting": "AI Hosting"
         }
+      },
+      "active_map": {
+        "name": "Active map"
       }
     },
     "switch": {
@@ -233,6 +236,29 @@
       "volume": {
         "name": "Volume"
       }
+    },
+    "button": {
+      "refresh_map": {
+        "name": "Refresh map"
+      }
+    }
+  },
+  "issues": {
+    "map_encrypted": {
+      "title": "Map can't be displayed",
+      "description": "The active map is encrypted by the device and can't be decrypted. Run a full clean to generate a readable copy, then reload. If a cached map is shown, it may be out of date — room edits made in Mi Home won't appear until after the next clean.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Refresh map",
+            "description": "The vacuum will briefly leave the dock and return to force a fresh readable map. Continue?"
+          }
+        }
+      }
+    },
+    "map_refreshing": {
+      "title": "Refreshing map…",
+      "description": "The vacuum has briefly left the dock to force a fresh readable map. It will return automatically."
     }
   },
   "services": {
