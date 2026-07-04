@@ -18,6 +18,9 @@ custom_components/xiaomi_vac/spec/profiles/_drafts/
 requirements-dev-wsl.txt
 requirements-dev-win.txt
 
+
+TODOS.md
+AGENTS.md
 CLAUDE.md
 .claudeignore
 
