@@ -90,7 +90,10 @@ class MiotMqttClient:
         """Start the MQTT client and its network loop."""
         if self._started:
             return
-        client = self._build_client(self._token)
+        # _build_client loads system CA certs (blocking) — build off-loop.
+        client = await self._hass.async_add_executor_job(
+            self._build_client, self._token
+        )
         # connect_async only queues the target; the socket is opened by the
         # loop_start() thread. Safe on the event loop.
         client.connect_async(self._host, _MQTT_PORT, _MQTT_KEEPALIVE)
@@ -117,11 +120,20 @@ class MiotMqttClient:
 
     # --- paho callbacks (network thread) ---------------------------------
 
+    @staticmethod
+    def _rc_value(reason_code: Any) -> int:
+        """Normalise a paho reason code (v2 ReasonCode or v1 int) to an int."""
+        if reason_code is None:
+            return -1
+        # paho-mqtt v2 passes a ReasonCode object carrying the numeric code on
+        # `.value`; v1 passed a plain int.
+        return int(getattr(reason_code, "value", reason_code))
+
     def _on_connect(
         self, client: mqtt.Client, _u: Any, _flags: Any,
         reason_code: Any, _properties: Any,
     ) -> None:
-        rc = int(reason_code)
+        rc = self._rc_value(reason_code)
         if rc == 0:
             _LOGGER.debug("MQTT connected as %s", self._client_id)
             # The broker ACL rejects a single `device/{did}/#`, so subscribe
@@ -139,7 +151,7 @@ class MiotMqttClient:
         self, _client: mqtt.Client, _u: Any, _flags: Any,
         reason_code: Any, _properties: Any,
     ) -> None:
-        rc = int(reason_code) if reason_code is not None else -1
+        rc = self._rc_value(reason_code)
         # Auto-reconnect is handled by paho's own loop; just log at debug.
         _LOGGER.debug("MQTT disconnected rc=%s", rc)
 

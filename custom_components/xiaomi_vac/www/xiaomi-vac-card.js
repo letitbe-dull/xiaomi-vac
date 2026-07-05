@@ -622,14 +622,9 @@ class XiaomiVacCard extends HTMLElement {
     }
     if (this._enabled("show_room_labels")) rooms.forEach((r) => {
       if (r.cx == null || !r.name) return;
-      // Clip long names to the room's width so they don't bleed across walls.
-      // ~0.25m per glyph at this size/weight; drop the label entirely if even a
-      // couple of chars won't fit.
-      let label = r.name;
-      const wMetres = r.bbox ? Math.abs(r.bbox[2] - r.bbox[0]) : Infinity;
-      const maxChars = Math.floor((wMetres * 0.92) / 0.25);
-      if (maxChars < 2) return;
-      if (label.length > maxChars) label = label.slice(0, maxChars - 1).trimEnd() + "…";
+      // Full name, uppercased. Let it overflow the room rather than truncate —
+      // text-anchor=middle keeps it centred so it spills evenly past the walls.
+      const label = r.name.toUpperCase();
       s += `<text x="${tx(r.cx)}" y="${ty(r.cy)}" font-size="0.42" fill="var(--xv-ink)" font-weight="600" text-anchor="middle" dominant-baseline="middle" style="pointer-events:none">${esc(label)}</text>`;
     });
     if (m.charger) {
