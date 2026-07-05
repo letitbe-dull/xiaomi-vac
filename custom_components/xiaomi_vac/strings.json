@@ -55,7 +55,7 @@
       },
       "miot_oauth_auth": {
         "title": "Link Xiaomi OAuth",
-        "description": "Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+        "description": "Open this link, approve access, then paste the code from the redirect address bar (after 'CODE=' and before '&'):\n\n{authorize_url}",
         "data": {
           "code": "OAuth code"
         }
@@ -87,7 +87,7 @@
     "step": {
       "miot_oauth_auth": {
         "title": "Link Xiaomi OAuth",
-        "description": "Enable the real-time (MQTT) live map on this existing vacuum. Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+        "description": "Enable the real-time (MQTT) live map on this existing vacuum. Open this link, approve access, then paste the code from the redirect address bar(after 'CODE=' and before '&'):\n\n{authorize_url}",
         "data": {
           "code": "OAuth code"
         }
@@ -108,7 +108,7 @@
         "step": {
           "link": {
             "title": "Link Xiaomi OAuth",
-            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link, approve access, then paste the code from the redirect address bar(after 'CODE=' and before '&'):\n\n{authorize_url}",
             "data": {
               "code": "OAuth code"
             }
