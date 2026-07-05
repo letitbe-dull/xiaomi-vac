@@ -13,3 +13,19 @@ clean_segment:
       example: "[11, 12]"
       selector:
         object:
+
+refresh_map:
+  name: Refresh map
+  description: Briefly starts the vacuum so it leaves the dock and uploads a fresh map, then sends it back to dock.
+  target:
+    entity:
+      domain: vacuum
+      integration: xiaomi_vac
+  fields:
+    confirm_movement:
+      name: Confirm movement
+      description: Must be true. The vacuum will briefly leave the dock and return.
+      required: true
+      example: true
+      selector:
+        boolean:

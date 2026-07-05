@@ -264,9 +264,8 @@ class IjaiVacuumDevice:
         except Exception:  # noqa: BLE001
             return None
         for part in str(raw).split(","):
-            p = part.replace('"', "")
-            if user_id and str(user_id) in p:
-                p = p.split(";")[0]
+            # The serial sits before an optional ";<uid>" suffix on siid 7/piid 45.
+            p = part.replace('"', "").split(";")[0]
             if len(p) in _WIFI_SN_LENS and p.isalnum() and p.isupper():
                 return p
         return None

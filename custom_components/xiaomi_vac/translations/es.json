@@ -236,29 +236,6 @@
       "volume": {
         "name": "Volumen"
       }
-    },
-    "button": {
-      "refresh_map": {
-        "name": "Actualizar mapa"
-      }
-    }
-  },
-  "issues": {
-    "map_encrypted": {
-      "title": "No se puede mostrar el mapa",
-      "description": "El mapa activo está cifrado por el dispositivo y no se puede descifrar. Realice una limpieza completa para generar una copia legible y luego recargue. Si se muestra un mapa en caché, puede estar desactualizado: los cambios de sala en Mi Home no aparecerán hasta después de la próxima limpieza.",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "Actualizar mapa",
-            "description": "La aspiradora saldrá brevemente de la base y volverá para forzar un mapa legible nuevo. ¿Continuar?"
-          }
-        }
-      }
-    },
-    "map_refreshing": {
-      "title": "Actualizando mapa…",
-      "description": "La aspiradora ha salido brevemente de la base para forzar un mapa legible nuevo. Volverá automáticamente."
     }
   },
   "services": {

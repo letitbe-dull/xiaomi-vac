@@ -236,29 +236,6 @@
       "volume": {
         "name": "Lautstärke"
       }
-    },
-    "button": {
-      "refresh_map": {
-        "name": "Karte aktualisieren"
-      }
-    }
-  },
-  "issues": {
-    "map_encrypted": {
-      "title": "Karte kann nicht angezeigt werden",
-      "description": "Die aktive Karte ist geräteseitig verschlüsselt und kann nicht entschlüsselt werden. Führen Sie eine vollständige Reinigung durch, um eine lesbare Kopie zu erstellen, und laden Sie dann neu. Eine angezeigte zwischengespeicherte Karte kann veraltet sein – Raumänderungen in Mi Home erscheinen erst nach der nächsten Reinigung.",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "Karte aktualisieren",
-            "description": "Der Sauger verlässt kurz die Station und kehrt zurück, um eine frische lesbare Karte zu erzwingen. Fortfahren?"
-          }
-        }
-      }
-    },
-    "map_refreshing": {
-      "title": "Karte wird aktualisiert…",
-      "description": "Der Sauger hat kurz die Station verlassen, um eine frische lesbare Karte zu erzwingen. Er kehrt automatisch zurück."
     }
   },
   "services": {

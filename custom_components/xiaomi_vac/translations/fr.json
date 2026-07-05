@@ -236,29 +236,6 @@
       "volume": {
         "name": "Volume"
       }
-    },
-    "button": {
-      "refresh_map": {
-        "name": "Actualiser la carte"
-      }
-    }
-  },
-  "issues": {
-    "map_encrypted": {
-      "title": "La carte ne peut pas être affichée",
-      "description": "La carte active est chiffrée par l'appareil et ne peut pas être déchiffrée. Lancez un nettoyage complet pour générer une copie lisible, puis rechargez. Si une carte en cache est affichée, elle peut être obsolète — les modifications de pièces dans Mi Home n'apparaîtront qu'après le prochain nettoyage.",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "Rafraîchir la carte",
-            "description": "L'aspirateur va brièvement quitter la station et revenir pour forcer une nouvelle carte lisible. Continuer ?"
-          }
-        }
-      }
-    },
-    "map_refreshing": {
-      "title": "Rafraîchissement de la carte…",
-      "description": "L'aspirateur a brièvement quitté la station pour forcer une nouvelle carte lisible. Il reviendra automatiquement."
     }
   },
   "services": {

@@ -9,6 +9,7 @@ from homeassistant.components.vacuum import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -50,6 +51,11 @@ async def async_setup_entry(
         {vol.Required("segments"): vol.All(cv.ensure_list, [vol.Coerce(int)])},
         "async_clean_segment",
     )
+    platform.async_register_entity_service(
+        "refresh_map",
+        {vol.Required("confirm_movement"): vol.All(cv.boolean, vol.Equal(True))},
+        "async_refresh_map",
+    )
 
 
 class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity):
@@ -58,6 +64,7 @@ class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity
 
     def __init__(self, coordinator: XiaomiVacuumCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
+        self._entry = entry
         self._device = coordinator.device
         core = self._device.core
         support = _BASE_SUPPORT
@@ -94,6 +101,15 @@ class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity
     async def async_return_to_base(self, **kwargs) -> None:
         await self.hass.async_add_executor_job(self._device.return_home)
         await self.coordinator.async_request_refresh()
+
+    async def async_refresh_map(self, confirm_movement: bool) -> None:
+        data = self._entry.runtime_data
+        if data.map is None:
+            raise HomeAssistantError("Refresh map requires a cloud map session")
+        await data.map.async_refresh_map_with_movement(
+            confirm_movement=confirm_movement,
+            use_mqtt=data.mqtt is not None,
+        )
 
     async def async_pause(self) -> None:
         await self.hass.async_add_executor_job(self._device.pause)

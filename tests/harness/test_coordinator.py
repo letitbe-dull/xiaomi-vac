@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.xiaomi_vac.const import (
@@ -26,6 +26,7 @@ from custom_components.xiaomi_vac.const import (
 from custom_components.xiaomi_vac.coordinator import XiaomiVacuumCoordinator
 from custom_components.xiaomi_vac.device import DeviceCommunicationError
 from custom_components.xiaomi_vac.map import MapResult, SessionExpired
+from custom_components.xiaomi_vac.cloud.mqtt import MqttMessage
 from custom_components.xiaomi_vac.map_coordinator import XiaomiMapCoordinator
 
 
@@ -257,7 +258,7 @@ async def test_map_coordinator_none_result_resets_fetcher_and_raises(
     with (
         patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
         patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
-        pytest.raises(UpdateFailed, match="No readable map"),
+        pytest.raises(UpdateFailed, match="Waiting for a readable map"),
     ):
         await coord._async_update_data()
 
@@ -362,11 +363,6 @@ async def test_map_coordinator_pass_token_persisted_after_refresh(
 
 
 # ---------------------------------------------------------------------------
-# Map coordinator: async_refresh_map_undock (Phase 4)
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
 # Map coordinator: two-slot fetch and cache-serve (Phase 5)
 # ---------------------------------------------------------------------------
 
@@ -451,169 +447,177 @@ async def test_map_coordinator_serves_from_cache_when_both_slots_key_b(
     assert result.image_png == b"ground-floor-prior-render"
     assert result.attributes == {"rooms": 3}
     assert result.content_hash == "hash-prior"
+# ---------------------------------------------------------------------------
+# Map refresh movement action
+# ---------------------------------------------------------------------------
 
 
-async def test_refresh_map_undock_refuses_when_not_docked(
-    hass: HomeAssistant,
-) -> None:
-    """Guard: pressing the button while cleaning is a no-op — the vacuum must
-    not be sent home mid-clean, and start must not be called."""
+def _refreshable_map_coord(
+    hass: HomeAssistant, activity: str = "docked",
+) -> XiaomiMapCoordinator:
     coord = _map_coord(hass)
-    coord._control.data = SimpleNamespace(activity="cleaning")
+    coord._device.profile.map = object()
+    coord._device.core.start = object()
+    coord._device.core.charge = object()
     coord._device.start = MagicMock()
     coord._device.return_home = MagicMock()
+    coord._control.data = SimpleNamespace(activity=activity)
+    coord._control.async_request_refresh = AsyncMock()
+    return coord
 
-    async def _exec(fn, *a):
-        return fn(*a)
 
-    with patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)):
-        result = await coord.async_refresh_map_undock()
+async def test_refresh_map_with_movement_requires_confirmation(
+    hass: HomeAssistant,
+) -> None:
+    coord = _refreshable_map_coord(hass)
 
-    assert result is False
+    with pytest.raises(HomeAssistantError, match="confirm_movement"):
+        await coord.async_refresh_map_with_movement(
+            confirm_movement=False, use_mqtt=True,
+        )
+
     coord._device.start.assert_not_called()
     coord._device.return_home.assert_not_called()
 
 
-async def test_refresh_map_undock_return_home_called_on_timeout(
+async def test_refresh_map_with_movement_refuses_when_not_docked_or_idle(
     hass: HomeAssistant,
 ) -> None:
-    """Even when the fresh-render poll times out, the vacuum must be sent
-    home in the finally block — hardware safety, not just the happy path."""
-    coord = _map_coord(hass)
-    coord._control.data = SimpleNamespace(activity="docked")
-    coord._control.async_request_refresh = AsyncMock()
-    coord.data = _fake_result(map_id=42, content_hash="prior")
-    coord._device.start = MagicMock()
-    coord._device.return_home = MagicMock()
+    coord = _refreshable_map_coord(hass, activity="cleaning")
 
-    async def _exec(fn, *a):
-        return fn(*a)
+    with pytest.raises(HomeAssistantError, match="docked or idle"):
+        await coord.async_refresh_map_with_movement(
+            confirm_movement=True, use_mqtt=True,
+        )
 
-    fake_cache = _FakeCache()
-
-    # _await_fresh_render returns False (timeout); we stub it to avoid the real
-    # 15s poll loop in the test.
-    with (
-        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=fake_cache)),
-        patch.object(coord, "_await_fresh_render", new=AsyncMock(return_value=False)),
-        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
-    ):
-        result = await coord.async_refresh_map_undock()
-
-    assert result is False
-    coord._device.start.assert_called_once()
-    coord._device.return_home.assert_called_once()
-
-
-async def test_refresh_map_undock_return_home_skipped_when_start_fails(
-    hass: HomeAssistant,
-) -> None:
-    """If start-sweep raised, the vacuum never left the dock — sending it
-    "home" would be a no-op at best, a spurious command at worst. Guard by
-    only calling return_home when `started` is True."""
-    coord = _map_coord(hass)
-    coord._control.data = SimpleNamespace(activity="docked")
-    coord._control.async_request_refresh = AsyncMock()
-    coord.data = _fake_result(map_id=42, content_hash="prior")
-    coord._device.start = MagicMock(side_effect=RuntimeError("device offline"))
-    coord._device.return_home = MagicMock()
-
-    async def _exec(fn, *a):
-        return fn(*a)
-
-    with (
-        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
-        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
-    ):
-        result = await coord.async_refresh_map_undock()
-
-    assert result is False
-    coord._device.start.assert_called_once()
+    coord._device.start.assert_not_called()
     coord._device.return_home.assert_not_called()
 
 
-async def test_refresh_map_undock_swaps_repair_issue(
+async def test_refresh_map_with_movement_refuses_single_flight(
     hass: HomeAssistant,
 ) -> None:
-    """The repair notice must swap to `map_refreshing` while the cycle runs
-    and clear on completion — this is what the user sees in the repair panel."""
-    coord = _map_coord(hass)
-    coord._control.data = SimpleNamespace(activity="docked")
-    coord._control.async_request_refresh = AsyncMock()
-    coord.data = _fake_result(map_id=1, content_hash="prior")
-    coord._device.start = MagicMock()
-    coord._device.return_home = MagicMock()
+    coord = _refreshable_map_coord(hass)
+    await coord._refresh_map_lock.acquire()
+    try:
+        with pytest.raises(HomeAssistantError, match="already running"):
+            await coord.async_refresh_map_with_movement(
+                confirm_movement=True, use_mqtt=True,
+            )
+    finally:
+        coord._refresh_map_lock.release()
 
-    async def _exec(fn, *a):
-        return fn(*a)
-
-    calls: list[tuple[str, str]] = []
-
-    def _fake_create(_hass, _domain, issue_id, **_kw):
-        calls.append(("create", issue_id))
-
-    def _fake_delete(_hass, _domain, issue_id):
-        calls.append(("delete", issue_id))
-
-    with (
-        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
-        patch.object(coord, "_await_fresh_render", new=AsyncMock(return_value=True)),
-        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
-        patch(
-            "custom_components.xiaomi_vac.map_coordinator.ir.async_create_issue",
-            side_effect=_fake_create,
-        ),
-        patch(
-            "custom_components.xiaomi_vac.map_coordinator.ir.async_delete_issue",
-            side_effect=_fake_delete,
-        ),
-    ):
-        result = await coord.async_refresh_map_undock()
-
-    assert result is True
-    # Old encrypted notice cleared before starting, refreshing notice created,
-    # then cleared at the end.
-    ops = [(op, iid) for op, iid in calls]
-    assert ops[0][0] == "delete" and ops[0][1].startswith("map_encrypted_")
-    assert ops[1] == ("create", ops[1][1]) and ops[1][1].startswith("map_refreshing_")
-    assert ops[-1][0] == "delete" and ops[-1][1].startswith("map_refreshing_")
+    coord._device.start.assert_not_called()
 
 
-async def test_refresh_map_undock_single_flight_lock(
+async def test_refresh_map_with_movement_uses_mqtt_wait_and_docks(
     hass: HomeAssistant,
 ) -> None:
-    """A second press while the first is running must return False without
-    starting a second clean — the vacuum can't run two cleans concurrently."""
-    coord = _map_coord(hass)
-    coord._control.data = SimpleNamespace(activity="docked")
-    coord._control.async_request_refresh = AsyncMock()
-    coord.data = _fake_result(map_id=1, content_hash="prior")
-    coord._device.start = MagicMock()
-    coord._device.return_home = MagicMock()
+    coord = _refreshable_map_coord(hass)
 
-    release = asyncio.Event()
+    async def _exec(fn, *args):
+        return fn(*args)
 
-    async def _blocking_await(*_a, **_kw):
-        await release.wait()
-        return True
-
-    async def _exec(fn, *a):
-        return fn(*a)
-
+    wait = AsyncMock()
     with (
-        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
-        patch.object(coord, "_await_fresh_render", side_effect=_blocking_await),
+        patch.object(coord, "_async_wait_for_mqtt_upload", new=wait),
         patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
     ):
-        first = asyncio.create_task(coord.async_refresh_map_undock())
-        # Give the first task a chance to acquire the lock before pressing again.
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        second = await coord.async_refresh_map_undock()
-        release.set()
-        first_result = await first
+        await coord.async_refresh_map_with_movement(
+            confirm_movement=True, use_mqtt=True,
+        )
 
-    assert second is False
-    assert first_result is True
-    # start called only once — the second press did not launch a clean.
-    assert coord._device.start.call_count == 1
+    coord._device.start.assert_called_once()
+    coord._device.return_home.assert_called_once()
+    wait.assert_awaited_once()
+
+
+async def test_refresh_map_with_movement_fallback_polls_and_docks(
+    hass: HomeAssistant,
+) -> None:
+    coord = _refreshable_map_coord(hass)
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    poll = AsyncMock()
+    with (
+        patch.object(coord, "_async_poll_for_live_map", new=poll),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        await coord.async_refresh_map_with_movement(
+            confirm_movement=True, use_mqtt=False,
+        )
+
+    coord._device.start.assert_called_once()
+    coord._device.return_home.assert_called_once()
+    poll.assert_awaited_once_with(0.0)
+
+
+async def test_refresh_map_with_movement_docks_even_when_start_raises(
+    hass: HomeAssistant,
+) -> None:
+    """If start() throws, the vacuum must still return to dock (finally guarantee)."""
+    coord = _refreshable_map_coord(hass)
+    coord._device.start.side_effect = Exception("motor failure")
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    with (
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+        pytest.raises(Exception, match="motor failure"),
+    ):
+        await coord.async_refresh_map_with_movement(confirm_movement=True, use_mqtt=True)
+
+    coord._device.return_home.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# MQTT event → debounced fetch
+# ---------------------------------------------------------------------------
+
+
+async def test_mqtt_upload_event_schedules_debounce_task(hass: HomeAssistant) -> None:
+    """event_occured/10/6 creates a debounce task on the coordinator."""
+    coord = _map_coord(hass)
+    coord.async_refresh = AsyncMock()
+
+    msg = MqttMessage(kind="event", topic="x", siid=10, eiid=6)
+    assert coord._mqtt_debounce_task is None
+
+    with patch("custom_components.xiaomi_vac.map_coordinator._DEBOUNCE_SECONDS", 60):
+        await coord.async_on_mqtt_message(msg)
+
+    assert coord._mqtt_debounce_task is not None
+    coord._mqtt_debounce_task.cancel()  # tidy up
+
+
+async def test_mqtt_curmap_property_updates_active_id(hass: HomeAssistant) -> None:
+    """properties_changed/10/2 stores the new curMapId on the coordinator."""
+    coord = _map_coord(hass)
+    coord.async_refresh = AsyncMock()
+
+    msg = MqttMessage(kind="property", topic="x", siid=10, piid=2, value=7)
+
+    with patch("custom_components.xiaomi_vac.map_coordinator._DEBOUNCE_SECONDS", 60):
+        await coord.async_on_mqtt_message(msg)
+
+    assert coord._mqtt_active_id == 7
+    coord._mqtt_debounce_task.cancel()
+
+
+async def test_mqtt_burst_coalesces_to_single_refresh(hass: HomeAssistant) -> None:
+    """Three rapid upload events within the debounce window trigger one async_refresh."""
+    coord = _map_coord(hass)
+    coord.async_refresh = AsyncMock()
+
+    msg = MqttMessage(kind="event", topic="x", siid=10, eiid=6)
+
+    with patch("custom_components.xiaomi_vac.map_coordinator._DEBOUNCE_SECONDS", 0):
+        await coord.async_on_mqtt_message(msg)
+        await coord.async_on_mqtt_message(msg)
+        await coord.async_on_mqtt_message(msg)
+        await asyncio.sleep(0.05)
+
+    coord.async_refresh.assert_awaited_once()

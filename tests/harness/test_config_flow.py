@@ -9,9 +9,15 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xiaomi_vac import async_migrate_entry
+from custom_components.xiaomi_vac.cloud.oauth import OAuthTokenSet
 from custom_components.xiaomi_vac.const import (
     CONF_HOST,
     CONF_MODEL,
+    CONF_OAUTH_ACCESS_TOKEN,
+    CONF_OAUTH_DEVICE_ID,
+    CONF_OAUTH_EXPIRES_TS,
+    CONF_OAUTH_REFRESH_TOKEN,
+    CONF_OAUTH_REGION,
     CONF_PASSWORD,
     CONF_SERVICE_TOKEN,
     CONF_SSECURITY,
@@ -166,7 +172,9 @@ def _cloud_patches(login_state: str = "ok", devices: list | None = None):
     ]
 
 
-async def _credentials_to_devices(hass: HomeAssistant, devices: list) -> dict:
+async def _credentials_to_devices(
+    hass: HomeAssistant, devices: list, *, stop_at_oauth: bool = False
+) -> dict:
     """Open the credentials form and submit it; return the next flow result."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
@@ -179,10 +187,19 @@ async def _credentials_to_devices(hass: HomeAssistant, devices: list) -> dict:
     with ExitStack() as stack:
         for p in _cloud_patches(devices=devices):
             stack.enter_context(p)
-        return await hass.config_entries.flow.async_configure(
+        result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_USERNAME: "user@example.com", CONF_PASSWORD: "secret"},
         )
+    if (
+        stop_at_oauth
+        or result["type"] is not FlowResultType.FORM
+        or result.get("step_id") != "miot_oauth"
+    ):
+        return result
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": False}
+    )
 
 
 async def test_cloud_dreame_supported_creates_entry(hass: HomeAssistant) -> None:
@@ -200,6 +217,57 @@ async def test_cloud_entry_does_not_store_password(hass: HomeAssistant) -> None:
     assert result["data"][CONF_USERNAME] == "user@example.com"
     # Session-token keys must still be present (so renewal works without password).
     assert CONF_SERVICE_TOKEN in result["data"]
+
+
+async def test_cloud_oauth_skip_keeps_legacy_entry_data(hass: HomeAssistant) -> None:
+    """Skipping optional MIoT OAuth creates the current legacy cloud entry."""
+    result = await _credentials_to_devices(
+        hass, [_make_device("dreame.vacuum.p2008")], stop_at_oauth=True
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "miot_oauth"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": False}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert CONF_OAUTH_ACCESS_TOKEN not in result["data"]
+    assert CONF_SERVICE_TOKEN in result["data"]
+
+
+async def test_cloud_oauth_success_stores_miot_tokens(hass: HomeAssistant) -> None:
+    """Opting into MIoT OAuth stores the token set for the future MQTT client."""
+    result = await _credentials_to_devices(
+        hass, [_make_device("dreame.vacuum.p2008")], stop_at_oauth=True
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": True}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "miot_oauth_auth"
+
+    tokens = OAuthTokenSet(
+        access_token="access",
+        refresh_token="refresh",
+        expires_in=3600,
+        expires_ts=1234,
+        region="sg",
+    )
+    with patch(
+        "custom_components.xiaomi_vac.config_flow.exchange_code",
+        return_value=tokens,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"code": "ALSG_code"}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OAUTH_ACCESS_TOKEN] == "access"
+    assert result["data"][CONF_OAUTH_REFRESH_TOKEN] == "refresh"
+    assert result["data"][CONF_OAUTH_EXPIRES_TS] == 1234
+    assert result["data"][CONF_OAUTH_REGION] == "sg"
+    assert result["data"][CONF_OAUTH_DEVICE_ID].startswith("ha.")
 
 
 async def test_reauth_mints_tokens_and_discards_password(hass: HomeAssistant) -> None:
@@ -389,6 +457,9 @@ async def test_cloud_captcha_submit_continues_to_entry(hass: HomeAssistant) -> N
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"code": "ab12"}
         )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": False}
+    )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
@@ -445,6 +516,9 @@ async def test_cloud_twofa_submit_continues_to_entry(hass: HomeAssistant) -> Non
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"code": "123456"}
         )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": False}
+    )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
@@ -476,6 +550,9 @@ async def test_cloud_device_picker_selection_creates_entry(hass: HomeAssistant) 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"device": "d2"}
         )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": False}
+    )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "viomi.vacuum.v12"

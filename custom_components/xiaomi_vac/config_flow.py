@@ -14,11 +14,20 @@ from homeassistant.helpers import config_validation as cv
 
 from .captcha_view import IMG_URL, ensure_registered, set_image
 from .cloud.connector import XiaomiCloud
+from .cloud.oauth import (
+    XiaomiOAuthError,
+    build_authorize_url,
+    exchange_code,
+    generate_oauth_device_id,
+    oauth_entry_updates,
+    resolve_region_from_code,
+)
 from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_MAC,
     CONF_MODEL,
+    CONF_OAUTH_DEVICE_ID,
     CONF_PASS_TOKEN,
     CONF_PASSWORD,
     CONF_SERVER,
@@ -45,6 +54,10 @@ LOCAL_SCHEMA = vol.Schema(
         vol.Required(CONF_TOKEN): vol.All(cv.string, vol.Length(min=32, max=32)),
     }
 )
+OAUTH_CHOICE_SCHEMA = vol.Schema(
+    {vol.Required("enable_miot_oauth", default=True): cv.boolean}
+)
+OAUTH_CODE_SCHEMA = vol.Schema({vol.Required("code"): cv.string})
 
 
 def _probe(host: str, token: str) -> dict[str, str]:
@@ -63,6 +76,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._selected: dict | None = None
         self._cap_n = 0
         self._data: dict[str, Any] = {}
+        self._title = ""
 
     # --- entry: pick login method ---------------------------------------
     async def async_step_user(
@@ -254,7 +268,57 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_WIFI_SN: wifi_sn or "",
             }
         )
-        return self.async_create_entry(title=d["name"] or d["model"], data=self._data)
+        self._title = d["name"] or d["model"]
+        return await self.async_step_miot_oauth()
+
+    async def async_step_miot_oauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Offer optional MIoT OAuth for future MQTT live-map support."""
+        if user_input is not None:
+            if user_input["enable_miot_oauth"]:
+                return await self.async_step_miot_oauth_auth()
+            return self._create_entry()
+        return self.async_show_form(
+            step_id="miot_oauth", data_schema=OAUTH_CHOICE_SCHEMA
+        )
+
+    async def async_step_miot_oauth_auth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Exchange the Xiaomi OAuth code for MQTT access tokens."""
+        errors: dict[str, str] = {}
+        device_id = str(
+            self._data.setdefault(CONF_OAUTH_DEVICE_ID, generate_oauth_device_id())
+        )
+        if user_input is not None:
+            code = user_input["code"].strip()
+            region = resolve_region_from_code(code, self._data.get(CONF_SERVER))
+            if region is None:
+                errors["base"] = "oauth_region_failed"
+            else:
+                try:
+                    tokens = await self.hass.async_add_executor_job(
+                        exchange_code, code, device_id, region
+                    )
+                except XiaomiOAuthError:
+                    _LOGGER.exception("Xiaomi OAuth exchange failed")
+                    errors["base"] = "oauth_failed"
+                else:
+                    self._data.update(oauth_entry_updates(tokens, device_id))
+                    return self._create_entry()
+        return self.async_show_form(
+            step_id="miot_oauth_auth",
+            data_schema=OAUTH_CODE_SCHEMA,
+            errors=errors,
+            description_placeholders={
+                "authorize_url": build_authorize_url(str(device_id))
+            },
+        )
+
+    def _create_entry(self) -> ConfigFlowResult:
+        """Create the config entry after optional OAuth handling."""
+        return self.async_create_entry(title=self._title, data=self._data)
 
     @staticmethod
     def _get_wifi_sn(host, token, model, user_id) -> str | None:

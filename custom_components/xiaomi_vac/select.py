@@ -78,12 +78,18 @@ class XiaomiVacuumSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntit
 
 
 def _map_label(m: dict) -> str:
-    return m.get("map_name") or f"Map {m['map_id']}"
+    """Label for a get-map-list entry ({name,id,cur})."""
+    return m.get("name") or f"Map {m['id']}"
 
 
 class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntity):
-    """Switch the vacuum's active map; the new map serves from cache
-    immediately (map-reliability Phase 2), no wait on a decryptable upload."""
+    """Switch the vacuum's active map.
+
+    Populated from `get-map-list` (via the coordinator's `map_list_meta`), NOT
+    from decrypted map data — so the dropdown lists and switches maps even when
+    the current cloud upload is undecryptable ("Key B"). Switching serves the
+    new map from cache immediately when a readable copy exists.
+    """
 
     _attr_has_entity_name = True
     _attr_translation_key = "active_map"
@@ -95,8 +101,14 @@ class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntit
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
 
     def _maps(self) -> list[dict]:
-        data = self.coordinator.data
-        return data.maps if data else []
+        return self.coordinator.map_list_meta
+
+    @property
+    def available(self) -> bool:
+        # Available whenever we know the map list, regardless of whether the
+        # active map's upload currently decrypts (a Key-B active map must not
+        # make the switch control disappear — that's when you need it most).
+        return bool(self._maps())
 
     @property
     def options(self) -> list[str]:
@@ -104,13 +116,13 @@ class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntit
 
     @property
     def current_option(self) -> str | None:
-        return next((_map_label(m) for m in self._maps() if m.get("active")), None)
+        return next((_map_label(m) for m in self._maps() if m.get("cur")), None)
 
     async def async_select_option(self, option: str) -> None:
         target = next((m for m in self._maps() if _map_label(m) == option), None)
         if target is None:
             return
         await self.hass.async_add_executor_job(
-            self.coordinator.device.set_current_map, target["map_id"]
+            self.coordinator.device.set_current_map, int(target["id"])
         )
         await self.coordinator.async_request_refresh()

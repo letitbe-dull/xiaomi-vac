@@ -236,29 +236,6 @@
       "volume": {
         "name": "Głośność"
       }
-    },
-    "button": {
-      "refresh_map": {
-        "name": "Odśwież mapę"
-      }
-    }
-  },
-  "issues": {
-    "map_encrypted": {
-      "title": "Nie można wyświetlić mapy",
-      "description": "Aktywna mapa jest zaszyfrowana przez urządzenie i nie można jej odszyfrować. Uruchom pełne sprzątanie, aby wygenerować czytelną kopię, a następnie odśwież. Jeśli wyświetlana jest mapa z pamięci podręcznej, może być nieaktualna — zmiany pokoi wprowadzone w Mi Home będą widoczne dopiero po kolejnym sprzątaniu.",
-      "fix_flow": {
-        "step": {
-          "confirm": {
-            "title": "Odśwież mapę",
-            "description": "Odkurzacz na chwilę opuści stację i wróci, aby wymusić świeżą czytelną mapę. Kontynuować?"
-          }
-        }
-      }
-    },
-    "map_refreshing": {
-      "title": "Odświeżanie mapy…",
-      "description": "Odkurzacz na chwilę opuścił stację, aby wymusić świeżą czytelną mapę. Wróci automatycznie."
     }
   },
   "services": {

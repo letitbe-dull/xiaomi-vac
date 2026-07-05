@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .cloud.connector import XiaomiCloud
+from .cloud.mqtt import MqttMessage
 from .const import (
     CONF_DEVICE_ID,
     CONF_MAC,
@@ -38,6 +39,17 @@ from .spec.types import MapCapability
 # activities where the map is actually changing
 _ACTIVE = {"cleaning", "returning"}
 
+# ijai-specific MQTT identifiers for map events (plan: Out of scope for other brands)
+_SIID_MAP = 10
+_EIID_MAP_UPLOAD = 6   # event_occured/10/6 = "test-upload-map" (fresh map uploaded)
+_PIID_CUR_MAP = 2      # properties_changed/10/2 = curMapId
+
+# Burst window: collapse multiple upload events within this window into one fetch
+_DEBOUNCE_SECONDS = 2.0
+_MAP_REFRESH_WAIT_SECONDS = 120.0
+_MAP_REFRESH_POLL_SECONDS = 3.0
+_REFRESH_READY_ACTIVITIES = {"docked", "idle"}
+
 # Cloud upload slots tried every cycle for the active map (per map-reliability
 # Phase 0: divergence between them is real but not gated on any local state,
 # so both are read every poll rather than treating one as a fallback).
@@ -53,28 +65,7 @@ _SINGLE_MAP_ID = 0
 # the wrong floor plan (map-reliability Phase 2: live-overlay scoping).
 _LIVE_ONLY_VECTOR_KEYS = ("path", "vacuum", "goto", "vacuum_room", "vacuum_room_name")
 
-# Phase-4 "Refresh map" window: upper bound before the vacuum is sent home,
-# even if no fresh Key-A blob has arrived (map-reliability Phase 0 decision).
-_REFRESH_TIMEOUT = 15.0
-# How often we re-poll the cloud during the refresh window; loose enough not to
-# hammer the API, tight enough to catch a fresh upload within the 15 s budget.
-_REFRESH_POLL_INTERVAL = 3.0
-# Activities in which starting a clean would be destructive/wrong. "None" is
-# treated as unknown -> refuse rather than move the vacuum on a hunch.
-_REFRESH_ELIGIBLE = {"docked", "idle"}
-
 _LOGGER = logging.getLogger(__name__)
-
-_ISSUE_MAP_ENCRYPTED = "map_encrypted"
-_ISSUE_MAP_REFRESHING = "map_refreshing"
-
-
-def _repair_issue_id(entry_id: str) -> str:
-    return f"{_ISSUE_MAP_ENCRYPTED}_{entry_id}"
-
-
-def _refreshing_issue_id(entry_id: str) -> str:
-    return f"{_ISSUE_MAP_REFRESHING}_{entry_id}"
 
 
 def _static_only(vector: dict) -> dict:
@@ -103,12 +94,20 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._cloud: XiaomiCloud | None = None
         self._fetcher: MapFetcher | None = None
         self._cache: MapCache | None = None
+        # Last successful get-map-list read ([{name,id,cur}...]), kept up to date
+        # every cycle EVEN WHEN no map decrypts, so the "Active Map" select can
+        # list/switch maps independent of whether the current upload is readable.
+        self._map_list_meta: list[dict] = []
         # Whether this profile has a map-list catalogue at all (set in _build).
         # A device without one has exactly one physical map -> _SINGLE_MAP_ID.
         self._has_map_list = False
-        # Phase-4 "Refresh map" single-flight lock + observable flag.
-        self._refresh_lock = asyncio.Lock()
-        self._refreshing = False
+        # MQTT-signaled curMapId; used in _resolve_active_id when the map-list
+        # read for this cycle failed (None = not yet signaled by MQTT).
+        self._mqtt_active_id: int | None = None
+        self._mqtt_debounce_task: asyncio.Task | None = None
+        self._mqtt_upload_waiters: set[asyncio.Future[None]] = set()
+        self._last_live_at: float | None = None
+        self._refresh_map_lock = asyncio.Lock()
 
     @property
     def device(self) -> IjaiVacuumDevice:
@@ -119,9 +118,10 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         return self._control
 
     @property
-    def refreshing(self) -> bool:
-        """True while a Phase-4 refresh cycle is undocking the vacuum."""
-        return self._refreshing
+    def map_list_meta(self) -> list[dict]:
+        """Latest [{name,id,cur}...] from get-map-list; available even when no
+        map decrypts, so the Active Map select isn't gated on decrypt success."""
+        return self._map_list_meta
 
     def _tune_interval(self) -> None:
         """Poll fast while the vacuum is moving, slowly when docked/idle."""
@@ -131,6 +131,117 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         new = timedelta(seconds=secs)
         if self.update_interval != new:
             self.update_interval = new
+
+    async def async_on_mqtt_message(self, msg: MqttMessage) -> None:
+        """Handle an MQTT message routed from the integration setup.
+
+        Triggered by: upload event (siid 10 / eiid 6) or curMapId change (siid 10 / piid 2).
+        """
+        if msg.kind == "property" and msg.siid == _SIID_MAP and msg.piid == _PIID_CUR_MAP:
+            try:
+                self._mqtt_active_id = int(msg.value)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                pass
+            _LOGGER.debug("MQTT curMapId=%s — scheduling map refresh", self._mqtt_active_id)
+            self._schedule_mqtt_refresh()
+        elif msg.kind == "event" and msg.siid == _SIID_MAP and msg.eiid == _EIID_MAP_UPLOAD:
+            _LOGGER.debug("MQTT map upload event — scheduling map refresh")
+            self._notify_mqtt_upload_waiters()
+            self._schedule_mqtt_refresh()
+
+    def _new_mqtt_upload_waiter(self) -> asyncio.Future[None]:
+        waiter: asyncio.Future[None] = self.hass.loop.create_future()
+        self._mqtt_upload_waiters.add(waiter)
+        waiter.add_done_callback(self._mqtt_upload_waiters.discard)
+        return waiter
+
+    def _notify_mqtt_upload_waiters(self) -> None:
+        for waiter in tuple(self._mqtt_upload_waiters):
+            if not waiter.done():
+                waiter.set_result(None)
+
+    def _fresh_live_after(self, since: float) -> bool:
+        return self._last_live_at is not None and self._last_live_at > since
+
+    async def _async_wait_for_mqtt_upload(
+        self, waiter: asyncio.Future[None], since: float,
+    ) -> None:
+        deadline = time.monotonic() + _MAP_REFRESH_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            if self._fresh_live_after(since):
+                return
+            if waiter.done():
+                await self.async_request_refresh()
+                return
+            await asyncio.sleep(1)
+        if self._fresh_live_after(since):
+            return
+        raise HomeAssistantError("Timed out waiting for a fresh map upload event")
+
+    async def _async_poll_for_live_map(self, since: float) -> None:
+        deadline = time.monotonic() + _MAP_REFRESH_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            await self.async_request_refresh()
+            if self._fresh_live_after(since):
+                return
+            remaining = deadline - time.monotonic()
+            await asyncio.sleep(min(_MAP_REFRESH_POLL_SECONDS, max(0.0, remaining)))
+        raise HomeAssistantError("Timed out waiting for a readable fresh map")
+
+    async def async_refresh_map_with_movement(
+        self, *, confirm_movement: bool, use_mqtt: bool,
+    ) -> None:
+        """Briefly start the vacuum to force a fresh map upload, then dock."""
+        if confirm_movement is not True:
+            raise HomeAssistantError("Refresh map requires confirm_movement: true")
+        if self._refresh_map_lock.locked():
+            raise HomeAssistantError("A map refresh is already running")
+
+        async with self._refresh_map_lock:
+            if self._device.profile.map is None:
+                raise HomeAssistantError("This vacuum has no supported map capability")
+            await self._control.async_request_refresh()
+            status = self._control.data
+            if status is None or status.activity not in _REFRESH_READY_ACTIVITIES:
+                raise HomeAssistantError("Refresh map is only available while docked or idle")
+            if self._device.core.start is None or self._device.core.charge is None:
+                raise HomeAssistantError("This vacuum cannot start and return to dock")
+
+            since = self._last_live_at or 0.0
+            waiter = self._new_mqtt_upload_waiter() if use_mqtt else None
+            dock_on_exit = False
+            try:
+                dock_on_exit = True
+                await self.hass.async_add_executor_job(self._device.start)
+                await self._control.async_request_refresh()
+                if waiter is not None:
+                    await self._async_wait_for_mqtt_upload(waiter, since)
+                else:
+                    await self._async_poll_for_live_map(since)
+            finally:
+                if waiter is not None and not waiter.done():
+                    waiter.cancel()
+                if dock_on_exit:
+                    with contextlib.suppress(Exception):
+                        await self.hass.async_add_executor_job(self._device.return_home)
+                    with contextlib.suppress(Exception):
+                        await self._control.async_request_refresh()
+
+    def _schedule_mqtt_refresh(self) -> None:
+        """Cancel any pending debounce task and start a fresh one."""
+        if self._mqtt_debounce_task is not None:
+            self._mqtt_debounce_task.cancel()
+        self._mqtt_debounce_task = self.hass.async_create_task(
+            self._mqtt_debounced_refresh()
+        )
+
+    async def _mqtt_debounced_refresh(self) -> None:
+        try:
+            await asyncio.sleep(_DEBOUNCE_SECONDS)
+        except asyncio.CancelledError:
+            return
+        self._mqtt_debounce_task = None
+        await self.async_refresh()
 
     def _build(self) -> MapFetcher:
         """Blocking: restore the saved cloud session and construct a fetcher.
@@ -160,8 +271,8 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             mac = live_mac or d.get(CONF_MAC) or ""
 
         _LOGGER.debug(
-            "Map key inputs: brand=%s wifi_sn set=%s mac=%s user_id=%s device_id=%s model=%s",
-            brand, bool(wifi_sn), mac, d[CONF_USER_ID], d[CONF_DEVICE_ID], d[CONF_MODEL],
+            "Map key inputs: brand=%s wifi_sn=%r mac=%s user_id=%s device_id=%s model=%s",
+            brand, wifi_sn, mac, d[CONF_USER_ID], d[CONF_DEVICE_ID], d[CONF_MODEL],
         )
         if "wifi_sn" in required and not wifi_sn:
             raise UpdateFailed("Could not read wifi_sn from the vacuum (needed to decrypt map)")
@@ -216,6 +327,9 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 return int(active_meta["id"])
             except (TypeError, ValueError):
                 pass
+        # Use the MQTT-signaled id when map-list read failed this cycle.
+        if self._mqtt_active_id is not None:
+            return self._mqtt_active_id
         if not self._has_map_list and not maps_meta:
             return _SINGLE_MAP_ID
         return None
@@ -267,6 +381,11 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 maps_meta = await self.hass.async_add_executor_job(self._device.map_list)
             except Exception:  # noqa: BLE001
                 maps_meta = []
+            # Keep the switchable map list current even if the rest of this cycle
+            # fails to produce a readable map. Never clobber a good list with a
+            # transient empty read (same guard as cache prune).
+            if maps_meta:
+                self._map_list_meta = maps_meta
 
             try:
                 slot_results = await self.hass.async_add_executor_job(self._fetch_slots)
@@ -281,19 +400,26 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             decoded = [r for r in slot_results if r is not None]
             active_meta = next((m for m in maps_meta if m.get("cur")), None)
             active_id = self._resolve_active_id(active_meta, decoded, maps_meta)
+            _LOGGER.debug(
+                "Map cycle: slot keys=%s active_id=%s maps_listed=%d",
+                ["A" if r is not None else "B" for r in slot_results],
+                active_id, len(maps_meta),
+            )
 
             # Whichever slot decrypted (Key A) wins and refreshes the cache for
             # this map id; both slots being None just means both were Key B this
             # cycle — normal, not an error, and handled by serving from cache.
             live = decoded[0] if decoded else None
             if live is not None and active_id is not None:
+                live_at = time.time()
+                self._last_live_at = live_at
                 await cache.async_upsert(
                     active_id,
                     png=live.image_png,
                     attributes=live.attributes,
                     vector=live.vector,
                     content_hash=live.content_hash,
-                    timestamp=time.time(),
+                    timestamp=live_at,
                 )
 
             # Prune maps the device no longer lists, but never off a transient
@@ -305,28 +431,30 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
 
             result = self._serve(cache, active_id, maps_meta)
             if result is None:
-                # Nothing live AND nothing cached for this map id. Usually a
-                # brand-new map that's never rendered readably yet, but it's
-                # ALSO what a fetcher built with stale key inputs produces —
-                # e.g. wifi_sn/mac read while the device was briefly
-                # unreachable at startup. Drop the fetcher so the next cycle
-                # re-reads live values and self-heals once the device is back.
+                # Nothing live AND nothing cached for this map id yet. This is
+                # the normal cold-start state: the vacuum's current upload is a
+                # bad ("Key B") blob that Mi Home can't read either, and we have
+                # no prior good copy to fall back on. Not an error and not
+                # actionable by the user — the cache fills the moment the vacuum
+                # next uploads a good blob (any normal clean/dock does it), and
+                # we serve silently from then on. So: no repair notice, no
+                # warning-level log; just stay unavailable and keep polling.
+                #
+                # It's also what a fetcher built with stale key inputs produces
+                # (wifi_sn/mac read while the device was briefly unreachable at
+                # startup), so drop the fetcher to re-read live values next cycle.
                 self._fetcher = None
-                ir.async_create_issue(
-                    self.hass,
-                    DOMAIN,
-                    _repair_issue_id(self.entry.entry_id),
-                    is_fixable=True,
-                    is_persistent=False,
-                    severity=ir.IssueSeverity.WARNING,
-                    translation_key=_ISSUE_MAP_ENCRYPTED,
-                    data={"entry_id": self.entry.entry_id},
+                _LOGGER.debug(
+                    "No readable map yet for active_id=%s: current upload is a "
+                    "bad blob and nothing cached — waiting for a good upload",
+                    active_id,
                 )
-                raise UpdateFailed(
-                    "No readable map available (device-side encrypted upload, "
-                    "and no cached copy yet)"
-                )
-            ir.async_delete_issue(self.hass, DOMAIN, _repair_issue_id(self.entry.entry_id))
+                raise UpdateFailed("Waiting for a readable map upload from the vacuum")
+            _LOGGER.debug(
+                "Serving map active_id=%s (%s this cycle), %d map(s) cached",
+                active_id, "live+cached" if decoded else "from cache",
+                len(cache.all()),
+            )
             return result
         except (UpdateFailed, ConfigEntryAuthFailed):
             raise
@@ -335,111 +463,6 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         except Exception as err:  # noqa: BLE001
             self._fetcher = None
             raise UpdateFailed(f"Map update error: {err}") from err
-
-    async def async_refresh_map_undock(self) -> bool:
-        """Briefly undock the vacuum to force a fresh readable ("Key A") upload.
-
-        Returns True if a new render for the active map landed within the window,
-        False if the window timed out, the vacuum was ineligible, or another
-        refresh was already in progress. Always returns the vacuum to the dock
-        when a clean was actually started.
-
-        Callers MUST have obtained explicit user consent — this method moves the
-        physical vacuum. Guards inside are the last line of defence, not the
-        consent gate.
-        """
-        if self._refresh_lock.locked():
-            _LOGGER.info("Refresh-map: already running; ignoring duplicate press")
-            return False
-
-        async with self._refresh_lock:
-            ctrl_data = self._control.data
-            activity = ctrl_data.activity if ctrl_data is not None else None
-            if activity not in _REFRESH_ELIGIBLE:
-                _LOGGER.warning(
-                    "Refresh-map: vacuum is %s, not docked/idle; refusing to move",
-                    activity,
-                )
-                return False
-
-            cache = await self._ensure_cache()
-            active_id = self.data.map_id if self.data is not None else None
-            prior_hash: str | None = None
-            if active_id is not None:
-                entry = cache.get(active_id)
-                prior_hash = entry.content_hash if entry is not None else None
-
-            self._refreshing = True
-            self.async_update_listeners()
-            # Swap any "map encrypted" notice for a "refreshing…" notice so the
-            # user watching the repair panel sees the action is in progress.
-            # Deleting the old id first avoids two overlapping notices for the
-            # same underlying condition.
-            ir.async_delete_issue(
-                self.hass, DOMAIN, _repair_issue_id(self.entry.entry_id)
-            )
-            ir.async_create_issue(
-                self.hass,
-                DOMAIN,
-                _refreshing_issue_id(self.entry.entry_id),
-                is_fixable=False,
-                is_persistent=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key=_ISSUE_MAP_REFRESHING,
-            )
-            started = False
-            try:
-                try:
-                    await self.hass.async_add_executor_job(self._device.start)
-                    started = True
-                except Exception as ex:  # noqa: BLE001
-                    _LOGGER.error("Refresh-map: start-sweep failed: %s", ex)
-                    return False
-
-                fresh = await self._await_fresh_render(cache, active_id, prior_hash)
-                return fresh
-            finally:
-                if started:
-                    try:
-                        await self.hass.async_add_executor_job(self._device.return_home)
-                    except Exception as ex:  # noqa: BLE001
-                        _LOGGER.error("Refresh-map: return-to-dock failed: %s", ex)
-                self._refreshing = False
-                self.async_update_listeners()
-                # Clear the "refreshing…" notice unconditionally; the normal
-                # poll cycle will re-raise `map_encrypted` on the next run if
-                # no readable map exists after the undock attempt.
-                ir.async_delete_issue(
-                    self.hass, DOMAIN, _refreshing_issue_id(self.entry.entry_id)
-                )
-                # Nudge status so the vacuum entity flips back to docked promptly.
-                await self._control.async_request_refresh()
-
-    async def _await_fresh_render(
-        self,
-        cache: MapCache,
-        active_id: int | None,
-        prior_hash: str | None,
-    ) -> bool:
-        """Poll the coordinator until the active map's cache hash changes or the
-        timeout elapses. Returns True on hash change (fresh render captured)."""
-        deadline = time.monotonic() + _REFRESH_TIMEOUT
-        while time.monotonic() < deadline:
-            await asyncio.sleep(_REFRESH_POLL_INTERVAL)
-            try:
-                await self.async_refresh()
-            except Exception as ex:  # noqa: BLE001
-                _LOGGER.debug("Refresh-map poll: coordinator refresh error: %s", ex)
-                continue
-            current_id = active_id
-            if current_id is None and self.data is not None:
-                current_id = self.data.map_id
-            if current_id is None:
-                continue
-            entry = cache.get(current_id)
-            if entry is not None and entry.content_hash != prior_hash:
-                return True
-        return False
 
     async def _refresh_and_persist(self) -> bool:
         """Renew the cloud session via passToken and save the new tokens."""
