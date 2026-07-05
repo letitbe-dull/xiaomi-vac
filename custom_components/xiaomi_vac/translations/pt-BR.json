@@ -219,6 +219,9 @@
           "fast": "Rápido",
           "ai_hosting": "Hospedagem de IA"
         }
+      },
+      "active_map": {
+        "name": "Mapa ativo"
       }
     },
     "switch": {

@@ -2,6 +2,7 @@
 attribute contract the card consumes. Synchronous; run in an executor."""
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import zlib
@@ -80,6 +81,13 @@ class MapResult:
     image_png: bytes
     attributes: dict
     vector: dict  # ACTIVE map's grid + vector overlays (back-compat)
+    # Physical map id (mapHeadId) this render belongs to; None when the brand's
+    # blob carries no id of its own (non-ijai — the coordinator's map-list
+    # metadata is the id source of truth in that case).
+    map_id: int | None = None
+    # sha256 of the pre-render unpacked map bytes; lets the coordinator's cache
+    # skip rewriting storage when a poll yields byte-identical content.
+    content_hash: str | None = None
     # All maps the device lists, each a vector dict tagged with map_id/map_name/
     # active. Always contains at least the active map; extra entries appear only
     # when the device actually has more than one map.
@@ -112,8 +120,7 @@ class MapFetcher:
     """Owns the map parser; pulls the active map and builds the contract."""
 
     def __init__(self, cloud: XiaomiCloud, *, server: str, user_id: str,
-                 device_id: str, model: str, mac: str, wifi_sn: str, parser_brand: str,
-                 upload_action: tuple[int, int] | None):
+                 device_id: str, model: str, mac: str, wifi_sn: str, parser_brand: str):
         self._cloud = cloud
         self._server = server
         self._user_id = str(user_id)
@@ -122,9 +129,6 @@ class MapFetcher:
         self._mac = mac
         self._wifi_sn = wifi_sn
         self._brand = parser_brand
-        # (siid, aiid) of the profile's own upload-by-mapid action, or None if the
-        # profile has none with a usable single input (e.g. viomi v15 — E4).
-        self._upload_action = upload_action
         self._parser = make_parser(
             self._brand, model, ColorsPalette(), Sizes(), _DRAWABLES, ImageConfig(), []
         )
@@ -139,10 +143,6 @@ class MapFetcher:
         # unencrypted models or until the property is successfully read.
         self._enckey: str | None = None
         self._enckey_polled = False
-        # Non-active map vectors are static; fetch each at most once per fetcher
-        # lifetime (keyed by map id, caches None on failure) so the timer never
-        # spams the cloud. Cleared on integration reload.
-        self._inactive_cache: dict[int, dict | None] = {}
 
     def _get_dreame_enckey(self) -> str | None:
         """Poll siid=6/piid=3 for the dreame cloud map encryption key."""
@@ -169,84 +169,27 @@ class MapFetcher:
             return dreame_decrypt_cloud_blob(raw, self._enckey)
         return self._parser.unpack_map(raw, **self._unpack_kw)
 
-    def fetch_all(self, maps_meta: list[dict] | None = None) -> MapResult | None:
-        """Fetch the active map plus best-effort vectors for any OTHER maps the
-        device lists. Returns the active MapResult with `.maps` populated.
+    def fetch(self, slot: str = "0") -> MapResult | None:
+        """Fetch + decrypt + parse one cloud upload slot ("0" or "1").
 
-        `maps_meta` is `device.map_list()` output ([{name,id,cur}, ...]). With a
-        single-map device this is just the active map and no cloud writes happen.
+        Returns None for anything that isn't a readable render: an
+        undecryptable ("Key B") blob, a corrupt/incomplete one, or an empty
+        map. Raises SessionExpired when the cloud won't even hand back a URL
+        (token likely dead) — the coordinator handles renewal.
         """
-        active = self.fetch("0")
-        if active is None:
-            return None
-        meta = maps_meta or []
-        active_meta = next((m for m in meta if m.get("cur")), None)
-        active_id = active.vector.get("map_id")
-        entries = [{**active.vector, "map_id": active_id,
-                    "map_name": (active_meta or {}).get("name"), "active": True}]
-        for m in meta:
-            if m.get("cur") or m.get("id") is None:
-                continue
-            vec = self._inactive_vector(int(m["id"]), active_id)
-            if vec:
-                entries.append({**vec, "map_id": m["id"],
-                                "map_name": m.get("name"), "active": False})
-        active.maps = entries
-        return active
-
-    def _inactive_vector(self, map_id: int, active_id) -> dict | None:
-        """Best-effort vector for a non-active map. UNPROVEN: the obj_name a
-        stored map lands at after an upload-by-id isn't confirmed (only ever had
-        one map to test), so this asks the cloud to upload it then probes a few
-        candidate slots, accepting only a blob whose map_id differs from the
-        active one. Safe to fail; result (incl. None) is cached."""
-        if map_id in self._inactive_cache:
-            return self._inactive_cache[map_id]
-        if self._upload_action is None:
-            self._inactive_cache[map_id] = None
-            return None
-        vec = None
-        try:
-            siid, aiid = self._upload_action
-            self._cloud.cloud_action(self._server, self._device_id, siid, aiid, [map_id])
-            for slot in ("1", str(map_id)):
-                url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
-                raw = self._cloud.download(url) if url else None
-                if not raw or raw == b"[]":
-                    continue
-                v = self._decode_vector(raw)
-                if v and v.get("map_id") not in (None, active_id) and v.get("rooms"):
-                    vec = v
-                    break
-        except Exception as ex:  # noqa: BLE001
-            _LOGGER.debug("inactive map %s fetch failed: %s", map_id, ex)
-        self._inactive_cache[map_id] = vec
-        return vec
-
-    def _decode_vector(self, raw: bytes) -> dict | None:
-        """Decrypt+parse a blob to just the vector contract (no PNG render)."""
-        try:
-            unpacked = self._unpack(raw)
-            md = self._parser.parse(unpacked)
-            return map_vector.vector_map(md, unpacked, ijai_grid=self._ijai_grid)
-        except Exception as ex:  # noqa: BLE001
-            _LOGGER.debug("inactive map decode failed: %s", ex)
-            return None
-
-    def fetch(self, map_name: str = "0") -> MapResult | None:
         if self._brand == "dreame" and not self._enckey_polled:
             self._enckey = self._get_dreame_enckey()
             self._enckey_polled = True
             _LOGGER.debug("dreame enckey poll: %s",
                           "found" if self._enckey else "not found (unencrypted or unavailable)")
-        url = self._cloud.map_url(self._server, self._device_id, map_name, self._endpoint)
+        url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
         if not url:
             # No URL usually means the cloud session expired; let the
             # coordinator try a token refresh.
             raise SessionExpired()
         raw = self._cloud.download(url)
         if not raw:
-            _LOGGER.warning("Map download failed")
+            _LOGGER.warning("Map download failed (slot %s)", slot)
             return None
 
         try:
@@ -254,18 +197,18 @@ class MapFetcher:
             md = self._parser.parse(unpacked)
             vector = map_vector.vector_map(md, unpacked, ijai_grid=self._ijai_grid)
         except Exception as ex:  # noqa: BLE001
-            # A corrupt / incomplete map (e.g. after a vacuum wifi reset) fails
-            # to decrypt or parse. Don't crash the coordinator over it.
+            # A corrupt/incomplete map, OR (routinely, per the map-reliability
+            # plan) an undecryptable "Key B" blob at this slot. Neither should
+            # crash the coordinator — the caller falls back to the other slot
+            # or the cache.
             if self._brand == "dreame" and self._enckey is not None:
                 _LOGGER.debug("dreame decrypt failed; will re-poll enckey next fetch: %s", ex)
                 self._enckey = None
                 self._enckey_polled = False
-            _LOGGER.warning(
-                "Could not decode the vacuum map (corrupt or unsupported map "
-                "data — try running a fresh clean): %s", ex)
+            _LOGGER.debug("Could not decode map at slot %s: %s", slot, ex)
             return None
         if md.image is None or md.image.is_empty:
-            _LOGGER.debug("Parsed map is empty")
+            _LOGGER.debug("Parsed map at slot %s is empty", slot)
             return None
 
         cropped, off_x, off_y = _autocrop(md.image.data)
@@ -292,6 +235,11 @@ class MapFetcher:
             "walls": [_od(w) for w in (md.walls or [])],
             "image_width": cropped.width,
             "image_height": cropped.height,
-            "map_name": map_name,
         }
-        return MapResult(image_png=buf.getvalue(), attributes=attributes, vector=vector)
+        return MapResult(
+            image_png=buf.getvalue(),
+            attributes=attributes,
+            vector=vector,
+            map_id=vector.get("map_id"),
+            content_hash=hashlib.sha256(unpacked).hexdigest(),
+        )

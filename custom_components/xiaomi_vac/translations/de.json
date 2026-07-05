@@ -219,6 +219,9 @@
           "fast": "Schnell",
           "ai_hosting": "KI-Hosting"
         }
+      },
+      "active_map": {
+        "name": "Aktive Karte"
       }
     },
     "switch": {

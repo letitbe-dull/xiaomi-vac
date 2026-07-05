@@ -219,6 +219,9 @@
           "fast": "高速",
           "ai_hosting": "AIホスティング"
         }
+      },
+      "active_map": {
+        "name": "現在のマップ"
       }
     },
     "switch": {

@@ -159,3 +159,30 @@ async def test_setup_entry_map_failure_does_not_block_control(hass: HomeAssistan
 
     # The map failure is swallowed by async_refresh; control setup must succeed.
     assert result is True
+
+
+async def test_setup_entry_without_oauth_has_no_mqtt_client(hass: HomeAssistant) -> None:
+    """Entry with no OAuth credentials must not start an MQTT client."""
+    # _BASE_DATA has no CONF_OAUTH_* keys → _async_start_mqtt returns None.
+    entry = _entry("AA:BB:CC:DD:EE:04", _BASE_DATA)
+    entry.add_to_hass(hass)
+
+    fake_device = _fake_device()
+
+    with (
+        patch("custom_components.xiaomi_vac.IjaiVacuumDevice", return_value=fake_device),
+        patch(
+            "custom_components.xiaomi_vac.coordinator.XiaomiVacuumCoordinator"
+            ".async_config_entry_first_refresh",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await async_setup_entry(hass, entry)
+
+    assert result is True
+    assert entry.runtime_data.mqtt is None

@@ -46,6 +46,20 @@
           "device": "Vacuum"
         }
       },
+      "miot_oauth": {
+        "title": "Enable real-time map auth",
+        "description": "Optional. This prepares the live MQTT map path. Skip it to keep the current polling map behaviour.",
+        "data": {
+          "enable_miot_oauth": "Enable OAuth for real-time map updates"
+        }
+      },
+      "miot_oauth_auth": {
+        "title": "Link Xiaomi OAuth",
+        "description": "Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+        "data": {
+          "code": "OAuth code"
+        }
+      },
       "reauth_confirm": {
         "title": "Sign in to Xiaomi again",
         "description": "Your session ran out and couldn't renew on its own. Sign in again to bring the live map back.",
@@ -57,7 +71,9 @@
     },
     "error": {
       "unsupported_model": "This model isn't supported yet.",
-      "cannot_connect": "Couldn't reach the vacuum at that IP with that token."
+      "cannot_connect": "Couldn't reach the vacuum at that IP with that token.",
+      "oauth_failed": "Xiaomi OAuth failed. Start the link again and paste the new code.",
+      "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
     },
     "abort": {
       "already_configured": "This vacuum is already set up.",
@@ -65,6 +81,47 @@
       "login_failed": "Xiaomi wouldn't accept that. Check your email and password, then try again.",
       "no_devices": "No supported vacuums on this account.",
       "unsupported_model": "This model isn't supported yet (ijai / Xiaomi-branded ijai vacuums only)."
+    }
+  },
+  "options": {
+    "step": {
+      "miot_oauth_auth": {
+        "title": "Link Xiaomi OAuth",
+        "description": "Enable the real-time (MQTT) live map on this existing vacuum. Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+        "data": {
+          "code": "OAuth code"
+        }
+      }
+    },
+    "error": {
+      "oauth_failed": "Xiaomi OAuth failed. Start the link again and paste the new code.",
+      "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
+    },
+    "abort": {
+      "oauth_local_only": "This vacuum was added as local-only, so it has no Xiaomi cloud session to link OAuth to."
+    }
+  },
+  "issues": {
+    "oauth_missing": {
+      "title": "Turn on the real-time live map",
+      "fix_flow": {
+        "step": {
+          "link": {
+            "title": "Link Xiaomi OAuth",
+            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+            "data": {
+              "code": "OAuth code"
+            }
+          }
+        },
+        "error": {
+          "oauth_failed": "Xiaomi OAuth failed. Start the link again and paste the new code.",
+          "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
+        },
+        "abort": {
+          "entry_gone": "That vacuum is no longer set up."
+        }
+      }
     }
   },
   "entity": {
@@ -231,6 +288,16 @@
         "segments": {
           "name": "Rooms",
           "description": "List of room ids to clean (from the map camera's \"rooms\" attribute)."
+        }
+      }
+    },
+    "refresh_map": {
+      "name": "Refresh map",
+      "description": "Briefly starts the vacuum so it leaves the dock and uploads a fresh map, then sends it back to dock.",
+      "fields": {
+        "confirm_movement": {
+          "name": "Confirm movement",
+          "description": "Must be true. The vacuum will briefly leave the dock and return."
         }
       }
     }

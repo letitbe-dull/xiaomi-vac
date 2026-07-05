@@ -219,6 +219,9 @@
           "fast": "Snel",
           "ai_hosting": "AI-hosting"
         }
+      },
+      "active_map": {
+        "name": "Actieve kaart"
       }
     },
     "switch": {

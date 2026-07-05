@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 from homeassistant.components.vacuum import VacuumEntityFeature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.xiaomi_vac.device import VacuumStatus
@@ -388,3 +389,33 @@ async def test_volume_set_value_calls_device_and_refreshes(hass: HomeAssistant) 
 
     coord.device.set_volume.assert_called_once_with(7)
     coord.async_request_refresh.assert_awaited_once()
+
+async def test_vacuum_refresh_map_delegates_to_map_coordinator(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    entry = _make_entry()
+    entry.runtime_data.map.async_refresh_map_with_movement = AsyncMock()
+    entry.runtime_data.mqtt = object()
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    await vac.async_refresh_map(confirm_movement=True)
+
+    entry.runtime_data.map.async_refresh_map_with_movement.assert_awaited_once_with(
+        confirm_movement=True,
+        use_mqtt=True,
+    )
+
+
+async def test_vacuum_refresh_map_requires_cloud_map_session(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    entry = _make_entry()
+    entry.runtime_data.map = None
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    with pytest.raises(HomeAssistantError, match="cloud map session"):
+        await vac.async_refresh_map(confirm_movement=True)

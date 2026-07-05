@@ -219,6 +219,9 @@
           "fast": "Veloce",
           "ai_hosting": "Hosting IA"
         }
+      },
+      "active_map": {
+        "name": "Mappa attiva"
       }
     },
     "switch": {

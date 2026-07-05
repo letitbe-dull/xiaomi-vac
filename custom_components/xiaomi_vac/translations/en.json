@@ -67,6 +67,47 @@
       "unsupported_model": "This model isn't supported yet (ijai / Xiaomi-branded ijai vacuums only)."
     }
   },
+  "options": {
+    "step": {
+      "miot_oauth_auth": {
+        "title": "Link Xiaomi OAuth",
+        "description": "Enable the real-time (MQTT) live map on this existing vacuum. Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+        "data": {
+          "code": "OAuth code"
+        }
+      }
+    },
+    "error": {
+      "oauth_failed": "Xiaomi OAuth failed. Start the link again and paste the new code.",
+      "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
+    },
+    "abort": {
+      "oauth_local_only": "This vacuum was added as local-only, so it has no Xiaomi cloud session to link OAuth to."
+    }
+  },
+  "issues": {
+    "oauth_missing": {
+      "title": "Turn on the real-time live map",
+      "fix_flow": {
+        "step": {
+          "link": {
+            "title": "Link Xiaomi OAuth",
+            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link, approve access, then paste the code from the redirect address bar:\n\n{authorize_url}",
+            "data": {
+              "code": "OAuth code"
+            }
+          }
+        },
+        "error": {
+          "oauth_failed": "Xiaomi OAuth failed. Start the link again and paste the new code.",
+          "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
+        },
+        "abort": {
+          "entry_gone": "That vacuum is no longer set up."
+        }
+      }
+    }
+  },
   "entity": {
     "camera": {
       "map": {
@@ -219,6 +260,9 @@
           "fast": "Fast",
           "ai_hosting": "AI Hosting"
         }
+      },
+      "active_map": {
+        "name": "Active map"
       }
     },
     "switch": {
@@ -243,6 +287,16 @@
         "segments": {
           "name": "Rooms",
           "description": "List of room ids to clean (from the map camera's \"rooms\" attribute)."
+        }
+      }
+    },
+    "refresh_map": {
+      "name": "Refresh map",
+      "description": "Briefly starts the vacuum so it leaves the dock and uploads a fresh map, then sends it back to dock.",
+      "fields": {
+        "confirm_movement": {
+          "name": "Confirm movement",
+          "description": "Must be true. The vacuum will briefly leave the dock and return."
         }
       }
     }

@@ -9,11 +9,18 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
 
+from .cloud.mqtt import MiotMqttClient, MqttMessage
+from .cloud.oauth import async_refresh_oauth_entry
 from .const import (
+    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_MODEL,
+    CONF_OAUTH_ACCESS_TOKEN,
+    CONF_OAUTH_DEVICE_ID,
+    CONF_OAUTH_REGION,
     CONF_PASSWORD,
     CONF_SERVICE_TOKEN,
     CONF_TOKEN,
@@ -41,6 +48,7 @@ class XiaomiVacuumData:
 
     control: XiaomiVacuumCoordinator
     map: XiaomiMapCoordinator | None
+    mqtt: MiotMqttClient | None = None
 
 
 type XiaomiConfigEntry = ConfigEntry[XiaomiVacuumData]
@@ -126,14 +134,104 @@ async def async_setup_entry(hass: HomeAssistant, entry: XiaomiConfigEntry) -> bo
         # don't fail the whole entry if the first map fetch hiccups
         await map_coordinator.async_refresh()
 
-    entry.runtime_data = XiaomiVacuumData(control=control, map=map_coordinator)
+    mqtt_client = await _async_start_mqtt(hass, entry, map_coordinator, control)
+    _async_manage_oauth_issue(hass, entry, mqtt_active=mqtt_client is not None)
+
+    entry.runtime_data = XiaomiVacuumData(
+        control=control, map=map_coordinator, mqtt=mqtt_client,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
+def _async_manage_oauth_issue(
+    hass: HomeAssistant, entry: XiaomiConfigEntry, *, mqtt_active: bool
+) -> None:
+    """Raise a Repairs nudge when a map-capable cloud entry has no OAuth yet.
+
+    Map-capable = a cloud session was captured (service token). Without OAuth the
+    live map stays on slow poll+cache, so we surface a fixable Repairs issue that
+    walks the user through linking OAuth. Cleared once OAuth is active.
+    """
+    from .repairs import oauth_missing_issue_id
+
+    issue_id = oauth_missing_issue_id(entry.entry_id)
+    map_capable = bool(entry.data.get(CONF_SERVICE_TOKEN))
+    if map_capable and not mqtt_active:
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="oauth_missing",
+            data={"entry_id": entry.entry_id},
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: XiaomiConfigEntry) -> bool:
     """Unload a config entry."""
+    data = entry.runtime_data
+    if data is not None and data.mqtt is not None:
+        await data.mqtt.async_stop()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def _async_start_mqtt(
+    hass: HomeAssistant,
+    entry: XiaomiConfigEntry,
+    map_coord: XiaomiMapCoordinator | None,
+    control_coord: XiaomiVacuumCoordinator,
+) -> MiotMqttClient | None:
+    """Bring up the MIoT cloud MQTT client for this entry when OAuth is set.
+
+    Additive & optional per the plan: any missing OAuth field → no client, no
+    error, existing behaviour intact.
+    """
+    data = entry.data
+    required = (
+        data.get(CONF_OAUTH_ACCESS_TOKEN),
+        data.get(CONF_OAUTH_REGION),
+        data.get(CONF_OAUTH_DEVICE_ID),
+        data.get(CONF_DEVICE_ID),
+    )
+    if not all(required):
+        _LOGGER.debug(
+            "MIoT MQTT not started: OAuth not configured on this entry "
+            "(access_token/region/oauth_device_id/device_id present=%s)",
+            [bool(v) for v in required],
+        )
+        return None
+
+    async def _token_provider(force: bool) -> str:
+        if force:
+            await async_refresh_oauth_entry(hass, entry, force=True)
+        return str(entry.data.get(CONF_OAUTH_ACCESS_TOKEN, ""))
+
+    async def _on_message(message: MqttMessage) -> None:
+        if map_coord is not None:
+            await map_coord.async_on_mqtt_message(message)
+        # Optional: vacuum status (siid 2 / piid 1) for faster control coordinator updates
+        if message.kind == "property" and message.siid == 2 and message.piid == 1:
+            hass.async_create_task(control_coord.async_request_refresh())
+
+    client = MiotMqttClient(
+        hass,
+        region=str(data[CONF_OAUTH_REGION]),
+        did=str(data[CONF_DEVICE_ID]),
+        client_device_id=str(data[CONF_OAUTH_DEVICE_ID]),
+        access_token=str(data[CONF_OAUTH_ACCESS_TOKEN]),
+        token_provider=_token_provider,
+        on_message=_on_message,
+    )
+    try:
+        await client.async_start()
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception("Failed to start MIoT MQTT client — continuing without it")
+        return None
+    return client
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

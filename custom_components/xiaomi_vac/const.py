@@ -16,6 +16,11 @@ CONF_WIFI_SN = "wifi_sn"
 CONF_SSECURITY = "ssecurity"
 CONF_SERVICE_TOKEN = "service_token"
 CONF_PASS_TOKEN = "pass_token"
+CONF_OAUTH_ACCESS_TOKEN = "oauth_access_token"
+CONF_OAUTH_REFRESH_TOKEN = "oauth_refresh_token"
+CONF_OAUTH_EXPIRES_TS = "oauth_expires_ts"
+CONF_OAUTH_REGION = "oauth_region"
+CONF_OAUTH_DEVICE_ID = "oauth_device_id"
 
 DEFAULT_SCAN_INTERVAL = 10  # seconds, local MIoT polling
 MAP_SCAN_INTERVAL = 30      # seconds, cloud map refresh while cleaning

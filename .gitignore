@@ -4,6 +4,8 @@
 .plans/
 .assets/
 .design/
+.bundle/
+.map-issues/
 .tools/
 .scripts/
 venv/

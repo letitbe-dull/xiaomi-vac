@@ -219,6 +219,9 @@
           "fast": "快速",
           "ai_hosting": "AI托管"
         }
+      },
+      "active_map": {
+        "name": "当前地图"
       }
     },
     "switch": {

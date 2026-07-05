@@ -219,6 +219,9 @@
           "fast": "Rapide",
           "ai_hosting": "Hébergement IA"
         }
+      },
+      "active_map": {
+        "name": "Carte active"
       }
     },
     "switch": {
