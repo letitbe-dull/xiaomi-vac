@@ -273,7 +273,17 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             if self.source == SOURCE_REAUTH:
                 return self._finish_reauth()
             return await self.async_step_devices()
-        return self.async_abort(reason="login_failed")
+        # 登录验证失败 = Xiaomi blocked the sign-in pending account verification,
+        # not bad credentials. Point the user at Xiaomi's own sign-in first.
+        reason_text = getattr(self._cloud, "login_error", "")
+        if not isinstance(reason_text, str):
+            reason_text = ""
+        if "登录验证失败" in reason_text:
+            return self.async_abort(reason="login_verification_required")
+        return self.async_abort(
+            reason="login_failed",
+            description_placeholders={"reason": reason_text or "unknown"},
+        )
 
     # --- device discovery + pick ----------------------------------------
     async def async_step_devices(

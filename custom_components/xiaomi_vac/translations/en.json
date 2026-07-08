@@ -90,7 +90,8 @@
     "abort": {
       "already_configured": "This vacuum is already set up.",
       "reauth_successful": "You're back in. The live map's restored.",
-      "login_failed": "Xiaomi cloud sign-in failed. Check your email and password, then try again.",
+      "login_failed": "Xiaomi cloud sign-in failed ({reason}). Check your email and password, then try again.",
+      "login_verification_required": "Xiaomi blocked this sign-in and wants the account verified. Sign in at account.xiaomi.com (or the Xiaomi Home app), complete any verification it asks for, then try again.",
       "no_devices": "No supported vacuums on this account.",
       "unsupported_model": "This model isn't supported yet (ijai / Xiaomi-branded ijai vacuums only)."
     }
