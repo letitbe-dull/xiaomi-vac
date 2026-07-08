@@ -10,6 +10,7 @@ from .profiles.dreame import (
     DREAME_P2009,
     DREAME_P2027,
     DREAME_P2036,
+    DREAME_P2041,
     DREAME_P2114A,
     DREAME_P2114O,
     DREAME_P2149O,
@@ -112,10 +113,13 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "dreame.vacuum.p2028a": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
     "dreame.vacuum.p2029": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
     "dreame.vacuum.p2036": DREAME_P2036,
+    "dreame.vacuum.p2041": DREAME_P2041,
+    "dreame.vacuum.p2041o": DREAME_P2041,  # Alias: spec-verified same layout as dreame.vacuum.p2041.
     "dreame.vacuum.p2114a": DREAME_P2114A,
     "dreame.vacuum.p2114o": DREAME_P2114O,
     "dreame.vacuum.p2140": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
     "dreame.vacuum.p2140a": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
+    "dreame.vacuum.p2140o": DREAME_P2041,  # Alias: spec-verified same layout as dreame.vacuum.p2041.
     "dreame.vacuum.p2140p": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
     "dreame.vacuum.p2148o": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
     "dreame.vacuum.p2149o": DREAME_P2149O,
