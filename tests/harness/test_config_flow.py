@@ -1,5 +1,8 @@
 """Tests for the Xiaomi Vacuum config flow."""
+import asyncio
+import json
 from contextlib import ExitStack
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -9,7 +12,6 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xiaomi_vac import async_migrate_entry
-from custom_components.xiaomi_vac.cloud.oauth import OAuthTokenSet
 from custom_components.xiaomi_vac.const import (
     CONF_HOST,
     CONF_MODEL,
@@ -18,6 +20,8 @@ from custom_components.xiaomi_vac.const import (
     CONF_OAUTH_EXPIRES_TS,
     CONF_OAUTH_REFRESH_TOKEN,
     CONF_OAUTH_REGION,
+    CONF_OAUTH_REDIRECT_URI,
+    CONF_PASS_TOKEN,
     CONF_PASSWORD,
     CONF_SERVICE_TOKEN,
     CONF_SSECURITY,
@@ -28,6 +32,13 @@ from custom_components.xiaomi_vac.const import (
 )
 
 TOKEN = "0" * 32
+TRANSLATIONS_EN = (
+    Path(__file__).resolve().parents[2]
+    / "custom_components"
+    / "xiaomi_vac"
+    / "translations"
+    / "en.json"
+)
 
 @pytest.fixture(autouse=True)
 def mock_setup_entry():
@@ -237,37 +248,59 @@ async def test_cloud_oauth_skip_keeps_legacy_entry_data(hass: HomeAssistant) -> 
 
 
 async def test_cloud_oauth_success_stores_miot_tokens(hass: HomeAssistant) -> None:
-    """Opting into MIoT OAuth stores the token set for the future MQTT client."""
+    """Opting into MIoT OAuth links through HA's webhook progress flow."""
     result = await _credentials_to_devices(
         hass, [_make_device("dreame.vacuum.p2008")], stop_at_oauth=True
     )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"enable_miot_oauth": True}
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "miot_oauth_auth"
+    updates = {
+        CONF_OAUTH_ACCESS_TOKEN: "access",
+        CONF_OAUTH_REFRESH_TOKEN: "refresh",
+        CONF_OAUTH_EXPIRES_TS: 1234,
+        CONF_OAUTH_REGION: "sg",
+        CONF_OAUTH_DEVICE_ID: "ha.webhook",
+        CONF_OAUTH_REDIRECT_URI: "http://homeassistant.local:8123/api/webhook/abc",
+    }
+    async def _slow_exchange(*args, **kwargs):
+        # Yield once so the eagerly-started task is still pending when the
+        # flow renders the progress step (the real exchange awaits a webhook).
+        await asyncio.sleep(0)
+        return updates
 
-    tokens = OAuthTokenSet(
-        access_token="access",
-        refresh_token="refresh",
-        expires_in=3600,
-        expires_ts=1234,
-        region="sg",
-    )
     with patch(
-        "custom_components.xiaomi_vac.config_flow.exchange_code",
-        return_value=tokens,
+        "custom_components.xiaomi_vac.config_flow._async_exchange_linked_oauth",
+        side_effect=_slow_exchange,
     ):
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"code": "ALSG_code"}
+            result["flow_id"], {"enable_miot_oauth": True}
         )
+        assert result["type"] is FlowResultType.SHOW_PROGRESS
+        authorize_url = result["description_placeholders"]["authorize_url"]
+        assert "account.xiaomi.com/oauth2/authorize" in authorize_url
+        # redirect_uri is percent-encoded inside the authorize URL
+        assert "%2Fapi%2Fwebhook%2F" in authorize_url
+
+        # HA auto-advances through show_progress_done once the task finishes
+        await asyncio.sleep(0)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"])
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_OAUTH_ACCESS_TOKEN] == "access"
     assert result["data"][CONF_OAUTH_REFRESH_TOKEN] == "refresh"
     assert result["data"][CONF_OAUTH_EXPIRES_TS] == 1234
     assert result["data"][CONF_OAUTH_REGION] == "sg"
-    assert result["data"][CONF_OAUTH_DEVICE_ID].startswith("ha.")
+    assert result["data"][CONF_OAUTH_DEVICE_ID] == "ha.webhook"
+    assert result["data"][CONF_OAUTH_REDIRECT_URI].endswith("/api/webhook/abc")
+
+
+def test_generated_english_translation_contains_oauth_config_step() -> None:
+    """translations/en.json must include the config-flow OAuth link step."""
+    doc = json.loads(TRANSLATIONS_EN.read_text(encoding="utf-8"))
+
+    step = doc["config"]["step"]["miot_oauth_code"]
+
+    assert "{authorize_url}" in step["description"]
+    assert step["data"]["code"] == "OAuth code"
+    assert "{authorize_url}" in doc["config"]["progress"]["miot_oauth_auth"]
 
 
 async def test_reauth_mints_tokens_and_discards_password(hass: HomeAssistant) -> None:
@@ -312,6 +345,8 @@ async def test_reauth_mints_tokens_and_discards_password(hass: HomeAssistant) ->
     assert result["reason"] == "reauth_successful"
     assert CONF_PASSWORD not in entry.data
     assert entry.data[CONF_SERVICE_TOKEN] == "newtoken"
+    assert entry.data[CONF_SSECURITY] == "newsec"
+    assert entry.data[CONF_PASS_TOKEN] == "newpass"
     assert entry.data[CONF_USER_ID] == "new"
 
 

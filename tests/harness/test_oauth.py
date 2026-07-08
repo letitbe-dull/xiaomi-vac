@@ -18,6 +18,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_OAUTH_EXPIRES_TS,
     CONF_OAUTH_REFRESH_TOKEN,
     CONF_OAUTH_REGION,
+    CONF_OAUTH_REDIRECT_URI,
 )
 
 
@@ -49,9 +50,13 @@ class _Session:
 def test_build_authorize_url_uses_xiaomi_state() -> None:
     """The authorize URL matches Xiaomi's MIoT OAuth contract."""
     device_id = "ha.0123456789abcdef"
-    query = parse_qs(urlparse(build_authorize_url(device_id)).query)
+    redirect_uri = "http://homeassistant.local:8123/api/webhook/test"
+    query = parse_qs(
+        urlparse(build_authorize_url(device_id, redirect_uri=redirect_uri)).query
+    )
 
     assert query["client_id"] == [OAUTH_APP_ID]
+    assert query["redirect_uri"] == [redirect_uri]
     assert query["response_type"] == ["code"]
     assert query["device_id"] == [device_id]
     assert query["skip_confirm"] == ["true"]
@@ -70,12 +75,18 @@ def test_exchange_code_parses_tokens_and_early_expiry() -> None:
     session = _Session()
 
     tokens = exchange_code(
-        "ALSG_code", "ha.0123456789abcdef", "sg", session=session, now=100
+        "ALSG_code",
+        "ha.0123456789abcdef",
+        "sg",
+        redirect_uri="http://ha.local/callback",
+        session=session,
+        now=100,
     )
 
     assert session.url == "https://sg.ha.api.io.mi.com/app/v2/ha/oauth/get_token"
     payload = json.loads(session.params["data"])
     assert payload["code"] == "ALSG_code"
+    assert payload["redirect_uri"] == "http://ha.local/callback"
     assert payload["device_id"] == "ha.0123456789abcdef"
     assert tokens.access_token == "access"
     assert tokens.refresh_token == "refresh2"
@@ -134,6 +145,7 @@ def test_refreshed_oauth_entry_updates_force_refresh() -> None:
             CONF_OAUTH_REFRESH_TOKEN: "refresh1",
             CONF_OAUTH_REGION: "sg",
             CONF_OAUTH_DEVICE_ID: "ha.0123456789abcdef",
+            CONF_OAUTH_REDIRECT_URI: "http://ha.local/callback",
             CONF_OAUTH_EXPIRES_TS: 9999,
         },
         force=True,
@@ -143,10 +155,12 @@ def test_refreshed_oauth_entry_updates_force_refresh() -> None:
 
     payload = json.loads(session.params["data"])
     assert payload["refresh_token"] == "refresh1"
+    assert payload["redirect_uri"] == "http://ha.local/callback"
     assert updates == {
         CONF_OAUTH_ACCESS_TOKEN: "access",
         CONF_OAUTH_REFRESH_TOKEN: "refresh2",
         CONF_OAUTH_EXPIRES_TS: 800,
         CONF_OAUTH_REGION: "sg",
         CONF_OAUTH_DEVICE_ID: "ha.0123456789abcdef",
+        CONF_OAUTH_REDIRECT_URI: "http://ha.local/callback",
     }

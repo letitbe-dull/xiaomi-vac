@@ -123,6 +123,7 @@ IJAI_CORE_V16 = CoreCapability(
 IJAI_V1 = ModelProfile(
     profile_id='ijai.v1',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v1:2",),
     core=IJAI_CORE_LEGACY,
     map=MapCapability(
         service=10,
@@ -243,6 +244,7 @@ IJAI_V1 = ModelProfile(
 IJAI_V2 = ModelProfile(
     profile_id='ijai.v2',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v2:2",),
     core=IJAI_CORE_LEGACY,
     map=MapCapability(
         service=10,
@@ -358,6 +360,7 @@ IJAI_V2 = ModelProfile(
 IJAI_V3 = ModelProfile(
     profile_id='ijai.v3',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v3:2",),
     core=IJAI_CORE_LEGACY,
     map=MapCapability(
         service=10,
@@ -483,6 +486,7 @@ IJAI_V3 = ModelProfile(
 IJAI_V10 = ModelProfile(
     profile_id='ijai.v10',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v10:1",),
     core=IJAI_CORE_V10,
     map=MapCapability(
         service=10,
@@ -596,6 +600,7 @@ IJAI_V10 = ModelProfile(
 IJAI_V13 = ModelProfile(
     profile_id='ijai.v13',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v13:2",),
     core=IJAI_CORE_STD,
     map=MapCapability(
         service=10,
@@ -717,6 +722,7 @@ IJAI_V13 = ModelProfile(
 IJAI_V14 = ModelProfile(
     profile_id='ijai.v14',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v14:2",),
     core=IJAI_CORE_STD,
     map=MapCapability(
         service=10,
@@ -839,6 +845,7 @@ IJAI_V14 = ModelProfile(
 IJAI_V17 = ModelProfile(
     profile_id='ijai.v17',
     brand='ijai',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v17:2",),
     core=IJAI_CORE_STD,
     map=MapCapability(
         service=10,
@@ -970,4 +977,9 @@ IJAI_V17 = ModelProfile(
 
 # ijai.vacuum.v16 — identical RICH layout to v10, but a distinct core (STD-style
 # fan/water labels). Split out so v16 doesn't inherit v10's wrong labels.
-IJAI_V16 = replace(IJAI_V10, profile_id='ijai.v16', core=IJAI_CORE_V16)
+IJAI_V16 = replace(
+    IJAI_V10,
+    profile_id='ijai.v16',
+    core=IJAI_CORE_V16,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:ijai-v16:1",),
+)

@@ -16,8 +16,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import XiaomiConfigEntry
-from .const import DOMAIN
+from .cloud.connector import XiaomiCloud
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_PASS_TOKEN,
+    CONF_SERVER,
+    CONF_SERVICE_TOKEN,
+    CONF_SSECURITY,
+    CONF_USER_ID,
+    CONF_USERNAME,
+    DOMAIN,
+)
 from .coordinator import XiaomiVacuumCoordinator
+from .device import IjaiVacuumDevice
 
 # Serialise commands to the device (one MIoT write at a time).
 PARALLEL_UPDATES = 1
@@ -37,6 +48,8 @@ _BASE_SUPPORT = (
     | VacuumEntityFeature.STOP
     | VacuumEntityFeature.STATE
 )
+
+_USER_ACK_TIMEOUT = "-9999"
 
 
 async def async_setup_entry(
@@ -120,5 +133,77 @@ class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity
 
     async def async_clean_segment(self, segments: list[int]) -> None:
         """Clean one or more rooms by their map room id (tap-to-clean)."""
-        await self.hass.async_add_executor_job(self._device.clean_segments, segments)
+        try:
+            await self.hass.async_add_executor_job(self._device.clean_segments, segments)
+        except Exception as err:  # noqa: BLE001
+            if not _is_user_ack_timeout(err):
+                raise HomeAssistantError(f"Room cleaning failed: {err}") from err
+            try:
+                await self.hass.async_add_executor_job(
+                    _cloud_clean_segments, self._entry.data, self._device, segments
+                )
+            except Exception as cloud_err:  # noqa: BLE001
+                raise HomeAssistantError(
+                    f"Room cleaning timed out locally and cloud fallback failed: {cloud_err}"
+                ) from cloud_err
         await self.coordinator.async_request_refresh()
+
+
+def _is_user_ack_timeout(err: Exception) -> bool:
+    return any(_USER_ACK_TIMEOUT in str(part) for part in (*err.args, err))
+
+
+def _cloud_action_ok(response: object) -> bool:
+    if not isinstance(response, dict):
+        return False
+    if response.get("code", 0) != 0:
+        return False
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("code", 0) != 0:
+        return False
+    if isinstance(result, list):
+        return all(not isinstance(item, dict) or item.get("code", 0) == 0 for item in result)
+    return True
+
+
+def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[int]) -> None:
+    required = (
+        data.get(CONF_USERNAME),
+        data.get(CONF_USER_ID),
+        data.get(CONF_SSECURITY),
+        data.get(CONF_SERVICE_TOKEN),
+        data.get(CONF_SERVER),
+        data.get(CONF_DEVICE_ID),
+    )
+    if not all(required):
+        raise ValueError("Room cleaning cloud fallback requires a Xiaomi cloud session")
+
+    attempts = [
+        params
+        for params in (
+            device.room_clean_start_params(segments),
+            device.room_clean_set_params(segments),
+        )
+        if params is not None
+    ]
+    if not attempts:
+        raise ValueError(f"{device.model} has no supported room-clean action")
+
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    for action, params in attempts:
+        response = cloud.cloud_action(
+            str(data[CONF_SERVER]),
+            str(data[CONF_DEVICE_ID]),
+            action.siid,
+            action.aiid,
+            params,
+        )
+        if _cloud_action_ok(response):
+            return
+    raise ValueError("Xiaomi cloud rejected every room-clean action")

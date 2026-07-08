@@ -60,26 +60,26 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "ijai.vacuum.v10": IJAI_V10,
     "ijai.vacuum.v13": IJAI_V13,
     "ijai.vacuum.v14": IJAI_V14,
-    "ijai.vacuum.v15": IJAI_V14,
+    "ijai.vacuum.v15": IJAI_V14,  # Alias: spec-verified same layout as ijai.vacuum.v14.
     "ijai.vacuum.v16": IJAI_V16,
     "ijai.vacuum.v17": IJAI_V17,
-    "ijai.vacuum.v18": IJAI_V17,
-    "ijai.vacuum.v19": IJAI_V17,
+    "ijai.vacuum.v18": IJAI_V17,  # Alias: spec-verified same layout as ijai.vacuum.v17.
+    "ijai.vacuum.v19": IJAI_V17,  # Alias: spec-verified same layout as ijai.vacuum.v17.
     # --- xiaomi (ijai-engine rebrands) --------------------------------------
     "xiaomi.vacuum.b106bk": XIAOMI_B106BK,
-    "xiaomi.vacuum.b106eu": XIAOMI_B106BK,
+    "xiaomi.vacuum.b106eu": XIAOMI_B106BK,  # Alias: spec-verified same layout as xiaomi.vacuum.b106bk.
     "xiaomi.vacuum.b108gl": XIAOMI_B108GL,
     "xiaomi.vacuum.b112": XIAOMI_B112,
-    "xiaomi.vacuum.b112bk": XIAOMI_B112,
-    "xiaomi.vacuum.b112gl": XIAOMI_B112,
+    "xiaomi.vacuum.b112bk": XIAOMI_B112,  # Alias: spec-verified same layout as xiaomi.vacuum.b112.
+    "xiaomi.vacuum.b112gl": XIAOMI_B112,  # Alias: spec-verified same layout as xiaomi.vacuum.b112.
     "xiaomi.vacuum.c101": XIAOMI_C101,
     "xiaomi.vacuum.c101eu": XIAOMI_C101EU,
     "xiaomi.vacuum.c102cn": XIAOMI_C102CN,
-    "xiaomi.vacuum.c102gl": XIAOMI_C102CN,
-    "xiaomi.vacuum.c103": XIAOMI_C101,
+    "xiaomi.vacuum.c102gl": XIAOMI_C102CN,  # Alias: spec-verified same layout as xiaomi.vacuum.c102cn.
+    "xiaomi.vacuum.c103": XIAOMI_C101,  # Alias: spec-verified same layout as xiaomi.vacuum.c101.
     "xiaomi.vacuum.c104": XIAOMI_C104,
-    "xiaomi.vacuum.d103cn": XIAOMI_C102CN,
-    "xiaomi.vacuum.d106gl": XIAOMI_C101EU,
+    "xiaomi.vacuum.d103cn": XIAOMI_C102CN,  # Alias: spec-verified same layout as xiaomi.vacuum.c102cn.
+    "xiaomi.vacuum.d106gl": XIAOMI_C101EU,  # Alias: spec-verified same layout as xiaomi.vacuum.c101eu.
     "xiaomi.vacuum.d110ch": XIAOMI_D110CH,
     "xiaomi.vacuum.ov21gl": XIAOMI_OV21GL,
     "xiaomi.vacuum.ov71gl": XIAOMI_OV71GL,
@@ -87,45 +87,45 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "viomi.vacuum.v12": VIOMI_V12,
     "viomi.vacuum.v13": VIOMI_V13,
     "viomi.vacuum.v15": VIOMI_V15,
-    "viomi.vacuum.v17": VIOMI_V15,
-    "viomi.vacuum.v18": VIOMI_V15,
-    "viomi.vacuum.v19": VIOMI_V13,
-    "viomi.vacuum.v22": VIOMI_V15,
-    "viomi.vacuum.v23": VIOMI_V15,
-    "viomi.vacuum.v24": VIOMI_V15,
-    "viomi.vacuum.v35": VIOMI_V13,
-    "viomi.vacuum.v38": VIOMI_V15,
-    "viomi.vacuum.v40": VIOMI_V15,
+    "viomi.vacuum.v17": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
+    "viomi.vacuum.v18": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
+    "viomi.vacuum.v19": VIOMI_V13,  # Alias: spec-verified same layout as viomi.vacuum.v13.
+    "viomi.vacuum.v22": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
+    "viomi.vacuum.v23": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
+    "viomi.vacuum.v24": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
+    "viomi.vacuum.v35": VIOMI_V13,  # Alias: spec-verified same layout as viomi.vacuum.v13.
+    "viomi.vacuum.v38": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
+    "viomi.vacuum.v40": VIOMI_V15,  # Alias: spec-verified same layout as viomi.vacuum.v15.
     "viomi.vacuum.v45": VIOMI_V45,
     # --- roidmi -------------------------------------------------------------
     "roidmi.vacuum.r1b": ROIDMI_R1B,
     "roidmi.vacuum.sdj60": ROIDMI_SDJ60,
-    "roidmi.vacuum.v60": ROIDMI_R1B,
+    "roidmi.vacuum.v60": ROIDMI_R1B,  # Alias: spec-verified same layout as roidmi.vacuum.r1b.
     "roidmi.vacuum.v62": ROIDMI_V62,
-    "roidmi.vacuum.v66": ROIDMI_R1B,
+    "roidmi.vacuum.v66": ROIDMI_R1B,  # Alias: spec-verified same layout as roidmi.vacuum.r1b.
     # --- dreame (full rich caps: blob map / brush+filter+mop+detergent /
     #     vacuum-extend / clean-logs / do-not-disturb / audio) -----------------
     "dreame.vacuum.p2008": DREAME_P2008,
     "dreame.vacuum.p2009": DREAME_P2009,
     "dreame.vacuum.p2027": DREAME_P2027,
-    "dreame.vacuum.p2028": DREAME_P2009,
-    "dreame.vacuum.p2028a": DREAME_P2009,
-    "dreame.vacuum.p2029": DREAME_P2009,
+    "dreame.vacuum.p2028": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
+    "dreame.vacuum.p2028a": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
+    "dreame.vacuum.p2029": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
     "dreame.vacuum.p2036": DREAME_P2036,
     "dreame.vacuum.p2114a": DREAME_P2114A,
     "dreame.vacuum.p2114o": DREAME_P2114O,
-    "dreame.vacuum.p2140": DREAME_P2036,
-    "dreame.vacuum.p2140a": DREAME_P2036,
-    "dreame.vacuum.p2140p": DREAME_P2036,
-    "dreame.vacuum.p2148o": DREAME_P2036,
+    "dreame.vacuum.p2140": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
+    "dreame.vacuum.p2140a": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
+    "dreame.vacuum.p2140p": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
+    "dreame.vacuum.p2148o": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
     "dreame.vacuum.p2149o": DREAME_P2149O,
     "dreame.vacuum.p2150a": DREAME_P2150A,
-    "dreame.vacuum.p2150b": DREAME_P2009,
-    "dreame.vacuum.p2150o": DREAME_P2036,
-    "dreame.vacuum.p2157": DREAME_P2036,
-    "dreame.vacuum.p2187": DREAME_P2009,
-    "dreame.vacuum.p2259": DREAME_P2009,
-    "dreame.vacuum.r2104": DREAME_P2027,
+    "dreame.vacuum.p2150b": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
+    "dreame.vacuum.p2150o": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
+    "dreame.vacuum.p2157": DREAME_P2036,  # Alias: spec-verified same layout as dreame.vacuum.p2036.
+    "dreame.vacuum.p2187": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
+    "dreame.vacuum.p2259": DREAME_P2009,  # Alias: spec-verified same layout as dreame.vacuum.p2009.
+    "dreame.vacuum.r2104": DREAME_P2027,  # Alias: spec-verified same layout as dreame.vacuum.p2027.
     "dreame.vacuum.r2205": DREAME_R2205,
     "dreame.vacuum.r2209": DREAME_R2209,
     "dreame.vacuum.r2210": DREAME_R2210,
@@ -133,17 +133,17 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "dreame.vacuum.r2215": DREAME_R2215,
     "dreame.vacuum.r2216o": DREAME_R2216O,
     "dreame.vacuum.r2228": DREAME_R2228,
-    "dreame.vacuum.r2228o": DREAME_R2215,
-    "dreame.vacuum.r2228z": DREAME_R2215,
-    "dreame.vacuum.r2232a": DREAME_R2215,
-    "dreame.vacuum.r2233": DREAME_R2215,
-    "dreame.vacuum.r2235": DREAME_R2215,
+    "dreame.vacuum.r2228o": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
+    "dreame.vacuum.r2228z": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
+    "dreame.vacuum.r2232a": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
+    "dreame.vacuum.r2233": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
+    "dreame.vacuum.r2235": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
     "dreame.vacuum.r2235a": DREAME_R2235A,
-    "dreame.vacuum.r2246": DREAME_R2215,
-    "dreame.vacuum.r2247": DREAME_R2215,
+    "dreame.vacuum.r2246": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
+    "dreame.vacuum.r2247": DREAME_R2215,  # Alias: spec-verified same layout as dreame.vacuum.r2215.
     "dreame.vacuum.r2254": DREAME_R2254,
     "dreame.vacuum.r2257o": DREAME_R2257O,
-    "dreame.vacuum.r2312": DREAME_R2235A,
+    "dreame.vacuum.r2312": DREAME_R2235A,  # Alias: spec-verified same layout as dreame.vacuum.r2235a.
 }
 
 

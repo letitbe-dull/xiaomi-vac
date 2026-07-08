@@ -94,6 +94,37 @@ def test_clean_segments_uses_v17_room_clean_action(monkeypatch):
     assert _last_calls() == [("action", 2, 7, ["10,12"])]
 
 
+def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+
+    device.clean_segments([10, 12])
+
+    assert _last_calls() == [("action", 2, 7, ["10,12"])]
+
+
+def test_request_map_upload_prefers_upload_by_mapid_ii(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+
+    device.request_map_upload(7)
+
+    assert _last_calls() == [("action", 10, 14, [7])]
+
+
+def test_request_map_upload_falls_back_to_upload_by_mapid(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+    FakeMiotDevice.action_results[(10, 14)] = RuntimeError("-1")
+
+    device.request_map_upload(7)
+
+    assert _last_calls() == [
+        ("action", 10, 14, [7]),
+        ("action", 10, 2, [7]),
+    ]
+
+
 def test_map_list_parses_map_list_output(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")

@@ -132,6 +132,7 @@ DREAME_P2008 = ModelProfile(
     clean_history=DREAME_P2008_CLEAN_HISTORY,
     dnd=DREAME_P2008_DND,
     voice=DREAME_P2008_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2008:2",),
 )
 
 
@@ -248,6 +249,7 @@ DREAME_P2009 = ModelProfile(
     clean_history=DREAME_P2009_CLEAN_HISTORY,
     dnd=DREAME_P2009_DND,
     voice=DREAME_P2009_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2009:2",),
 )
 
 
@@ -348,6 +350,7 @@ DREAME_P2027 = ModelProfile(
     clean_history=DREAME_P2027_CLEAN_HISTORY,
     dnd=DREAME_P2027_DND,
     voice=DREAME_P2027_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2027:3",),
 )
 
 
@@ -442,6 +445,7 @@ DREAME_P2036 = ModelProfile(
     clean_history=DREAME_P2036_CLEAN_HISTORY,
     dnd=DREAME_P2036_DND,
     voice=DREAME_P2036_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2036:2",),
 )
 
 
@@ -561,6 +565,7 @@ DREAME_P2114A = ModelProfile(
     clean_history=DREAME_P2114A_CLEAN_HISTORY,
     dnd=DREAME_P2114A_DND,
     voice=DREAME_P2114A_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2114a:2",),
 )
 
 
@@ -660,6 +665,7 @@ DREAME_P2114O = ModelProfile(
     clean_history=DREAME_P2114O_CLEAN_HISTORY,
     dnd=DREAME_P2114O_DND,
     voice=DREAME_P2114O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2114o:2",),
 )
 
 
@@ -776,6 +782,7 @@ DREAME_P2149O = ModelProfile(
     clean_history=DREAME_P2149O_CLEAN_HISTORY,
     dnd=DREAME_P2149O_DND,
     voice=DREAME_P2149O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2149o:2",),
 )
 
 
@@ -892,6 +899,7 @@ DREAME_P2150A = ModelProfile(
     clean_history=DREAME_P2150A_CLEAN_HISTORY,
     dnd=DREAME_P2150A_DND,
     voice=DREAME_P2150A_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2150a:2",),
 )
 
 
@@ -988,6 +996,7 @@ DREAME_R2205 = ModelProfile(
     clean_history=DREAME_R2205_CLEAN_HISTORY,
     dnd=DREAME_R2205_DND,
     voice=DREAME_R2205_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2205:2",),
 )
 
 
@@ -1083,6 +1092,7 @@ DREAME_R2209 = ModelProfile(
     clean_history=DREAME_R2209_CLEAN_HISTORY,
     dnd=DREAME_R2209_DND,
     voice=DREAME_R2209_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2209:2",),
 )
 
 
@@ -1183,6 +1193,7 @@ DREAME_R2210 = ModelProfile(
     clean_history=DREAME_R2210_CLEAN_HISTORY,
     dnd=DREAME_R2210_DND,
     voice=DREAME_R2210_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2210:1",),
 )
 
 
@@ -1282,6 +1293,7 @@ DREAME_R2211O = ModelProfile(
     clean_history=DREAME_R2211O_CLEAN_HISTORY,
     dnd=DREAME_R2211O_DND,
     voice=DREAME_R2211O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2211o:2",),
 )
 
 
@@ -1402,6 +1414,7 @@ DREAME_R2215 = ModelProfile(
     clean_history=DREAME_R2215_CLEAN_HISTORY,
     dnd=DREAME_R2215_DND,
     voice=DREAME_R2215_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2215:2",),
 )
 
 
@@ -1499,6 +1512,7 @@ DREAME_R2216O = ModelProfile(
     clean_history=DREAME_R2216O_CLEAN_HISTORY,
     dnd=DREAME_R2216O_DND,
     voice=DREAME_R2216O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2216o:1",),
 )
 
 
@@ -1601,6 +1615,7 @@ DREAME_R2228 = ModelProfile(
     clean_history=DREAME_R2228_CLEAN_HISTORY,
     dnd=DREAME_R2228_DND,
     voice=DREAME_R2228_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2228:2",),
 )
 
 
@@ -1637,6 +1652,7 @@ DREAME_R2235A = ModelProfile(
     core=DREAME_R2235A_CORE,
     room_clean=DREAME_R2235A_ROOM_CLEAN,
     consumables=DREAME_R2235A_CONSUMABLES,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2235a:1",),
 )
 
 
@@ -1734,6 +1750,7 @@ DREAME_R2254 = ModelProfile(
     clean_history=DREAME_R2254_CLEAN_HISTORY,
     dnd=DREAME_R2254_DND,
     voice=DREAME_R2254_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2254:3",),
 )
 
 
@@ -1770,4 +1787,5 @@ DREAME_R2257O = ModelProfile(
     core=DREAME_R2257O_CORE,
     room_clean=DREAME_R2257O_ROOM_CLEAN,
     consumables=DREAME_R2257O_CONSUMABLES,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2257o:1",),
 )

@@ -61,7 +61,9 @@ def test_registry_profiles_are_value_equal_to_generated_drafts() -> None:
 
     for model, profile in MODEL_PROFILES.items():
         assert model in drafts
-        assert replace(profile, profile_id="") == replace(drafts[model], profile_id="")
+        assert replace(profile, profile_id="", notes=()) == replace(
+            drafts[model], profile_id="", notes=()
+        ), model
 
 
 def test_v17_core_keeps_spec_accurate_labels() -> None:

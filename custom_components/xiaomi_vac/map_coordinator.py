@@ -46,6 +46,7 @@ _PIID_CUR_MAP = 2      # properties_changed/10/2 = curMapId
 
 # Burst window: collapse multiple upload events within this window into one fetch
 _DEBOUNCE_SECONDS = 2.0
+_MAP_UPLOAD_THROTTLE_SECONDS = 30.0
 _MAP_REFRESH_WAIT_SECONDS = 120.0
 _MAP_REFRESH_POLL_SECONDS = 3.0
 _REFRESH_READY_ACTIVITIES = {"docked", "idle"}
@@ -105,9 +106,12 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         # read for this cycle failed (None = not yet signaled by MQTT).
         self._mqtt_active_id: int | None = None
         self._mqtt_debounce_task: asyncio.Task | None = None
+        self._mqtt_refresh_needs_upload = False
         self._mqtt_upload_waiters: set[asyncio.Future[None]] = set()
+        self._last_upload_request_at: dict[int, float] = {}
         self._last_live_at: float | None = None
         self._refresh_map_lock = asyncio.Lock()
+        self._pending_entry_updates: dict[str, str] = {}
 
     @property
     def device(self) -> IjaiVacuumDevice:
@@ -143,11 +147,11 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             except (TypeError, ValueError):
                 pass
             _LOGGER.debug("MQTT curMapId=%s — scheduling map refresh", self._mqtt_active_id)
-            self._schedule_mqtt_refresh()
+            self._schedule_mqtt_refresh(request_upload=True)
         elif msg.kind == "event" and msg.siid == _SIID_MAP and msg.eiid == _EIID_MAP_UPLOAD:
             _LOGGER.debug("MQTT map upload event — scheduling map refresh")
             self._notify_mqtt_upload_waiters()
-            self._schedule_mqtt_refresh()
+            self._schedule_mqtt_refresh(request_upload=True)
 
     def _new_mqtt_upload_waiter(self) -> asyncio.Future[None]:
         waiter: asyncio.Future[None] = self.hass.loop.create_future()
@@ -227,8 +231,9 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                     with contextlib.suppress(Exception):
                         await self._control.async_request_refresh()
 
-    def _schedule_mqtt_refresh(self) -> None:
+    def _schedule_mqtt_refresh(self, *, request_upload: bool = False) -> None:
         """Cancel any pending debounce task and start a fresh one."""
+        self._mqtt_refresh_needs_upload = self._mqtt_refresh_needs_upload or request_upload
         if self._mqtt_debounce_task is not None:
             self._mqtt_debounce_task.cancel()
         self._mqtt_debounce_task = self.hass.async_create_task(
@@ -241,7 +246,45 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         except asyncio.CancelledError:
             return
         self._mqtt_debounce_task = None
+        request_upload = self._mqtt_refresh_needs_upload
+        self._mqtt_refresh_needs_upload = False
+        if request_upload:
+            await self.async_request_map_upload(self._mqtt_active_id)
         await self.async_refresh()
+
+    def _known_active_map_id(self) -> int | None:
+        if self._mqtt_active_id is not None:
+            return self._mqtt_active_id
+        for meta in self._map_list_meta:
+            if meta.get("cur") and meta.get("id") is not None:
+                try:
+                    return int(meta["id"])
+                except (TypeError, ValueError):
+                    return None
+        if self.data is not None and self.data.map_id is not None:
+            return self.data.map_id
+        return None
+
+    async def async_request_map_upload(self, map_id: int | None = None) -> bool:
+        """Ask the vacuum to upload a fresh cloud blob for a map-list map."""
+        target = self._known_active_map_id() if map_id is None else map_id
+        if target is None:
+            return False
+        target = int(target)
+        now = time.monotonic()
+        last = self._last_upload_request_at.get(target, 0.0)
+        if now - last < _MAP_UPLOAD_THROTTLE_SECONDS:
+            _LOGGER.debug("Skipping throttled map upload request for map_id=%s", target)
+            return False
+        self._last_upload_request_at[target] = now
+        try:
+            await self.hass.async_add_executor_job(
+                self._device.request_map_upload, target
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Map upload request failed for map_id=%s: %s", target, err)
+            return False
+        return True
 
     def _build(self) -> MapFetcher:
         """Blocking: restore the saved cloud session and construct a fetcher.
@@ -250,6 +293,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         the map AES key); the values stashed at setup time can be empty/stale.
         """
         d = self.entry.data
+        self._pending_entry_updates = {}
         # No password: the saved session is restored and renewed via passToken.
         cloud = XiaomiCloud(d[CONF_USERNAME])
         cloud.restore_session(d[CONF_USER_ID], d[CONF_SSECURITY], d[CONF_SERVICE_TOKEN],
@@ -267,19 +311,29 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         if required:
             live_sn = self._device.get_wifi_sn(d[CONF_USER_ID])
             live_mac = self._device.get_mac()
-            wifi_sn = live_sn or d.get(CONF_WIFI_SN) or ""
-            mac = live_mac or d.get(CONF_MAC) or ""
+            stored_sn = d.get(CONF_WIFI_SN) or ""
+            stored_mac = d.get(CONF_MAC) or ""
+            wifi_sn = live_sn or stored_sn
+            mac = live_mac or stored_mac
+            if live_sn and live_sn != stored_sn:
+                self._pending_entry_updates[CONF_WIFI_SN] = live_sn
+            if live_mac and live_mac != stored_mac:
+                self._pending_entry_updates[CONF_MAC] = live_mac
 
         _LOGGER.debug(
             "Map key inputs: brand=%s wifi_sn=%r mac=%s user_id=%s device_id=%s model=%s",
             brand, wifi_sn, mac, d[CONF_USER_ID], d[CONF_DEVICE_ID], d[CONF_MODEL],
         )
         if "wifi_sn" in required and not wifi_sn:
-            raise UpdateFailed("Could not read wifi_sn from the vacuum (needed to decrypt map)")
+            raise UpdateFailed(
+                "Missing map key input wifi_sn: could not read it live or from storage"
+            )
         if "device_mac" in required and not mac:
             # An empty mac silently produces the wrong AES key (decrypt fails
             # with "Padding is incorrect"), so refuse to build with one.
-            raise UpdateFailed("Could not read mac from the vacuum (needed to decrypt map)")
+            raise UpdateFailed(
+                "Missing map key input mac: could not read it live or from storage"
+            )
 
         return MapFetcher(
             cloud,
@@ -291,6 +345,15 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             wifi_sn=wifi_sn,
             parser_brand=brand,
         )
+
+    def _persist_pending_entry_updates(self) -> None:
+        if not self._pending_entry_updates:
+            return
+        self.hass.config_entries.async_update_entry(
+            self.entry,
+            data={**self.entry.data, **self._pending_entry_updates},
+        )
+        self._pending_entry_updates = {}
 
     async def _ensure_cache(self) -> MapCache:
         if self._cache is None:
@@ -373,6 +436,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         try:
             if self._fetcher is None:
                 self._fetcher = await self.hass.async_add_executor_job(self._build)
+                self._persist_pending_entry_updates()
             cache = await self._ensure_cache()
 
             # The map list (distinct physical maps) drives multi-map; best-effort
@@ -394,7 +458,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 # If renewal fails, the passToken is dead too: ask the user to
                 # re-auth (raises a reauth flow) rather than dead-end.
                 if not await self._refresh_and_persist():
-                    raise ConfigEntryAuthFailed("Cloud session expired") from None
+                    raise ConfigEntryAuthFailed("Xiaomi cloud map session expired") from None
                 slot_results = await self.hass.async_add_executor_job(self._fetch_slots)
 
             decoded = [r for r in slot_results if r is not None]
@@ -459,7 +523,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         except (UpdateFailed, ConfigEntryAuthFailed):
             raise
         except SessionExpired:
-            raise ConfigEntryAuthFailed("Cloud session expired") from None
+            raise ConfigEntryAuthFailed("Xiaomi cloud map session expired") from None
         except Exception as err:  # noqa: BLE001
             self._fetcher = None
             raise UpdateFailed(f"Map update error: {err}") from err

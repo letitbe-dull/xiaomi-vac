@@ -175,6 +175,60 @@ async def test_map_coordinator_build_ijai_raises_without_wifi_sn(
         coord._build()
 
 
+async def test_map_coordinator_persists_live_wifi_sn_and_mac(
+    hass: HomeAssistant,
+) -> None:
+    """Live non-empty map key inputs are saved back to the config entry."""
+    entry = _map_entry("ijai.vacuum.v17")
+    device = MagicMock()
+    device.profile = SimpleNamespace(brand="ijai", profile_id="ijai.v17", map=None)
+    device.get_wifi_sn.return_value = "A" * 18
+    device.get_mac.return_value = "AA:BB:CC:DD:EE:FF"
+    control = MagicMock()
+    control.data = None
+    coord = XiaomiMapCoordinator(hass, entry, device, control)
+
+    with (
+        patch("custom_components.xiaomi_vac.map_coordinator.XiaomiCloud"),
+        patch("custom_components.xiaomi_vac.map_coordinator.MapFetcher"),
+        patch.object(hass.config_entries, "async_update_entry") as update,
+    ):
+        coord._build()
+        coord._persist_pending_entry_updates()
+
+    updated = update.call_args.kwargs["data"]
+    assert updated[CONF_WIFI_SN] == "A" * 18
+    assert updated[CONF_MAC] == "AA:BB:CC:DD:EE:FF"
+
+
+async def test_map_coordinator_never_overwrites_stored_keys_with_blank_live_reads(
+    hass: HomeAssistant,
+) -> None:
+    """Blank live reads fall back to stored wifi_sn/mac without persisting blanks."""
+    entry = _map_entry("ijai.vacuum.v17")
+    entry.data[CONF_WIFI_SN] = "B" * 18
+    entry.data[CONF_MAC] = "11:22:33:44:55:66"
+    device = MagicMock()
+    device.profile = SimpleNamespace(brand="ijai", profile_id="ijai.v17", map=None)
+    device.get_wifi_sn.return_value = ""
+    device.get_mac.return_value = None
+    control = MagicMock()
+    control.data = None
+    coord = XiaomiMapCoordinator(hass, entry, device, control)
+
+    with (
+        patch("custom_components.xiaomi_vac.map_coordinator.XiaomiCloud"),
+        patch("custom_components.xiaomi_vac.map_coordinator.MapFetcher") as fetcher,
+        patch.object(hass.config_entries, "async_update_entry") as update,
+    ):
+        coord._build()
+        coord._persist_pending_entry_updates()
+
+    assert fetcher.call_args.kwargs["wifi_sn"] == "B" * 18
+    assert fetcher.call_args.kwargs["mac"] == "11:22:33:44:55:66"
+    update.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Map coordinator: _async_update_data advanced paths
 # ---------------------------------------------------------------------------
@@ -591,6 +645,51 @@ async def test_mqtt_upload_event_schedules_debounce_task(hass: HomeAssistant) ->
 
     assert coord._mqtt_debounce_task is not None
     coord._mqtt_debounce_task.cancel()  # tidy up
+
+
+async def test_map_upload_request_uses_active_map_and_throttles(
+    hass: HomeAssistant,
+) -> None:
+    """Coordinator upload requests use the active map id and throttle repeats."""
+    coord = _map_coord(hass)
+    coord._map_list_meta = [{"id": 7, "cur": True, "name": "Upstairs"}]
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    with (
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+        patch("custom_components.xiaomi_vac.map_coordinator.time.monotonic",
+              side_effect=[100.0, 101.0]),
+    ):
+        first = await coord.async_request_map_upload()
+        second = await coord.async_request_map_upload()
+
+    assert first is True
+    assert second is False
+    coord._device.request_map_upload.assert_called_once_with(7)
+
+
+async def test_mqtt_curmap_event_uploads_selected_map_and_refreshes(
+    hass: HomeAssistant,
+) -> None:
+    """MQTT curMapId changes trigger one upload wrapper call and one refresh."""
+    coord = _map_coord(hass)
+    coord.async_refresh = AsyncMock()
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    msg = MqttMessage(kind="property", topic="x", siid=10, piid=2, value=7)
+    with (
+        patch("custom_components.xiaomi_vac.map_coordinator._DEBOUNCE_SECONDS", 0),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        await coord.async_on_mqtt_message(msg)
+        await asyncio.sleep(0.05)
+
+    coord._device.request_map_upload.assert_called_once_with(7)
+    coord.async_refresh.assert_awaited_once()
 
 
 async def test_mqtt_curmap_property_updates_active_id(hass: HomeAssistant) -> None:

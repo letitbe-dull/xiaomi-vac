@@ -160,6 +160,18 @@ def test_required_map_key_inputs_for_xiaomi_rebrand():
     assert map_parsers.required_map_key_inputs(key) == {"wifi_sn", "device_mac"}
 
 
+@pytest.mark.parametrize(
+    "model",
+    ["dreame.vacuum.p2009", "dreame.vacuum.p2036", "dreame.vacuum.r2215"],
+)
+def test_dreame_phase1_hub_profiles_route_to_dreame_parser(model):
+    from spec.registry import get_profile
+
+    profile = get_profile(model)
+    assert profile.map is not None
+    assert map_parsers.parser_key(profile) == "dreame"
+
+
 def test_has_ijai_grid_only_ijai():
     assert map_parsers.has_ijai_grid("ijai") is True
     for brand in ("xiaomi", "dreame", "viomi", "roidmi"):

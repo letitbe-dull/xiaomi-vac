@@ -10,9 +10,15 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xiaomi_vac import PLATFORMS, async_setup_entry
+from custom_components.xiaomi_vac import _async_start_mqtt
 from custom_components.xiaomi_vac.const import (
+    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_MODEL,
+    CONF_OAUTH_ACCESS_TOKEN,
+    CONF_OAUTH_DEVICE_ID,
+    CONF_OAUTH_REGION,
+    CONF_OAUTH_REFRESH_TOKEN,
     CONF_SERVICE_TOKEN,
     CONF_TOKEN,
     DOMAIN,
@@ -186,3 +192,82 @@ async def test_setup_entry_without_oauth_has_no_mqtt_client(hass: HomeAssistant)
 
     assert result is True
     assert entry.runtime_data.mqtt is None
+
+
+async def test_setup_entry_refreshes_oauth_before_mqtt_start(
+    hass: HomeAssistant,
+) -> None:
+    """Stored OAuth is refreshed proactively before MQTT is constructed."""
+    data = {
+        **_BASE_DATA,
+        CONF_DEVICE_ID: "did123",
+        CONF_OAUTH_ACCESS_TOKEN: "old",
+        CONF_OAUTH_REFRESH_TOKEN: "refresh",
+        CONF_OAUTH_REGION: "sg",
+        CONF_OAUTH_DEVICE_ID: "ha.abc",
+    }
+    entry = _entry("AA:BB:CC:DD:EE:05", data)
+    entry.add_to_hass(hass)
+
+    fake_device = _fake_device()
+    mqtt_instance = MagicMock()
+    mqtt_instance.async_start = AsyncMock()
+
+    with (
+        patch("custom_components.xiaomi_vac.IjaiVacuumDevice", return_value=fake_device),
+        patch(
+            "custom_components.xiaomi_vac.coordinator.XiaomiVacuumCoordinator"
+            ".async_config_entry_first_refresh",
+            new=AsyncMock(),
+        ),
+        patch(
+            "custom_components.xiaomi_vac.async_refresh_oauth_entry",
+            new=AsyncMock(return_value=False),
+        ) as refresh,
+        patch("custom_components.xiaomi_vac.MiotMqttClient", return_value=mqtt_instance),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await async_setup_entry(hass, entry)
+
+    assert result is True
+    refresh.assert_awaited_once_with(hass, entry, force=False)
+    mqtt_instance.async_start.assert_awaited_once()
+
+
+async def test_mqtt_token_provider_refreshes_before_returning_token(
+    hass: HomeAssistant,
+) -> None:
+    """The MQTT token provider does a due-check refresh even when not forced."""
+    data = {
+        **_BASE_DATA,
+        CONF_DEVICE_ID: "did123",
+        CONF_OAUTH_ACCESS_TOKEN: "old",
+        CONF_OAUTH_REFRESH_TOKEN: "refresh",
+        CONF_OAUTH_REGION: "sg",
+        CONF_OAUTH_DEVICE_ID: "ha.abc",
+    }
+    entry = _entry("AA:BB:CC:DD:EE:06", data)
+    entry.add_to_hass(hass)
+    mqtt_instance = MagicMock()
+    mqtt_instance.async_start = AsyncMock()
+
+    with (
+        patch(
+            "custom_components.xiaomi_vac.async_refresh_oauth_entry",
+            new=AsyncMock(return_value=False),
+        ) as refresh,
+        patch("custom_components.xiaomi_vac.MiotMqttClient", return_value=mqtt_instance) as cls,
+    ):
+        await _async_start_mqtt(hass, entry, None, MagicMock())
+
+        provider = cls.call_args.kwargs["token_provider"]
+        refresh.reset_mock()
+
+        token = await provider(False)
+
+    assert token == "old"
+    refresh.assert_awaited_once_with(hass, entry, force=False)

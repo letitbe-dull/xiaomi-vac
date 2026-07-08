@@ -34,6 +34,16 @@ def test_distinct_core_count_matches_promoted_profiles() -> None:
     assert len(cores) == 22
 
 
+def test_registered_profiles_include_spec_notes() -> None:
+    profiles = {id(profile): profile for profile in MODEL_PROFILES.values()}
+    for profile in profiles.values():
+        assert profile.notes
+        assert all(
+            note.startswith("urn:miot-spec-v2:device:vacuum:")
+            for note in profile.notes
+        )
+
+
 @pytest.mark.parametrize(("model", "profile"), sorted(MODEL_PROFILES.items()))
 def test_core_policy_for_registered_models(model: str, profile) -> None:
     if model.startswith("roidmi."):

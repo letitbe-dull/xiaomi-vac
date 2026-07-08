@@ -145,6 +145,7 @@ XIAOMI_CORE_D110CH = CoreCapability(
 XIAOMI_B106BK = ModelProfile(
     profile_id='xiaomi.b106bk',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-b106bk:1",),
     core=XIAOMI_CORE_B106BK,
     map=MapCapability(
         service=10,
@@ -278,6 +279,7 @@ XIAOMI_B106BK = ModelProfile(
 XIAOMI_B108GL = ModelProfile(
     profile_id='xiaomi.b108gl',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-b108gl:1",),
     core=XIAOMI_CORE_B108GL,
     voice=VoiceCapability(
         service=14,
@@ -295,6 +297,7 @@ XIAOMI_B108GL = ModelProfile(
 XIAOMI_B112 = ModelProfile(
     profile_id='xiaomi.b112',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-b112:1",),
     core=XIAOMI_CORE_B112,
     map=MapCapability(
         service=10,
@@ -408,6 +411,7 @@ XIAOMI_B112 = ModelProfile(
 XIAOMI_C101 = ModelProfile(
     profile_id='xiaomi.c101',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c101:2",),
     core=XIAOMI_CORE_C101,
     map=MapCapability(
         service=10,
@@ -535,6 +539,7 @@ XIAOMI_C101 = ModelProfile(
 XIAOMI_C101EU = ModelProfile(
     profile_id='xiaomi.c101eu',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c101eu:2",),
     core=XIAOMI_CORE_C101,
     map=MapCapability(
         service=10,
@@ -666,6 +671,7 @@ XIAOMI_C101EU = ModelProfile(
 XIAOMI_C102CN = ModelProfile(
     profile_id='xiaomi.c102cn',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c102cn:1",),
     core=XIAOMI_CORE_C102CN,
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 4),
@@ -677,6 +683,7 @@ XIAOMI_C102CN = ModelProfile(
 XIAOMI_C104 = ModelProfile(
     profile_id='xiaomi.c104',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c104:2",),
     core=XIAOMI_CORE_B106BK,
     map=MapCapability(
         service=10,
@@ -797,7 +804,12 @@ XIAOMI_C104 = ModelProfile(
 
 # xiaomi.vacuum.d110ch — identical RICH layout to C102CN, distinct core
 # (alarm/volume on siid 22). Split so it doesn't inherit C102CN's slots.
-XIAOMI_D110CH = replace(XIAOMI_C102CN, profile_id='xiaomi.d110ch', core=XIAOMI_CORE_D110CH)
+XIAOMI_D110CH = replace(
+    XIAOMI_C102CN,
+    profile_id='xiaomi.d110ch',
+    core=XIAOMI_CORE_D110CH,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-d110ch:2",),
+)
 
 # ov21gl / ov71gl — new-generation layout: mode/fan_speed/water_level on siid 2
 # (no siid 7 at all), charging_state on siid 3, alarm/volume on siid 4,
@@ -873,6 +885,7 @@ XIAOMI_CORE_OV21GL = CoreCapability(
 XIAOMI_OV21GL = ModelProfile(
     profile_id='xiaomi.ov21gl',
     brand='xiaomi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov21gl:2",),
     core=XIAOMI_CORE_OV21GL,
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 15),
@@ -881,4 +894,8 @@ XIAOMI_OV21GL = ModelProfile(
 )
 
 # xiaomi.vacuum.ov71gl — identical spec layout to ov21gl
-XIAOMI_OV71GL = replace(XIAOMI_OV21GL, profile_id='xiaomi.ov71gl')
+XIAOMI_OV71GL = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.ov71gl',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov71gl:1",),
+)

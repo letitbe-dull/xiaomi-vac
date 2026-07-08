@@ -172,28 +172,42 @@ class IjaiVacuumDevice:
         cap = self.profile.room_clean
         if cap is None:
             raise ValueError(f"{self.model} has no room-clean capability")
-        # MIoT action input is an ordered list of values (one per in-piid).
-        joined = ",".join(str(r) for r in room_ids)
-        if cap.start is not None:
-            self._action(cap.start, [joined])
+        start = self.room_clean_start_params(room_ids)
+        if start is not None:
+            action, params = start
+            self._action(action, params)
             return
-        if (
-            cap.set_room_clean is not None
+        fallback = self.room_clean_set_params(room_ids)
+        if fallback is not None:
+            action, params = fallback
+            self._action(action, params)
+            return
+        raise ValueError(f"{self.model} has no usable room-clean action")
+
+    def room_clean_start_params(self, room_ids: list[int | str]) -> tuple[object, list] | None:
+        """Return the direct room-clean action and params, when available."""
+        cap = self.profile.room_clean
+        if cap is None or cap.start is None:
+            return None
+        return cap.start, [",".join(str(r) for r in room_ids)]
+
+    def room_clean_set_params(self, room_ids: list[int | str]) -> tuple[object, list] | None:
+        """Return the set-room-clean action and params, when available."""
+        cap = self.profile.room_clean
+        if not (
+            cap is not None
+            and cap.set_room_clean is not None
             and cap.clean_room_ids is not None
             and cap.clean_room_mode is not None
             and cap.clean_room_oper is not None
         ):
-            values = {
-                cap.clean_room_mode.piid: 0,  # global/all rooms mode
-                cap.clean_room_oper.piid: 1,  # start
-                cap.clean_room_ids.piid: joined,
-            }
-            self._action(
-                cap.set_room_clean,
-                [values[piid] for piid in cap.set_room_clean.in_piids],
-            )
-            return
-        raise ValueError(f"{self.model} has no usable room-clean action")
+            return None
+        values = {
+            cap.clean_room_mode.piid: 0,  # global/all rooms mode
+            cap.clean_room_oper.piid: 1,  # start
+            cap.clean_room_ids.piid: ",".join(str(r) for r in room_ids),
+        }
+        return cap.set_room_clean, [values[piid] for piid in cap.set_room_clean.in_piids]
 
     # --- maps ------------------------------------------------------------
     def map_list(self) -> list[dict]:
@@ -230,11 +244,33 @@ class IjaiVacuumDevice:
         return []
 
     def request_map_upload(self, map_id: int) -> dict:
-        """Trigger upload-by-mapid for a non-active map; returns raw out."""
+        """Trigger a fresh upload for a map-list map; returns raw out."""
         cap = self.profile.map
-        if not isinstance(cap, MapCapability) or cap.upload_by_mapid is None:
+        if not isinstance(cap, MapCapability):
             raise ValueError(f"{self.model} has no map-upload capability")
-        return self._action(cap.upload_by_mapid, [int(map_id)])
+        actions = []
+        if cap.get_map_list is not None and cap.upload_by_mapid_ii is not None:
+            actions.append(cap.upload_by_mapid_ii)
+        if cap.upload_by_mapid is not None:
+            actions.append(cap.upload_by_mapid)
+        elif cap.upload_by_mapid_ii is not None:
+            actions.append(cap.upload_by_mapid_ii)
+        if not actions:
+            raise ValueError(f"{self.model} has no map-upload capability")
+        last_error: Exception | None = None
+        for action in actions:
+            try:
+                return self._action(action, [int(map_id)])
+            except Exception as err:  # noqa: BLE001
+                last_error = err
+                if action is not actions[-1]:
+                    _LOGGER.debug(
+                        "map upload action %s/%s failed, trying fallback: %s",
+                        action.siid, action.aiid, err,
+                    )
+                    continue
+                raise
+        raise ValueError(f"{self.model} map-upload failed: {last_error}")
 
     def set_current_map(self, map_id: int) -> None:
         """Switch the vacuum's active map (multi-map devices)."""

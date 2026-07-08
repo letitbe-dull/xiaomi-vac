@@ -199,7 +199,9 @@ class MiotMqttClient:
         # Rebuild rather than mutating a live client — avoids racing paho's
         # network thread on username_pw_set + reconnect.
         self._token = new_token
-        fresh = self._build_client(new_token)
+        fresh = await self._hass.async_add_executor_job(
+            self._build_client, new_token
+        )
         fresh.connect_async(self._host, _MQTT_PORT, _MQTT_KEEPALIVE)
         fresh.loop_start()
         self._client = fresh
