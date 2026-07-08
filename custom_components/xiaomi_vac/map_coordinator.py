@@ -272,8 +272,10 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             return False
         target = int(target)
         now = time.monotonic()
-        last = self._last_upload_request_at.get(target, 0.0)
-        if now - last < _MAP_UPLOAD_THROTTLE_SECONDS:
+        # None sentinel, not 0.0: monotonic() is ~uptime, so a 0.0 default
+        # falsely throttles the first request within 30s of boot.
+        last = self._last_upload_request_at.get(target)
+        if last is not None and now - last < _MAP_UPLOAD_THROTTLE_SECONDS:
             _LOGGER.debug("Skipping throttled map upload request for map_id=%s", target)
             return False
         self._last_upload_request_at[target] = now
