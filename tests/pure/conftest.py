@@ -19,6 +19,13 @@ _PKG = os.path.join(
 if _PKG not in sys.path:
     sys.path.insert(0, _PKG)
 
+# Synthetic package so modules with relative imports (map.py) can load without
+# executing the HA-importing package __init__. Import as `xvac.map`.
+if "xvac" not in sys.modules:
+    _xvac = ModuleType("xvac")
+    _xvac.__path__ = [_PKG]
+    sys.modules["xvac"] = _xvac
+
 _TOOLS = os.path.join(_ROOT, ".tools")
 tools_pkg = ModuleType("tools")
 tools_pkg.__path__ = [_TOOLS]

@@ -21,7 +21,8 @@ def dreame_extract_enckey(prop_value: str) -> str | None:
     if not prop_value or "," not in prop_value:
         return None
     parts = prop_value.split(",")
-    return parts[1] if len(parts) > 1 else None
+    # `or None`: an empty key ("path,") means no usable enckey.
+    return (parts[1] or None) if len(parts) > 1 else None
 
 
 def dreame_decrypt_cloud_blob(raw: bytes, enckey: str) -> bytes:

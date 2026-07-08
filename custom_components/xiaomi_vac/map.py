@@ -189,23 +189,32 @@ class MapFetcher:
             raise SessionExpired()
         raw = self._cloud.download(url)
         if not raw:
-            _LOGGER.warning("Map download failed (slot %s)", slot)
+            # Not per-slot actionable; the coordinator raises UpdateFailed when
+            # every fallback (both slots + cache) comes up empty.
+            _LOGGER.debug("Map download failed (slot %s)", slot)
             return None
 
         try:
             unpacked = self._unpack(raw)
-            md = self._parser.parse(unpacked)
-            vector = map_vector.vector_map(md, unpacked, ijai_grid=self._ijai_grid)
         except Exception as ex:  # noqa: BLE001
-            # A corrupt/incomplete map, OR (routinely, per the map-reliability
-            # plan) an undecryptable "Key B" blob at this slot. Neither should
-            # crash the coordinator — the caller falls back to the other slot
-            # or the cache.
+            # Decrypt/decompress failed: a corrupt blob OR (routinely, per the
+            # map-reliability plan) an undecryptable "Key B" blob at this slot.
+            # Never crash the coordinator — it falls back to the other slot or
+            # the cache. A stale dreame enckey also lands here: drop it so the
+            # next fetch re-polls siid=6/piid=3.
             if self._brand == "dreame" and self._enckey is not None:
                 _LOGGER.debug("dreame decrypt failed; will re-poll enckey next fetch: %s", ex)
                 self._enckey = None
                 self._enckey_polled = False
-            _LOGGER.debug("Could not decode map at slot %s: %s", slot, ex)
+            _LOGGER.debug("Could not decrypt map at slot %s: %s", slot, ex)
+            return None
+        try:
+            md = self._parser.parse(unpacked)
+            vector = map_vector.vector_map(md, unpacked, ijai_grid=self._ijai_grid)
+        except Exception as ex:  # noqa: BLE001
+            # Decrypted fine but the parser rejected the frame (corrupt or
+            # unexpected layout). The key material is good — keep the enckey.
+            _LOGGER.debug("Parser rejected map frame at slot %s: %s", slot, ex)
             return None
         if md.image is None or md.image.is_empty:
             _LOGGER.debug("Parsed map at slot %s is empty", slot)
