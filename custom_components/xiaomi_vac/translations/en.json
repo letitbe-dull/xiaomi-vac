@@ -46,9 +46,32 @@
           "device": "Vacuum"
         }
       },
+      "miot_oauth": {
+        "title": "Enable real-time map auth",
+        "description": "Optional. This prepares the live MQTT map path. Skip it to keep the current polling map behaviour.",
+        "data": {
+          "enable_miot_oauth": "Enable OAuth for real-time map updates"
+        }
+      },
+      "miot_oauth_auth": {
+        "title": "Link Xiaomi OAuth",
+        "description": "Open the Xiaomi OAuth link. Home Assistant will continue automatically after Xiaomi redirects back.",
+        "data": {}
+      },
+      "miot_oauth_code": {
+        "title": "Paste Xiaomi OAuth code",
+        "description": "The automatic callback did not finish. Open this link, approve access, then paste the code from the redirect address bar (after 'CODE=' and before '&'):\n\n{authorize_url}",
+        "data": {
+          "code": "OAuth code"
+        }
+      },
+      "miot_oauth_finish": {
+        "title": "Xiaomi OAuth linked",
+        "description": "The real-time map auth is ready."
+      },
       "reauth_confirm": {
         "title": "Sign in to Xiaomi again",
-        "description": "Your session ran out and couldn't renew on its own. Sign in again to bring the live map back.",
+        "description": "Your Xiaomi cloud map session ran out and couldn't renew on its own. Sign in again to bring the map back.",
         "data": {
           "username": "Email, phone number or Mi account ID",
           "password": "Password"
@@ -57,12 +80,18 @@
     },
     "error": {
       "unsupported_model": "This model isn't supported yet.",
-      "cannot_connect": "Couldn't reach the vacuum at that IP with that token."
+      "cannot_connect": "Couldn't reach the vacuum at that IP with that token.",
+      "oauth_failed": "Xiaomi OAuth failed. Try the link again or paste the code manually.",
+      "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
+    },
+    "progress": {
+      "miot_oauth_auth": "Open [Xiaomi OAuth]({authorize_url}) in a new tab. After approval, Xiaomi should return to Home Assistant and this step will continue automatically."
     },
     "abort": {
       "already_configured": "This vacuum is already set up.",
       "reauth_successful": "You're back in. The live map's restored.",
-      "login_failed": "Xiaomi wouldn't accept that. Check your email and password, then try again.",
+      "login_failed": "Xiaomi cloud sign-in failed ({reason}). Check your email and password, then try again.",
+      "login_verification_required": "Xiaomi blocked this sign-in and wants the account verified. Sign in at account.xiaomi.com (or the Xiaomi Home app), complete any verification it asks for, then try again.",
       "no_devices": "No supported vacuums on this account.",
       "unsupported_model": "This model isn't supported yet (ijai / Xiaomi-branded ijai vacuums only)."
     }
@@ -71,15 +100,27 @@
     "step": {
       "miot_oauth_auth": {
         "title": "Link Xiaomi OAuth",
-        "description": "Enable the real-time (MQTT) live map on this existing vacuum. Open this link, approve access, then paste the code from the redirect address bar(after 'CODE=' and before '&'):\n\n{authorize_url}",
+        "description": "Open the Xiaomi OAuth link. Home Assistant will continue automatically after Xiaomi redirects back.",
+        "data": {}
+      },
+      "miot_oauth_code": {
+        "title": "Paste Xiaomi OAuth code",
+        "description": "The automatic callback did not finish. Open this link, approve access, then paste the code from the redirect address bar (after 'CODE=' and before '&'):\n\n{authorize_url}",
         "data": {
           "code": "OAuth code"
         }
+      },
+      "miot_oauth_finish": {
+        "title": "Xiaomi OAuth linked",
+        "description": "The real-time map auth is ready."
       }
     },
     "error": {
-      "oauth_failed": "Xiaomi OAuth failed. Start the link again and paste the new code.",
+      "oauth_failed": "Xiaomi OAuth failed. Try the link again or paste the code manually.",
       "oauth_region_failed": "Couldn't work out the Xiaomi OAuth region from that code."
+    },
+    "progress": {
+      "miot_oauth_auth": "Open [Xiaomi OAuth]({authorize_url}) in a new tab. After approval, Xiaomi should return to Home Assistant and this step will continue automatically."
     },
     "abort": {
       "oauth_local_only": "This vacuum was added as local-only, so it has no Xiaomi cloud session to link OAuth to."
@@ -92,7 +133,7 @@
         "step": {
           "link": {
             "title": "Link Xiaomi OAuth",
-            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link, approve access, then paste the code from the redirect address bar(after 'CODE=' and before '&'):\n\n{authorize_url}",
+            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link, approve access, then paste the code from the redirect address bar (after 'CODE=' and before '&'):\n\n{authorize_url}",
             "data": {
               "code": "OAuth code"
             }

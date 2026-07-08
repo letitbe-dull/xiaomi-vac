@@ -125,4 +125,5 @@ class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntit
         await self.hass.async_add_executor_job(
             self.coordinator.device.set_current_map, int(target["id"])
         )
+        await self.coordinator.async_request_map_upload(int(target["id"]))
         await self.coordinator.async_request_refresh()

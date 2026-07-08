@@ -132,6 +132,7 @@ DREAME_P2008 = ModelProfile(
     clean_history=DREAME_P2008_CLEAN_HISTORY,
     dnd=DREAME_P2008_DND,
     voice=DREAME_P2008_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2008:2",),
 )
 
 
@@ -248,6 +249,7 @@ DREAME_P2009 = ModelProfile(
     clean_history=DREAME_P2009_CLEAN_HISTORY,
     dnd=DREAME_P2009_DND,
     voice=DREAME_P2009_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2009:2",),
 )
 
 
@@ -348,6 +350,7 @@ DREAME_P2027 = ModelProfile(
     clean_history=DREAME_P2027_CLEAN_HISTORY,
     dnd=DREAME_P2027_DND,
     voice=DREAME_P2027_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2027:3",),
 )
 
 
@@ -442,6 +445,95 @@ DREAME_P2036 = ModelProfile(
     clean_history=DREAME_P2036_CLEAN_HISTORY,
     dnd=DREAME_P2036_DND,
     voice=DREAME_P2036_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2036:2",),
+)
+
+
+DREAME_P2041_MAP = DreameMapCapability(
+    service=6,
+    map_data=Prop(6, 1),  # map-data — "Map Data"
+    frame_info=Prop(6, 2),  # frame-info — "Frame Information"
+    object_name=Prop(6, 3),  # object-name — "Intermediate Map Data File Name on FDS"
+    map_extend_data=Prop(6, 4),  # map-extend-data — "Map Editing Parameters"
+    robot_time=Prop(6, 5),  # robot-time — "Host Current Timestamp"
+    result_code=Prop(6, 6),  # result-code — "Map Editing Response Code"
+    map_req=Action(6, 1, in_piid=2, out_piids=(1, 3, 5)),  # map-req — "Request Map Data"
+    update_map=Action(6, 2, in_piid=4, out_piids=(6,)),  # update-map — "Update Map Information"
+)
+
+
+DREAME_P2041_SCHEDULE = DreameScheduleCapability(
+    service=8,
+    time_zone=Prop(8, 1),  # time-zone — "Host Timezone Retrieval"
+    timer_clean=Prop(8, 2),  # timer-clean — "Scheduled Reservation Cleaning"
+    timer_id=Prop(8, 3),  # timer-id — "Reservation ID, For Easy Extension, Use String, Comma Separate Each ID (e.g.: "3,15", "1,9,45"), Currently Each Command Uses One ID (e.g.: "2", "60")"
+    delete_timer=Action(8, 1, in_piid=3),  # delete-timer — "Delete Scheduled Reservation"
+)
+
+
+DREAME_P2041_SETTINGS = DreameSettingsCapability(
+    service=4,
+    cleaning_mode=Prop(4, 4),  # cleaning-mode — "Cleaning Mode"
+    mop_mode=Prop(4, 5),  # mop-mode — "Water Level Settings in Mopping Mode"
+    waterbox_status=Prop(4, 6),  # waterbox-status — "Water Tank Status"
+    task_status=Prop(4, 7),  # task-status — "Host Task Status"
+    break_point_restart=Prop(4, 11),  # break-point-restart — "Resume Cleaning Switch"
+    carpet_press=Prop(4, 12),  # carpet-press — "Carpet Boost Switch"
+)
+
+
+DREAME_P2041_CONSUMABLES = DreameConsumablesCapability(
+    main_brush_life=Prop(9, 2),  # brush-life-level — "Cleaning Brush Remaining Life"
+    main_brush_left_time=Prop(9, 1),  # brush-left-time — "Cleaning Brush Remaining Time"
+    reset_main_brush=Action(9, 1),  # reset-brush-life — "Reset Cleaning Brush"
+    side_brush_life=Prop(10, 2),  # brush-life-level — "Cleaning Brush Remaining Life"
+    side_brush_left_time=Prop(10, 1),  # brush-left-time — "Cleaning Brush Remaining Time"
+    reset_side_brush=Action(10, 1),  # reset-brush-life — "Reset Cleaning Brush"
+    filter_life=Prop(11, 1),  # filter-life-level — "Filter Remaining Life"
+    filter_left_time=Prop(11, 2),  # filter-left-time — "Filter Remaining Time"
+    reset_filter=Action(11, 1),  # reset-filter-life — "Reset Filter"
+)
+
+
+DREAME_P2041_CLEAN_HISTORY = DreameCleanHistoryCapability(
+    service=12,
+    first_clean_time=Prop(12, 1),  # first-clean-time — "First Cleaning Start Time"
+    total_clean_time=Prop(12, 2),  # total-clean-time — "Total Cleaning Time"
+    total_clean_times=Prop(12, 3),  # total-clean-times — "Total Cleaning Count"
+    total_clean_area=Prop(12, 4),  # total-clean-area — "Total Cleaning Area"
+)
+
+
+DREAME_P2041_DND = DreameDndCapability(
+    service=5,
+    enable=Prop(5, 1),  # enable — "Enable"
+    start_time=Prop(5, 2),  # start-time — "Do Not Disturb Start Time"
+    end_time=Prop(5, 3),  # end-time — "Do Not Disturb End Time"
+)
+
+
+DREAME_P2041_VOICE = DreameAudioCapability(
+    service=7,
+    voice_packet_id=Prop(7, 2),  # voice-packet-id — "Voice Pack ID"
+    voice_change_state=Prop(7, 3),  # voice-change-state — "Voice Pack Switching Status"
+    set_voice=Prop(7, 4),  # set-voice — "Set Personalized Voice"
+    locate=Action(7, 1),  # position — "Locate My Robot"
+    play_sound=Action(7, 2),  # play-sound — "Voice Preview"
+)
+
+
+DREAME_P2041 = ModelProfile(
+    profile_id="dreame.p2041",
+    brand="dreame",
+    core=DREAME_P2009_CORE,
+    map=DREAME_P2041_MAP,
+    schedule=DREAME_P2041_SCHEDULE,
+    settings=DREAME_P2041_SETTINGS,
+    consumables=DREAME_P2041_CONSUMABLES,
+    clean_history=DREAME_P2041_CLEAN_HISTORY,
+    dnd=DREAME_P2041_DND,
+    voice=DREAME_P2041_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2041:2",),
 )
 
 
@@ -561,6 +653,7 @@ DREAME_P2114A = ModelProfile(
     clean_history=DREAME_P2114A_CLEAN_HISTORY,
     dnd=DREAME_P2114A_DND,
     voice=DREAME_P2114A_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2114a:2",),
 )
 
 
@@ -660,6 +753,7 @@ DREAME_P2114O = ModelProfile(
     clean_history=DREAME_P2114O_CLEAN_HISTORY,
     dnd=DREAME_P2114O_DND,
     voice=DREAME_P2114O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2114o:2",),
 )
 
 
@@ -776,6 +870,7 @@ DREAME_P2149O = ModelProfile(
     clean_history=DREAME_P2149O_CLEAN_HISTORY,
     dnd=DREAME_P2149O_DND,
     voice=DREAME_P2149O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2149o:2",),
 )
 
 
@@ -892,6 +987,7 @@ DREAME_P2150A = ModelProfile(
     clean_history=DREAME_P2150A_CLEAN_HISTORY,
     dnd=DREAME_P2150A_DND,
     voice=DREAME_P2150A_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-p2150a:2",),
 )
 
 
@@ -988,6 +1084,7 @@ DREAME_R2205 = ModelProfile(
     clean_history=DREAME_R2205_CLEAN_HISTORY,
     dnd=DREAME_R2205_DND,
     voice=DREAME_R2205_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2205:2",),
 )
 
 
@@ -1083,6 +1180,7 @@ DREAME_R2209 = ModelProfile(
     clean_history=DREAME_R2209_CLEAN_HISTORY,
     dnd=DREAME_R2209_DND,
     voice=DREAME_R2209_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2209:2",),
 )
 
 
@@ -1183,6 +1281,7 @@ DREAME_R2210 = ModelProfile(
     clean_history=DREAME_R2210_CLEAN_HISTORY,
     dnd=DREAME_R2210_DND,
     voice=DREAME_R2210_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2210:1",),
 )
 
 
@@ -1282,6 +1381,7 @@ DREAME_R2211O = ModelProfile(
     clean_history=DREAME_R2211O_CLEAN_HISTORY,
     dnd=DREAME_R2211O_DND,
     voice=DREAME_R2211O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2211o:2",),
 )
 
 
@@ -1402,6 +1502,7 @@ DREAME_R2215 = ModelProfile(
     clean_history=DREAME_R2215_CLEAN_HISTORY,
     dnd=DREAME_R2215_DND,
     voice=DREAME_R2215_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2215:2",),
 )
 
 
@@ -1499,6 +1600,7 @@ DREAME_R2216O = ModelProfile(
     clean_history=DREAME_R2216O_CLEAN_HISTORY,
     dnd=DREAME_R2216O_DND,
     voice=DREAME_R2216O_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2216o:1",),
 )
 
 
@@ -1601,6 +1703,7 @@ DREAME_R2228 = ModelProfile(
     clean_history=DREAME_R2228_CLEAN_HISTORY,
     dnd=DREAME_R2228_DND,
     voice=DREAME_R2228_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2228:2",),
 )
 
 
@@ -1637,6 +1740,7 @@ DREAME_R2235A = ModelProfile(
     core=DREAME_R2235A_CORE,
     room_clean=DREAME_R2235A_ROOM_CLEAN,
     consumables=DREAME_R2235A_CONSUMABLES,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2235a:1",),
 )
 
 
@@ -1734,6 +1838,7 @@ DREAME_R2254 = ModelProfile(
     clean_history=DREAME_R2254_CLEAN_HISTORY,
     dnd=DREAME_R2254_DND,
     voice=DREAME_R2254_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2254:3",),
 )
 
 
@@ -1770,4 +1875,5 @@ DREAME_R2257O = ModelProfile(
     core=DREAME_R2257O_CORE,
     room_clean=DREAME_R2257O_ROOM_CLEAN,
     consumables=DREAME_R2257O_CONSUMABLES,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:dreame-r2257o:1",),
 )

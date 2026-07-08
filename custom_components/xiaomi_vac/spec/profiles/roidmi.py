@@ -25,6 +25,7 @@ from ..types import (
 ROIDMI_R1B = ModelProfile(
     profile_id='roidmi.r1b',
     brand='roidmi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:roidmi-r1b:2",),
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 9),
         start=Action(2, 3, in_piid=9),
@@ -35,6 +36,7 @@ ROIDMI_R1B = ModelProfile(
 ROIDMI_SDJ60 = ModelProfile(
     profile_id='roidmi.sdj60',
     brand='roidmi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:roidmi-sdj60:2",),
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 9),
         start=Action(2, 6, in_piid=9),
@@ -45,6 +47,7 @@ ROIDMI_SDJ60 = ModelProfile(
 ROIDMI_V62 = ModelProfile(
     profile_id='roidmi.v62',
     brand='roidmi',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:roidmi-v62:1",),
     map=MapCapability(
         service=10,
         map_num=Prop(10, 3),

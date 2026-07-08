@@ -151,6 +151,7 @@ VIOMI_V12 = ModelProfile(
     clean_history=VIOMI_V12_CLEAN_HISTORY,
     dnd=VIOMI_V12_DND,
     voice=VIOMI_V12_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:viomi-v12:1",),
 )
 
 
@@ -283,6 +284,7 @@ VIOMI_V13 = ModelProfile(
     clean_history=VIOMI_V13_CLEAN_HISTORY,
     dnd=VIOMI_V13_DND,
     voice=VIOMI_V13_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:viomi-v13:2",),
 )
 
 
@@ -415,6 +417,7 @@ VIOMI_V15 = ModelProfile(
     clean_history=VIOMI_V15_CLEAN_HISTORY,
     dnd=VIOMI_V15_DND,
     voice=VIOMI_V15_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:viomi-v15:1",),
 )
 
 
@@ -595,4 +598,5 @@ VIOMI_V45 = ModelProfile(
     clean_history=VIOMI_V45_CLEAN_HISTORY,
     dnd=VIOMI_V45_DND,
     voice=VIOMI_V45_VOICE,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:viomi-v45:2",),
 )

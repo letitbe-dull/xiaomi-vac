@@ -23,15 +23,25 @@ def test_registry_counts_match_card_baseline() -> None:
     supported = [model for model in MODEL_PROFILES if is_supported(model)]
     rejected = [model for model in MODEL_PROFILES if not is_supported(model)]
 
-    assert len(MODEL_PROFILES) == 85
+    assert len(MODEL_PROFILES) == 88
     assert len(supported) == 67
-    assert len(rejected) == 18
+    assert len(rejected) == 21
 
 
 def test_distinct_core_count_matches_promoted_profiles() -> None:
     cores = {repr(profile.core) for profile in MODEL_PROFILES.values() if profile.core}
 
     assert len(cores) == 22
+
+
+def test_registered_profiles_include_spec_notes() -> None:
+    profiles = {id(profile): profile for profile in MODEL_PROFILES.values()}
+    for profile in profiles.values():
+        assert profile.notes
+        assert all(
+            note.startswith("urn:miot-spec-v2:device:vacuum:")
+            for note in profile.notes
+        )
 
 
 @pytest.mark.parametrize(("model", "profile"), sorted(MODEL_PROFILES.items()))

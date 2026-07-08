@@ -19,6 +19,7 @@ from ..const import (
     CONF_OAUTH_EXPIRES_TS,
     CONF_OAUTH_REFRESH_TOKEN,
     CONF_OAUTH_REGION,
+    CONF_OAUTH_REDIRECT_URI,
 )
 
 if TYPE_CHECKING:
@@ -58,14 +59,16 @@ def oauth_state(device_id: str) -> str:
     return hashlib.sha1(f"d={device_id}".encode()).hexdigest()
 
 
-def build_authorize_url(device_id: str) -> str:
+def build_authorize_url(
+    device_id: str, *, redirect_uri: str = OAUTH_REDIRECT_URI
+) -> str:
     """Build the Xiaomi OAuth authorize URL."""
     return (
         f"{OAUTH_AUTHORIZE_URL}?"
         + urlencode(
             {
                 "client_id": OAUTH_APP_ID,
-                "redirect_uri": OAUTH_REDIRECT_URI,
+                "redirect_uri": redirect_uri,
                 "response_type": "code",
                 "device_id": device_id,
                 "state": oauth_state(device_id),
@@ -97,6 +100,7 @@ def exchange_code(
     device_id: str,
     region: str,
     *,
+    redirect_uri: str = OAUTH_REDIRECT_URI,
     session: requests.Session | None = None,
     now: float | None = None,
 ) -> OAuthTokenSet:
@@ -105,7 +109,7 @@ def exchange_code(
         region,
         {
             "client_id": int(OAUTH_APP_ID),
-            "redirect_uri": OAUTH_REDIRECT_URI,
+            "redirect_uri": redirect_uri,
             "code": code,
             "device_id": device_id,
         },
@@ -118,6 +122,7 @@ def refresh_tokens(
     refresh_token: str,
     region: str,
     *,
+    redirect_uri: str = OAUTH_REDIRECT_URI,
     session: requests.Session | None = None,
     now: float | None = None,
 ) -> OAuthTokenSet:
@@ -126,7 +131,7 @@ def refresh_tokens(
         region,
         {
             "client_id": int(OAUTH_APP_ID),
-            "redirect_uri": OAUTH_REDIRECT_URI,
+            "redirect_uri": redirect_uri,
             "refresh_token": refresh_token,
         },
         session=session,
@@ -134,7 +139,11 @@ def refresh_tokens(
     )
 
 
-def oauth_entry_updates(tokens: OAuthTokenSet, device_id: str) -> dict[str, Any]:
+def oauth_entry_updates(
+    tokens: OAuthTokenSet,
+    device_id: str,
+    redirect_uri: str = OAUTH_REDIRECT_URI,
+) -> dict[str, Any]:
     """Return config-entry data updates for OAuth tokens."""
     return {
         CONF_OAUTH_ACCESS_TOKEN: tokens.access_token,
@@ -142,6 +151,7 @@ def oauth_entry_updates(tokens: OAuthTokenSet, device_id: str) -> dict[str, Any]
         CONF_OAUTH_EXPIRES_TS: tokens.expires_ts,
         CONF_OAUTH_REGION: tokens.region,
         CONF_OAUTH_DEVICE_ID: device_id,
+        CONF_OAUTH_REDIRECT_URI: redirect_uri,
     }
 
 
@@ -165,12 +175,14 @@ def refreshed_oauth_entry_updates(
     refresh_token = data.get(CONF_OAUTH_REFRESH_TOKEN)
     region = data.get(CONF_OAUTH_REGION)
     device_id = data.get(CONF_OAUTH_DEVICE_ID)
+    redirect_uri = str(data.get(CONF_OAUTH_REDIRECT_URI) or OAUTH_REDIRECT_URI)
     if not refresh_token or not region or not device_id:
         return None
     tokens = refresh_tokens(
-        str(refresh_token), str(region), session=session, now=now
+        str(refresh_token), str(region), redirect_uri=redirect_uri,
+        session=session, now=now
     )
-    return oauth_entry_updates(tokens, str(device_id))
+    return oauth_entry_updates(tokens, str(device_id), redirect_uri)
 
 
 async def async_refresh_oauth_entry(

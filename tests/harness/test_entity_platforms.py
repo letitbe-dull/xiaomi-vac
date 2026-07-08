@@ -1,6 +1,7 @@
 """Harness tests: entity construction, feature flags, command dispatch."""
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -11,7 +12,17 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.xiaomi_vac.device import VacuumStatus
 from custom_components.xiaomi_vac.number import VolumeNumber, async_setup_entry as number_setup
+from custom_components.xiaomi_vac.const import (
+    CONF_DEVICE_ID,
+    CONF_PASS_TOKEN,
+    CONF_SERVER,
+    CONF_SERVICE_TOKEN,
+    CONF_SSECURITY,
+    CONF_USER_ID,
+    CONF_USERNAME,
+)
 from custom_components.xiaomi_vac.select import (
+    XiaomiActiveMapSelect,
     XiaomiVacuumSelect,
     async_setup_entry as select_setup,
 )
@@ -306,6 +317,69 @@ async def test_vacuum_clean_segment_calls_device_and_refreshes(hass: HomeAssista
     coord.async_request_refresh.assert_awaited_once()
 
 
+async def test_vacuum_clean_segment_retries_user_ack_timeout_via_cloud(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.clean_segments.side_effect = RuntimeError("-9999 user ack timeout")
+    coord.device.room_clean_start_params.return_value = (
+        SimpleNamespace(siid=2, aiid=7),
+        ["1,2"],
+    )
+    coord.device.room_clean_set_params.return_value = (
+        SimpleNamespace(siid=7, aiid=3),
+        [0, 1, "1,2"],
+    )
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {
+        CONF_USERNAME: "user@example.com",
+        CONF_USER_ID: "uid",
+        CONF_SSECURITY: "ssec",
+        CONF_SERVICE_TOKEN: "svc",
+        CONF_PASS_TOKEN: "pass",
+        CONF_SERVER: "sg",
+        CONF_DEVICE_ID: "did123",
+    }
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    cloud = MagicMock()
+    cloud.cloud_action.side_effect = [{"code": -1}, {"code": 0}]
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
+        await vac.async_clean_segment(segments=[1, 2])
+
+    coord.device.clean_segments.assert_called_once_with([1, 2])
+    cloud.cloud_action.assert_has_calls(
+        [
+            call("sg", "did123", 2, 7, ["1,2"]),
+            call("sg", "did123", 7, 3, [0, 1, "1,2"]),
+        ]
+    )
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_vacuum_clean_segment_does_not_cloud_retry_other_failures(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.clean_segments.side_effect = RuntimeError("boom")
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {}
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    with (
+        patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud") as cloud_cls,
+        pytest.raises(HomeAssistantError, match="Room cleaning failed"),
+    ):
+        await vac.async_clean_segment(segments=[1, 2])
+
+    cloud_cls.assert_not_called()
+    coord.async_request_refresh.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Command dispatch: select entity
 # ---------------------------------------------------------------------------
@@ -322,6 +396,31 @@ async def test_select_option_calls_setter_and_refreshes(hass: HomeAssistant) -> 
     await sel.async_select_option("normal")
 
     coord.device.set_fan_speed.assert_called_once_with("normal")
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_active_map_select_options_current_and_switch_uploads(
+    hass: HomeAssistant,
+) -> None:
+    coord = MagicMock()
+    coord.map_list_meta = [
+        {"id": 1, "name": "Ground", "cur": True},
+        {"id": 2, "name": "Upstairs", "cur": False},
+    ]
+    coord.async_request_map_upload = AsyncMock()
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+
+    sel = XiaomiActiveMapSelect(coord, entry)
+    sel.hass = hass
+
+    assert sel.options == ["Ground", "Upstairs"]
+    assert sel.current_option == "Ground"
+
+    await sel.async_select_option("Upstairs")
+
+    coord.device.set_current_map.assert_called_once_with(2)
+    coord.async_request_map_upload.assert_awaited_once_with(2)
     coord.async_request_refresh.assert_awaited_once()
 
 

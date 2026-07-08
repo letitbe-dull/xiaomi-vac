@@ -173,7 +173,8 @@ def _async_manage_oauth_issue(
 
 async def async_unload_entry(hass: HomeAssistant, entry: XiaomiConfigEntry) -> bool:
     """Unload a config entry."""
-    data = entry.runtime_data
+    # runtime_data is only assigned at the end of setup; guard never-loaded entries
+    data = getattr(entry, "runtime_data", None)
     if data is not None and data.mqtt is not None:
         await data.mqtt.async_stop()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -190,6 +191,7 @@ async def _async_start_mqtt(
     Additive & optional per the plan: any missing OAuth field → no client, no
     error, existing behaviour intact.
     """
+    await _async_refresh_oauth_for_mqtt(hass, entry, force=False)
     data = entry.data
     required = (
         data.get(CONF_OAUTH_ACCESS_TOKEN),
@@ -206,8 +208,7 @@ async def _async_start_mqtt(
         return None
 
     async def _token_provider(force: bool) -> str:
-        if force:
-            await async_refresh_oauth_entry(hass, entry, force=True)
+        await _async_refresh_oauth_for_mqtt(hass, entry, force=force)
         return str(entry.data.get(CONF_OAUTH_ACCESS_TOKEN, ""))
 
     async def _on_message(message: MqttMessage) -> None:
@@ -232,6 +233,19 @@ async def _async_start_mqtt(
         _LOGGER.exception("Failed to start MIoT MQTT client — continuing without it")
         return None
     return client
+
+
+async def _async_refresh_oauth_for_mqtt(
+    hass: HomeAssistant, entry: XiaomiConfigEntry, *, force: bool
+) -> bool:
+    """Refresh OAuth for MQTT; keep stale tokens when a due-check refresh fails."""
+    try:
+        return await async_refresh_oauth_entry(hass, entry, force=force)
+    except Exception:  # noqa: BLE001
+        if force:
+            raise
+        _LOGGER.exception("MIoT OAuth proactive refresh failed; using stored token")
+        return False
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
