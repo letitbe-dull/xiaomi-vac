@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
-import zlib
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageChops

@@ -80,18 +80,15 @@ def test_set_fan_speed_rejects_unknown_label(monkeypatch):
 
 
 def test_clean_segments_uses_v17_room_clean_action(monkeypatch):
+    """set-room-clean (7/3) takes map room ids as a CSV STRING; the
+    start-room-sweep action (2/7) wants Mijia ids and fails with map ids
+    (verified on v17 hardware, issue #7)."""
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
 
-    assert (device.profile.room_clean.start.siid, device.profile.room_clean.start.aiid) == (
-        2,
-        7,
-    )
-    assert device.profile.room_clean.start.in_piid == 10
-
     device.clean_segments([10, 12])
 
-    assert _last_calls() == [("action", 2, 7, ["10,12"])]
+    assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
 def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
@@ -100,7 +97,7 @@ def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
 
     device.clean_segments([10, 12])
 
-    assert _last_calls() == [("action", 2, 7, ["10,12"])]
+    assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
 def test_request_map_upload_prefers_upload_by_mapid_ii(monkeypatch):

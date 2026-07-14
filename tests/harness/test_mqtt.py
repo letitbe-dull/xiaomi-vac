@@ -4,12 +4,10 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
-import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.xiaomi_vac.cloud.mqtt import (
     MiotMqttClient,
-    MqttMessage,
     _parse_message,
 )
 

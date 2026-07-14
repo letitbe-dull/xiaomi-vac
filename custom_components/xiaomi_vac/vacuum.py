@@ -178,11 +178,13 @@ def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[i
     if not all(required):
         raise ValueError("Room cleaning cloud fallback requires a Xiaomi cloud session")
 
+    # Same preference order as device.clean_segments: set-room-clean takes
+    # map room ids; start-room-sweep wants Mijia ids and fails with map ids.
     attempts = [
         params
         for params in (
-            device.room_clean_start_params(segments),
             device.room_clean_set_params(segments),
+            device.room_clean_start_params(segments),
         )
         if params is not None
     ]

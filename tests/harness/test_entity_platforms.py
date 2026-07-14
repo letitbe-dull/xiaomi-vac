@@ -8,7 +8,6 @@ import pytest
 from homeassistant.components.vacuum import VacuumEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.xiaomi_vac.device import VacuumStatus
 from custom_components.xiaomi_vac.number import VolumeNumber, async_setup_entry as number_setup
@@ -31,7 +30,7 @@ from custom_components.xiaomi_vac.switch import (
     RepeatSwitch,
     async_setup_entry as switch_setup,
 )
-from custom_components.xiaomi_vac.vacuum import XiaomiVacuum, async_setup_entry as vacuum_setup
+from custom_components.xiaomi_vac.vacuum import XiaomiVacuum
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -350,10 +349,11 @@ async def test_vacuum_clean_segment_retries_user_ack_timeout_via_cloud(
         await vac.async_clean_segment(segments=[1, 2])
 
     coord.device.clean_segments.assert_called_once_with([1, 2])
+    # set-room-clean first (takes map ids); start-room-sweep is the fallback.
     cloud.cloud_action.assert_has_calls(
         [
-            call("sg", "did123", 2, 7, ["1,2"]),
             call("sg", "did123", 7, 3, [0, 1, "1,2"]),
+            call("sg", "did123", 2, 7, ["1,2"]),
         ]
     )
     coord.async_request_refresh.assert_awaited_once()

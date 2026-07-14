@@ -172,12 +172,17 @@ class IjaiVacuumDevice:
         cap = self.profile.room_clean
         if cap is None:
             raise ValueError(f"{self.model} has no room-clean capability")
-        start = self.room_clean_start_params(room_ids)
-        if start is not None:
-            action, params = start
+        # Prefer sweep.set-room-clean: it takes map/device room ids. The
+        # vacuum.start-room-sweep action wants Mijia room ids (prop 2/10), so
+        # map ids sent through it fail at device level (verified on v17
+        # hardware, issue #7). Room-ids must stay a CSV string — the device
+        # reads an integer as empty ids, which means a full global clean.
+        preferred = self.room_clean_set_params(room_ids)
+        if preferred is not None:
+            action, params = preferred
             self._action(action, params)
             return
-        fallback = self.room_clean_set_params(room_ids)
+        fallback = self.room_clean_start_params(room_ids)
         if fallback is not None:
             action, params = fallback
             self._action(action, params)

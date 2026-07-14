@@ -1,15 +1,9 @@
 .claude/
 .docs/
-.ignore/
 .plans/
-.assets/
-.design/
 .bundle/
-.map-issues/
-.tools/
 .scripts/
 venv/
-xiamoi_images/
 
 .pytest_cache/
 *.pyc
@@ -24,14 +18,6 @@ requirements-dev-win.txt
 TODOS.md
 AGENTS.md
 CLAUDE.md
-.claudeignore
+GEMINI.md
 
 .mi_session.json
-HA_XIAOMI_HOME_AUTH_MAP_REPORT.md
-ha_xiaomi_home/
-issues.md
-plan.md
-dreame-map.md
-test-fails.md
-push-notes.md
-.scratch/

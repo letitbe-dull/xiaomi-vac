@@ -1,7 +1,6 @@
 """Pure tests for build_sensors() — no HA install required."""
 from __future__ import annotations
 
-import pytest
 
 from .helpers import load_sensor_module
 

@@ -447,12 +447,14 @@ def _to_json(text: str) -> dict:
 
 
 def _enc_rc4(pw: str, payload: str) -> str:
-    r = ARC4.new(base64.b64decode(pw)); r.encrypt(bytes(1024))
+    r = ARC4.new(base64.b64decode(pw))
+    r.encrypt(bytes(1024))
     return base64.b64encode(r.encrypt(payload.encode())).decode()
 
 
 def _dec_rc4(pw: str, payload: str) -> bytes:
-    r = ARC4.new(base64.b64decode(pw)); r.encrypt(bytes(1024))
+    r = ARC4.new(base64.b64decode(pw))
+    r.encrypt(bytes(1024))
     return r.encrypt(base64.b64decode(payload))
 
 
