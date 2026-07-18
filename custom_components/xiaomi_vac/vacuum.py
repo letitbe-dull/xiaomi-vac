@@ -1,6 +1,8 @@
 """Vacuum entity for Xiaomi (ijai-family) vacuums."""
 from __future__ import annotations
 
+import logging
+
 import voluptuous as vol
 from homeassistant.components.vacuum import (
     StateVacuumEntity,
@@ -29,9 +31,12 @@ from .const import (
 )
 from .coordinator import XiaomiVacuumCoordinator
 from .device import IjaiVacuumDevice
+from .spec.types import MapCapability
 
 # Serialise commands to the device (one MIoT write at a time).
 PARALLEL_UPDATES = 1
+
+_LOGGER = logging.getLogger(__name__)
 
 _ACTIVITY = {
     "cleaning": VacuumActivity.CLEANING,
@@ -48,9 +53,6 @@ _BASE_SUPPORT = (
     | VacuumEntityFeature.STOP
     | VacuumEntityFeature.STATE
 )
-
-_USER_ACK_TIMEOUT = "-9999"
-
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: XiaomiConfigEntry, async_add_entities: AddEntitiesCallback
@@ -133,24 +135,39 @@ class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity
 
     async def async_clean_segment(self, segments: list[int]) -> None:
         """Clean one or more rooms by their map room id (tap-to-clean)."""
-        try:
-            await self.hass.async_add_executor_job(self._device.clean_segments, segments)
-        except Exception as err:  # noqa: BLE001
-            if not _is_user_ack_timeout(err):
-                raise HomeAssistantError(f"Room cleaning failed: {err}") from err
+        data = self._entry.data
+        if _has_cloud_session(data):
+            # ijai proven, xiaomi inferred, viomi/dreame/roidmi best-effort-unverified — plan v1.2.2
             try:
                 await self.hass.async_add_executor_job(
-                    _cloud_clean_segments, self._entry.data, self._device, segments
+                    _cloud_clean_segments, data, self._device, segments
                 )
+                _LOGGER.debug("%s: room-clean served via cloud", self._device.model)
+                await self.coordinator.async_request_refresh()
+                return
             except Exception as cloud_err:  # noqa: BLE001
-                raise HomeAssistantError(
-                    f"Room cleaning timed out locally and cloud fallback failed: {cloud_err}"
-                ) from cloud_err
+                _LOGGER.warning(
+                    "%s: cloud room-clean failed, falling back to local (may no-op on ijai): %s",
+                    self._device.model,
+                    cloud_err,
+                )
+        # Local fallback — also used when no cloud session is configured.
+        try:
+            await self.hass.async_add_executor_job(self._device.clean_segments, segments)
+            _LOGGER.debug("%s: room-clean served via local", self._device.model)
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(f"Room cleaning failed: {err}") from err
         await self.coordinator.async_request_refresh()
 
 
-def _is_user_ack_timeout(err: Exception) -> bool:
-    return any(_USER_ACK_TIMEOUT in str(part) for part in (*err.args, err))
+def _has_cloud_session(data: dict) -> bool:
+    return all(
+        data.get(k)
+        for k in (
+            CONF_USERNAME, CONF_USER_ID, CONF_SSECURITY,
+            CONF_SERVICE_TOKEN, CONF_SERVER, CONF_DEVICE_ID,
+        )
+    )
 
 
 def _cloud_action_ok(response: object) -> bool:
@@ -209,3 +226,29 @@ def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[i
         if _cloud_action_ok(response):
             return
     raise ValueError("Xiaomi cloud rejected every room-clean action")
+
+
+def _cloud_set_current_map(data: dict, device: IjaiVacuumDevice, map_id: int) -> None:
+    # ijai proven, xiaomi inferred, viomi/dreame/roidmi best-effort-unverified — plan v1.2.2
+    cap = device.profile.map
+    if not isinstance(cap, MapCapability):
+        raise ValueError(f"{device.model} has no cloud-mappable map capability")
+    action = cap.set_current_map
+    if action is None:
+        raise ValueError(f"{device.model} has no set-current-map action")
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    response = cloud.cloud_action(
+        str(data[CONF_SERVER]),
+        str(data[CONF_DEVICE_ID]),
+        action.siid,
+        action.aiid,
+        [int(map_id)],
+    )
+    if not _cloud_action_ok(response):
+        raise ValueError(f"Xiaomi cloud rejected map-switch: {response}")
