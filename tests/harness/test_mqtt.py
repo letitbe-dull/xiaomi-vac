@@ -157,7 +157,7 @@ def test_on_connect_rc0_subscribes_three_legs() -> None:
     )
     paho_mock = MagicMock()
 
-    client._on_connect(paho_mock, None, None, 0, None)
+    client._on_connect(paho_mock, None, None, 0)
 
     paho_mock.subscribe.assert_has_calls(
         [
@@ -182,7 +182,7 @@ async def test_on_connect_rc5_schedules_token_refresh(hass: HomeAssistant) -> No
         refresh_called.set()
 
     with patch.object(client, "_refresh_and_reconnect", side_effect=_fake_refresh):
-        client._on_connect(paho_mock, None, None, 5, None)
+        client._on_connect(paho_mock, None, None, 5)
         await asyncio.wait_for(refresh_called.wait(), timeout=1.0)
 
     assert refresh_called.is_set()

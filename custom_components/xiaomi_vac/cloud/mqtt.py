@@ -28,6 +28,11 @@ _RECONNECT_MAX = 60
 
 _RC_NOT_AUTHORIZED = 5
 
+# Home Assistant pins paho-mqtt==1.6.1 in its own package_constraints.txt, so
+# despite anything a custom integration may put in manifest.json, the runtime
+# library is 1.6.x. The MQTTv3.1.1 callback signatures below match that API
+# (client, userdata, flags, rc) / (client, userdata, rc) — no CallbackAPIVersion.
+
 _TOPIC_PROPERTIES_CHANGED = "properties_changed"
 _TOPIC_EVENT_OCCURED = "event_occured"
 
@@ -120,20 +125,9 @@ class MiotMqttClient:
 
     # --- paho callbacks (network thread) ---------------------------------
 
-    @staticmethod
-    def _rc_value(reason_code: Any) -> int:
-        """Normalise a paho reason code (v2 ReasonCode or v1 int) to an int."""
-        if reason_code is None:
-            return -1
-        # paho-mqtt v2 passes a ReasonCode object carrying the numeric code on
-        # `.value`; v1 passed a plain int.
-        return int(getattr(reason_code, "value", reason_code))
-
     def _on_connect(
-        self, client: mqtt.Client, _u: Any, _flags: Any,
-        reason_code: Any, _properties: Any,
+        self, client: mqtt.Client, _u: Any, _flags: Any, rc: int,
     ) -> None:
-        rc = self._rc_value(reason_code)
         if rc == 0:
             _LOGGER.debug("MQTT connected as %s", self._client_id)
             # The broker ACL rejects a single `device/{did}/#`, so subscribe
@@ -148,10 +142,8 @@ class MiotMqttClient:
         _LOGGER.debug("MQTT connect failed rc=%s", rc)
 
     def _on_disconnect(
-        self, _client: mqtt.Client, _u: Any, _flags: Any,
-        reason_code: Any, _properties: Any,
+        self, _client: mqtt.Client, _u: Any, rc: int,
     ) -> None:
-        rc = self._rc_value(reason_code)
         # Auto-reconnect is handled by paho's own loop; just log at debug.
         _LOGGER.debug("MQTT disconnected rc=%s", rc)
 
@@ -211,9 +203,7 @@ class MiotMqttClient:
     # --- helpers ---------------------------------------------------------
 
     def _build_client(self, token: str) -> mqtt.Client:
-        client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2, client_id=self._client_id
-        )
+        client = mqtt.Client(client_id=self._client_id)
         client.username_pw_set(_APP_ID, token)
         if self._tls_verify:
             client.tls_set_context(ssl.create_default_context())
