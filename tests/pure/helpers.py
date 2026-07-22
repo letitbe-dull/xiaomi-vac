@@ -29,6 +29,17 @@ class FakeMiotDevice:
             raise value
         return [{"value": value}]
 
+    def get_properties(self, properties, *, property_getter="get_properties", max_properties=None):  # noqa: ARG002
+        results = []
+        for p in properties:
+            siid, piid = p["siid"], p["piid"]
+            self.calls.append(("get", siid, piid))
+            value = self.property_values.get((siid, piid))
+            if isinstance(value, Exception):
+                raise value
+            results.append({"siid": siid, "piid": piid, "code": 0, "value": value})
+        return results
+
     def set_property_by(self, siid: int, piid: int, value):
         self.calls.append(("set", siid, piid, value))
 

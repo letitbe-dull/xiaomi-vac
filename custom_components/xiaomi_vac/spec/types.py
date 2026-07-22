@@ -348,3 +348,6 @@ class ModelProfile:
     dnd: DndCapability | DreameDndCapability | None = None
     voice: VoiceCapability | DreameAudioCapability | None = None
     notes: tuple[str, ...] = field(default_factory=tuple)
+    # Cap on properties per get_properties call; None = send all at once.
+    # Set to a small value for devices that reject large batches.
+    max_properties: int | None = None

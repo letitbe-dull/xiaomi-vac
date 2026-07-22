@@ -66,23 +66,35 @@ class IjaiVacuumDevice:
         self._dev = MiotDevice(host, token, timeout=timeout)
 
     # --- helpers ---------------------------------------------------------
-    def _get(self, prop) -> object | None:
-        if prop is None:
-            return None
-        try:
-            return self._dev.get_property_by(prop.siid, prop.piid)[0].get("value")
-        except Exception as ex:  # noqa: BLE001
-            _LOGGER.debug("get %s/%s failed: %s", prop.siid, prop.piid, ex)
-            return None
+    def _batch_get(self, props: list) -> dict:
+        """Batch-read MIoT props in one (or chunked) get_properties call.
 
-    def _get_required(self, prop) -> object:
-        """Read a mandatory property; raises DeviceCommunicationError on any failure."""
+        Returns {Prop: value|None}; properties whose device code is non-zero map
+        to None.  Raises DeviceCommunicationError on network/protocol failure.
+        The chunk size is capped at self.profile.max_properties when set — use
+        this for devices that reject large batches (e.g. IJAI_CORE_LEGACY).
+        """
+        if not props:
+            return {}
+        batch_size = self.profile.max_properties
+        miio_props = [
+            {"did": f"{p.siid}-{p.piid}", "siid": p.siid, "piid": p.piid}
+            for p in props
+        ]
         try:
-            return self._dev.get_property_by(prop.siid, prop.piid)[0].get("value")
+            raw = self._dev.get_properties(
+                miio_props, property_getter="get_properties", max_properties=batch_size
+            )
         except Exception as ex:  # noqa: BLE001
             raise DeviceCommunicationError(
-                f"Required property {prop.siid}/{prop.piid} read failed: {ex}"
+                f"Property batch read failed ({len(props)} props): {ex}"
             ) from ex
+        value_map: dict[tuple[int, int], object] = {
+            (r["siid"], r["piid"]): r.get("value")
+            for r in raw
+            if isinstance(r, dict) and r.get("code", -1) == 0
+        }
+        return {p: value_map.get((p.siid, p.piid)) for p in props}
 
     def _set(self, prop, value) -> None:
         if prop is None:
@@ -97,27 +109,35 @@ class IjaiVacuumDevice:
     # --- telemetry -------------------------------------------------------
     def status(self) -> VacuumStatus:
         c = self.core
-        _raw = self._get_required(c.status)
+        # Lean core (decision 2026-06-25): consumable life and clean-area/time
+        # are NOT in core; they're parked at launch -> always None here.
+        # Batch all non-None props in one get_properties call (chunked when
+        # profile.max_properties is set — e.g. IJAI_CORE_LEGACY devices).
+        poll = [p for p in (
+            c.status, c.battery, c.fault, c.fan_speed, c.water_level,
+            c.mode, c.sweep_type, c.repeat, c.alarm, c.volume,
+        ) if p is not None]
+        vals = self._batch_get(poll)
+        _raw = vals.get(c.status)
         try:
             raw = int(_raw)
         except (TypeError, ValueError) as ex:
             raise DeviceCommunicationError(
-                f"status property returned non-integer value: {_raw!r}"
+                f"Required property {c.status.siid}/{c.status.piid} read failed: "
+                f"returned {_raw!r}"
             ) from ex
-        # Lean core (decision 2026-06-25): consumable life and clean-area/time
-        # are NOT in core; they're parked at launch -> always None here.
         return VacuumStatus(
             activity=c.status_map.get(raw, "idle"),
             raw_status=raw,
-            battery=_as_int(self._get(c.battery)),
-            fault=_as_int(self._get(c.fault)),
-            fan_speed_raw=_as_int(self._get(c.fan_speed)),
-            water_level_raw=_as_int(self._get(c.water_level)),
-            mode_raw=_as_int(self._get(c.mode)),
-            sweep_type_raw=_as_int(self._get(c.sweep_type)),
-            repeat_raw=_as_int(self._get(c.repeat)),
-            alarm_raw=_as_int(self._get(c.alarm)),
-            volume_raw=_as_int(self._get(c.volume)),
+            battery=_as_int(vals.get(c.battery)),
+            fault=_as_int(vals.get(c.fault)),
+            fan_speed_raw=_as_int(vals.get(c.fan_speed)),
+            water_level_raw=_as_int(vals.get(c.water_level)),
+            mode_raw=_as_int(vals.get(c.mode)),
+            sweep_type_raw=_as_int(vals.get(c.sweep_type)),
+            repeat_raw=_as_int(vals.get(c.repeat)),
+            alarm_raw=_as_int(vals.get(c.alarm)),
+            volume_raw=_as_int(vals.get(c.volume)),
             main_brush_life=None,
             side_brush_life=None,
             filter_life=None,
