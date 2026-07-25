@@ -20,6 +20,7 @@ class FakeMiotDevice:
 
     def __init__(self, host, token, timeout=5):  # noqa: ARG002
         self.calls = []
+        self.batch_max_properties = []
         self.instances.append(self)
 
     def get_property_by(self, siid: int, piid: int):
@@ -30,6 +31,7 @@ class FakeMiotDevice:
         return [{"value": value}]
 
     def get_properties(self, properties, *, property_getter="get_properties", max_properties=None):  # noqa: ARG002
+        self.batch_max_properties.append(max_properties)
         results = []
         for p in properties:
             siid, piid = p["siid"], p["piid"]

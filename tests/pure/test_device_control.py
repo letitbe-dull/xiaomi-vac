@@ -192,6 +192,32 @@ def test_map_list_rejects_non_dict_items(monkeypatch):
     assert device.map_list() == []
 
 
+def test_status_batches_reads_at_profile_max_properties_on_legacy_v3(monkeypatch):
+    """v3 (IJAI_CORE_LEGACY) rejects large batches; profile caps the chunk at 5."""
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+    status_prop = device.core.status
+    FakeMiotDevice.property_values = {(status_prop.siid, status_prop.piid): 5}
+
+    device.status()
+
+    assert device.profile.max_properties == 5
+    assert FakeMiotDevice.instances[-1].batch_max_properties == [5]
+
+
+def test_status_sends_unbatched_read_on_v17(monkeypatch):
+    """v17 has no max_properties cap — the whole poll goes in one call."""
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
+    status_prop = device.core.status
+    FakeMiotDevice.property_values = {(status_prop.siid, status_prop.piid): 5}
+
+    device.status()
+
+    assert device.profile.max_properties is None
+    assert FakeMiotDevice.instances[-1].batch_max_properties == [None]
+
+
 def test_unsupported_property_and_action_raise_value_error(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "dreame.vacuum.p2008")
