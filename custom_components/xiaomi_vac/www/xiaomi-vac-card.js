@@ -5,7 +5,7 @@
  *
  *   type: custom:xiaomi-vac-card
  *   vacuum: vacuum.kevin_jonas
- * Optional: map (camera), water (select), display toggles
+ * Optional: map (camera), water/fan/activeMap (select), display toggles
  *
  * Map data comes from the integration's vector endpoint
  * (/api/xiaomi_vac/map/{entry_id}) — room polygons, walls, path, dock, etc.
@@ -90,7 +90,7 @@ const parseRGBA = (s) => {
 // to native cards (the old hand-rolled SVGs were janky and inconsistent).
 const MDI = {
   play: "mdi:play", pause: "mdi:pause", dock: "mdi:home-map-marker",
-  locate: "mdi:map-marker-radius", fan: "mdi:fan", water: "mdi:water",
+  locate: "mdi:map-marker-radius", fan: "mdi:fan", water: "mdi:water", map: "mdi:layers",
 };
 // `charging` overlays a bolt — docked-and-charging reads identically to
 // docked-and-full otherwise (same grey accent, same fill bar).
@@ -112,6 +112,7 @@ const TOGGLE_DEFAULTS = {
   show_controls: true,
   show_fan: true,
   show_water: true,
+  show_active_map: true,
   show_room_labels: true,
   allow_room_cleaning: true,
 };
@@ -155,8 +156,27 @@ class XiaomiVacCard extends HTMLElement {
       `sensor.${this._base()}_battery`,
       this._config.water || `select.${this._base()}_water_level`,
       this._config.fan || `select.${this._base()}_fan_speed`,
+      this._activeMapEid(),
     ];
     return eids.some((e) => (a.states[e]) !== (b.states[e]));
+  }
+  // Auto-detected via the entity registry (device_id + translation_key) rather
+  // than guessing an entity_id from the vacuum's object_id — the select's slug
+  // isn't guaranteed to match the vacuum's (renamed device, id collision, etc).
+  _activeMapEid() {
+    if (this._config.activeMap) return this._config.activeMap;
+    if (this._cachedMapEid && this._st(this._cachedMapEid)) return this._cachedMapEid;
+    const ents = this._hass && this._hass.entities;
+    const vacEnt = ents && ents[this._config.vacuum];
+    const deviceId = vacEnt && vacEnt.device_id;
+    if (ents && deviceId) {
+      const found = Object.keys(ents).find((eid) =>
+        eid.startsWith("select.") &&
+        ents[eid].device_id === deviceId &&
+        ents[eid].translation_key === "active_map");
+      if (found) { this._cachedMapEid = found; return found; }
+    }
+    return `select.${this._base()}_active_map`;   // fallback if registry lookup misses
   }
   getCardSize() { return 10; }   // ~50px/unit; the card is a fixed 520px
   connectedCallback() {
@@ -268,6 +288,10 @@ class XiaomiVacCard extends HTMLElement {
         .pg-map{background:radial-gradient(120% 90% at 50% 0%,var(--xv-card),var(--xv-floor));
           box-sizing:border-box;padding:56px 14px 92px}
         .pg-map svg{width:100%;height:100%;display:block}
+        .map-badge{position:absolute;top:64px;right:20px;z-index:4;background:var(--xv-accent);color:#fff;
+          font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:5px 10px;
+          border-radius:9px;box-shadow:0 4px 12px color-mix(in srgb,var(--xv-accent) 40%,transparent);
+          pointer-events:none}
         .rm{cursor:pointer;transition:stroke-width .12s}
         /* a mouse click triggers :focus (not :focus-visible), so the UA default
            outline paints a near-black ring hugging the path — kill it on tap */
@@ -329,6 +353,7 @@ class XiaomiVacCard extends HTMLElement {
         <button class="b act-locate" title="Locate" aria-label="Locate vacuum"><ha-icon icon="${MDI.locate}"></ha-icon></button>
         <button class="b cyc-fan" title="Suction" aria-label="Cycle suction level"><ha-icon icon="${MDI.fan}"></ha-icon></button>
         <button class="b cyc-water" title="Water level" aria-label="Cycle water level"><ha-icon icon="${MDI.water}"></ha-icon></button>
+        <button class="b cyc-map" title="Active map" aria-label="Cycle active map"><ha-icon icon="${MDI.map}"></ha-icon></button>
       </div>`;
     this.appendChild(this._root);
 
@@ -347,6 +372,7 @@ class XiaomiVacCard extends HTMLElement {
     q(".cyc-fan").onclick = () => this._cycleFan();
     q(".cyc-water").onclick = () =>
       this._cycleSelect(this._config.water || `select.${this._base()}_water_level`);
+    q(".cyc-map").onclick = () => this._cycleSelect(this._activeMapEid());
     q(".roomtag").onclick = () => this._cleanSelected();
 
     this._setupSwipe();
@@ -371,7 +397,10 @@ class XiaomiVacCard extends HTMLElement {
       : "";
     const mapOffset = this._mapOffset();
     const mapPages = this._enabled("show_map")
-      ? this._maps().map((m, i) => `<div class="slide pg-map" data-mi="${i + mapOffset}">${this._mapSVG(m)}</div>`)
+      ? this._maps().map((m, i) =>
+          `<div class="slide pg-map" data-mi="${i + mapOffset}">` +
+          (m.active ? `<div class="map-badge">Active</div>` : "") +
+          `${this._mapSVG(m)}</div>`)
       : [];
     this._pages = [...(imgPage ? [imgPage] : []), ...mapPages];
 
@@ -732,6 +761,8 @@ class XiaomiVacCard extends HTMLElement {
     q(".tray").style.display = this._enabled("show_controls") ? "" : "none";
     q(".cyc-fan").style.display = this._enabled("show_fan") ? "" : "none";
     q(".cyc-water").style.display = this._enabled("show_water") ? "" : "none";
+    q(".cyc-map").style.display =
+      this._enabled("show_active_map") && this._st(this._activeMapEid()) ? "" : "none";
     // keep image-page name fresh if it was a placeholder
     const nm = q(".pg-img .nm");
     if (nm && vac) nm.textContent = vac.attributes.friendly_name || "Vacuum";
@@ -755,11 +786,13 @@ class XiaomiVacCardEditor extends HTMLElement {
           map: "Map camera",
           fan: "Fan speed select entity",
           water: "Water level select entity",
+          activeMap: "Active map select entity",
           show_vacuum_page: "Show vacuum page",
           show_map: "Show map",
           show_controls: "Show controls",
           show_fan: "Show suction control",
           show_water: "Show water control",
+          show_active_map: "Show active map control",
           show_room_labels: "Show room labels",
           allow_room_cleaning: "Allow room cleaning",
         }[s.name] || s.name);
@@ -774,11 +807,13 @@ class XiaomiVacCardEditor extends HTMLElement {
       { name: "map", selector: { entity: { domain: "camera" } } },
       { name: "fan", selector: { entity: { domain: "select" } } },
       { name: "water", selector: { entity: { domain: "select" } } },
+      { name: "activeMap", selector: { entity: { domain: "select" } } },
       { name: "show_vacuum_page", selector: { boolean: {} } },
       { name: "show_map", selector: { boolean: {} } },
       { name: "show_controls", selector: { boolean: {} } },
       { name: "show_fan", selector: { boolean: {} } },
       { name: "show_water", selector: { boolean: {} } },
+      { name: "show_active_map", selector: { boolean: {} } },
       { name: "show_room_labels", selector: { boolean: {} } },
       { name: "allow_room_cleaning", selector: { boolean: {} } },
     ];

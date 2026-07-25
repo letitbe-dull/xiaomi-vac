@@ -26,7 +26,7 @@ if "xvac" not in sys.modules:
     _xvac.__path__ = [_PKG]
     sys.modules["xvac"] = _xvac
 
-_TOOLS = os.path.join(_ROOT, ".tools")
+_TOOLS = os.path.join(_ROOT, ".scripts")
 tools_pkg = ModuleType("tools")
 tools_pkg.__path__ = [_TOOLS]
 sys.modules.setdefault("tools", tools_pkg)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import importlib
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -20,6 +20,7 @@ class FakeMiotDevice:
 
     def __init__(self, host, token, timeout=5):  # noqa: ARG002
         self.calls = []
+        self.batch_max_properties = []
         self.instances.append(self)
 
     def get_property_by(self, siid: int, piid: int):
@@ -28,6 +29,18 @@ class FakeMiotDevice:
         if isinstance(value, Exception):
             raise value
         return [{"value": value}]
+
+    def get_properties(self, properties, *, property_getter="get_properties", max_properties=None):  # noqa: ARG002
+        self.batch_max_properties.append(max_properties)
+        results = []
+        for p in properties:
+            siid, piid = p["siid"], p["piid"]
+            self.calls.append(("get", siid, piid))
+            value = self.property_values.get((siid, piid))
+            if isinstance(value, Exception):
+                raise value
+            results.append({"siid": siid, "piid": piid, "code": 0, "value": value})
+        return results
 
     def set_property_by(self, siid: int, piid: int, value):
         self.calls.append(("set", siid, piid, value))

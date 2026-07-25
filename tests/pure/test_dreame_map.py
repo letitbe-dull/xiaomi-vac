@@ -2,7 +2,7 @@
 
 Covers parser construction per model, the three decrypt paths (parser-IV,
 zero-IV, plain), fetch() failure fallbacks, enckey extraction edges, and
-the enckey re-poll after a decrypt failure. See dreame-map.md.
+the enckey re-poll after a decrypt failure. See .plans/dreame-map.md.
 """
 from __future__ import annotations
 

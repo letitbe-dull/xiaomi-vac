@@ -1,6 +1,8 @@
 """Selects: fan speed, water level, cleaning mode, sweep type, active map."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -12,9 +14,12 @@ from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
 from .map_coordinator import XiaomiMapCoordinator
 from .spec.types import MapCapability
+from .vacuum import _cloud_set_current_map, _has_cloud_session
 
 # Serialise commands to the device (one MIoT write at a time).
 PARALLEL_UPDATES = 1
+
+_LOGGER = logging.getLogger(__name__)
 
 # (key, core attr holding {name: raw}, VacuumStatus attr with current raw, device setter)
 SELECTS = (
@@ -96,6 +101,7 @@ class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntit
 
     def __init__(self, coordinator: XiaomiMapCoordinator, entry: XiaomiConfigEntry) -> None:
         super().__init__(coordinator)
+        self._entry = entry
         base = entry.unique_id or entry.entry_id
         self._attr_unique_id = f"{base}_active_map"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
@@ -122,8 +128,32 @@ class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntit
         target = next((m for m in self._maps() if _map_label(m) == option), None)
         if target is None:
             return
-        await self.hass.async_add_executor_job(
-            self.coordinator.device.set_current_map, int(target["id"])
-        )
-        await self.coordinator.async_request_map_upload(int(target["id"]))
+        map_id = int(target["id"])
+        data = self._entry.data
+        if _has_cloud_session(data):
+            # ijai proven, xiaomi inferred, viomi/dreame/roidmi best-effort-unverified — plan v1.2.2
+            try:
+                await self.hass.async_add_executor_job(
+                    _cloud_set_current_map, data, self.coordinator.device, map_id
+                )
+                _LOGGER.debug("%s: map-switch served via cloud", self.coordinator.device.model)
+            except Exception as cloud_err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "%s: cloud map-switch failed, falling back to local: %s",
+                    self.coordinator.device.model,
+                    cloud_err,
+                )
+                await self.hass.async_add_executor_job(
+                    self.coordinator.device.set_current_map, map_id
+                )
+                _LOGGER.debug("%s: map-switch served via local", self.coordinator.device.model)
+        else:
+            await self.hass.async_add_executor_job(
+                self.coordinator.device.set_current_map, map_id
+            )
+            _LOGGER.debug(
+                "%s: map-switch served via local (no cloud session)",
+                self.coordinator.device.model,
+            )
+        await self.coordinator.async_request_map_upload(map_id)
         await self.coordinator.async_request_refresh()

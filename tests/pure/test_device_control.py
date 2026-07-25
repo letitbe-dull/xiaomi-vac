@@ -80,18 +80,15 @@ def test_set_fan_speed_rejects_unknown_label(monkeypatch):
 
 
 def test_clean_segments_uses_v17_room_clean_action(monkeypatch):
+    """set-room-clean (7/3) takes map room ids as a CSV STRING; the
+    start-room-sweep action (2/7) wants Mijia ids and fails with map ids
+    (verified on v17 hardware, issue #7)."""
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
 
-    assert (device.profile.room_clean.start.siid, device.profile.room_clean.start.aiid) == (
-        2,
-        7,
-    )
-    assert device.profile.room_clean.start.in_piid == 10
-
     device.clean_segments([10, 12])
 
-    assert _last_calls() == [("action", 2, 7, ["10,12"])]
+    assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
 def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
@@ -100,7 +97,7 @@ def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
 
     device.clean_segments([10, 12])
 
-    assert _last_calls() == [("action", 2, 7, ["10,12"])]
+    assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
 def test_request_map_upload_prefers_upload_by_mapid_ii(monkeypatch):
@@ -193,6 +190,32 @@ def test_map_list_rejects_non_dict_items(monkeypatch):
     }
 
     assert device.map_list() == []
+
+
+def test_status_batches_reads_at_profile_max_properties_on_legacy_v3(monkeypatch):
+    """v3 (IJAI_CORE_LEGACY) rejects large batches; profile caps the chunk at 5."""
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+    status_prop = device.core.status
+    FakeMiotDevice.property_values = {(status_prop.siid, status_prop.piid): 5}
+
+    device.status()
+
+    assert device.profile.max_properties == 5
+    assert FakeMiotDevice.instances[-1].batch_max_properties == [5]
+
+
+def test_status_sends_unbatched_read_on_v17(monkeypatch):
+    """v17 has no max_properties cap — the whole poll goes in one call."""
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
+    status_prop = device.core.status
+    FakeMiotDevice.property_values = {(status_prop.siid, status_prop.piid): 5}
+
+    device.status()
+
+    assert device.profile.max_properties is None
+    assert FakeMiotDevice.instances[-1].batch_max_properties == [None]
 
 
 def test_unsupported_property_and_action_raise_value_error(monkeypatch):

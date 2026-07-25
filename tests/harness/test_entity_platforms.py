@@ -8,7 +8,6 @@ import pytest
 from homeassistant.components.vacuum import VacuumEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.xiaomi_vac.device import VacuumStatus
 from custom_components.xiaomi_vac.number import VolumeNumber, async_setup_entry as number_setup
@@ -26,12 +25,13 @@ from custom_components.xiaomi_vac.select import (
     XiaomiVacuumSelect,
     async_setup_entry as select_setup,
 )
+from custom_components.xiaomi_vac.spec.types import Action, MapCapability
 from custom_components.xiaomi_vac.switch import (
     AlarmSwitch,
     RepeatSwitch,
     async_setup_entry as switch_setup,
 )
-from custom_components.xiaomi_vac.vacuum import XiaomiVacuum, async_setup_entry as vacuum_setup
+from custom_components.xiaomi_vac.vacuum import XiaomiVacuum
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -304,24 +304,30 @@ async def test_vacuum_locate_calls_device(hass: HomeAssistant) -> None:
     coord.device.locate.assert_called_once()
 
 
-async def test_vacuum_clean_segment_calls_device_and_refreshes(hass: HomeAssistant) -> None:
+async def test_vacuum_clean_segment_uses_local_when_no_cloud_session(
+    hass: HomeAssistant,
+) -> None:
     coord = _make_coordinator()
     coord.async_request_refresh = AsyncMock()
     entry = _make_entry()
+    entry.data = {}
     vac = XiaomiVacuum(coord, entry)
     vac.hass = hass
 
-    await vac.async_clean_segment(segments=[1, 2])
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud") as cloud_cls:
+        await vac.async_clean_segment(segments=[1, 2])
 
+    cloud_cls.assert_not_called()
     coord.device.clean_segments.assert_called_once_with([1, 2])
     coord.async_request_refresh.assert_awaited_once()
 
 
-async def test_vacuum_clean_segment_retries_user_ack_timeout_via_cloud(
+async def test_vacuum_clean_segment_uses_cloud_first_when_session_present(
     hass: HomeAssistant,
 ) -> None:
+    """Cloud is tried before local when a session exists; on success local is
+    never touched — the reverse of the pre-v1.2.2 local-first order."""
     coord = _make_coordinator()
-    coord.device.clean_segments.side_effect = RuntimeError("-9999 user ack timeout")
     coord.device.room_clean_start_params.return_value = (
         SimpleNamespace(siid=2, aiid=7),
         ["1,2"],
@@ -345,17 +351,46 @@ async def test_vacuum_clean_segment_retries_user_ack_timeout_via_cloud(
     vac.hass = hass
 
     cloud = MagicMock()
+    # set-room-clean rejected, start-room-sweep accepted — cloud still resolves
+    # on its own without ever falling back to local.
     cloud.cloud_action.side_effect = [{"code": -1}, {"code": 0}]
     with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
         await vac.async_clean_segment(segments=[1, 2])
 
-    coord.device.clean_segments.assert_called_once_with([1, 2])
+    coord.device.clean_segments.assert_not_called()
     cloud.cloud_action.assert_has_calls(
         [
-            call("sg", "did123", 2, 7, ["1,2"]),
             call("sg", "did123", 7, 3, [0, 1, "1,2"]),
+            call("sg", "did123", 2, 7, ["1,2"]),
         ]
     )
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_vacuum_clean_segment_falls_back_to_local_when_cloud_errors(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {
+        CONF_USERNAME: "user@example.com",
+        CONF_USER_ID: "uid",
+        CONF_SSECURITY: "ssec",
+        CONF_SERVICE_TOKEN: "svc",
+        CONF_PASS_TOKEN: "pass",
+        CONF_SERVER: "sg",
+        CONF_DEVICE_ID: "did123",
+    }
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    cloud = MagicMock()
+    cloud.restore_session.side_effect = RuntimeError("cloud session invalid")
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
+        await vac.async_clean_segment(segments=[1, 2])
+
+    coord.device.clean_segments.assert_called_once_with([1, 2])
     coord.async_request_refresh.assert_awaited_once()
 
 
@@ -399,9 +434,7 @@ async def test_select_option_calls_setter_and_refreshes(hass: HomeAssistant) -> 
     coord.async_request_refresh.assert_awaited_once()
 
 
-async def test_active_map_select_options_current_and_switch_uploads(
-    hass: HomeAssistant,
-) -> None:
+def _make_map_coordinator() -> MagicMock:
     coord = MagicMock()
     coord.map_list_meta = [
         {"id": 1, "name": "Ground", "cur": True},
@@ -409,7 +442,15 @@ async def test_active_map_select_options_current_and_switch_uploads(
     ]
     coord.async_request_map_upload = AsyncMock()
     coord.async_request_refresh = AsyncMock()
+    return coord
+
+
+async def test_active_map_select_options_current_and_switch_uses_local_when_no_cloud_session(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_map_coordinator()
     entry = _make_entry()
+    entry.data = {}
 
     sel = XiaomiActiveMapSelect(coord, entry)
     sel.hass = hass
@@ -417,7 +458,72 @@ async def test_active_map_select_options_current_and_switch_uploads(
     assert sel.options == ["Ground", "Upstairs"]
     assert sel.current_option == "Ground"
 
-    await sel.async_select_option("Upstairs")
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud") as cloud_cls:
+        await sel.async_select_option("Upstairs")
+
+    cloud_cls.assert_not_called()
+    coord.device.set_current_map.assert_called_once_with(2)
+    coord.async_request_map_upload.assert_awaited_once_with(2)
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_active_map_select_switch_uses_cloud_first_when_session_present(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_map_coordinator()
+    coord.device.profile.map = MapCapability(
+        service=7, set_current_map=Action(siid=7, aiid=8)
+    )
+    entry = _make_entry()
+    entry.data = {
+        CONF_USERNAME: "user@example.com",
+        CONF_USER_ID: "uid",
+        CONF_SSECURITY: "ssec",
+        CONF_SERVICE_TOKEN: "svc",
+        CONF_PASS_TOKEN: "pass",
+        CONF_SERVER: "sg",
+        CONF_DEVICE_ID: "did123",
+    }
+
+    sel = XiaomiActiveMapSelect(coord, entry)
+    sel.hass = hass
+
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": 0}
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
+        await sel.async_select_option("Upstairs")
+
+    cloud.cloud_action.assert_called_once_with("sg", "did123", 7, 8, [2])
+    coord.device.set_current_map.assert_not_called()
+    coord.async_request_map_upload.assert_awaited_once_with(2)
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_active_map_select_switch_falls_back_to_local_when_cloud_errors(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_map_coordinator()
+    coord.device.profile.map = MapCapability(
+        service=7, set_current_map=Action(siid=7, aiid=8)
+    )
+    entry = _make_entry()
+    entry.data = {
+        CONF_USERNAME: "user@example.com",
+        CONF_USER_ID: "uid",
+        CONF_SSECURITY: "ssec",
+        CONF_SERVICE_TOKEN: "svc",
+        CONF_PASS_TOKEN: "pass",
+        CONF_SERVER: "sg",
+        CONF_DEVICE_ID: "did123",
+    }
+
+    sel = XiaomiActiveMapSelect(coord, entry)
+    sel.hass = hass
+
+    cloud = MagicMock()
+    cloud.restore_session.side_effect = RuntimeError("cloud session invalid")
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
+        await sel.async_select_option("Upstairs")
 
     coord.device.set_current_map.assert_called_once_with(2)
     coord.async_request_map_upload.assert_awaited_once_with(2)

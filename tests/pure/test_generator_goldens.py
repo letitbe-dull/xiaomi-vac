@@ -61,8 +61,10 @@ def test_registry_profiles_are_value_equal_to_generated_drafts() -> None:
 
     for model, profile in MODEL_PROFILES.items():
         assert model in drafts
-        assert replace(profile, profile_id="", notes=()) == replace(
-            drafts[model], profile_id="", notes=()
+        # max_properties is a runtime tuning value, not derivable from the MIoT
+        # spec, so generated drafts always have None; strip it from both sides.
+        assert replace(profile, profile_id="", notes=(), max_properties=None) == replace(
+            drafts[model], profile_id="", notes=(), max_properties=None
         ), model
 
 
