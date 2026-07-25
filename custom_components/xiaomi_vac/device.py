@@ -316,19 +316,23 @@ class IjaiVacuumDevice:
         for piid in (5, 3):
             try:
                 val = self._dev.get_property_by(1, piid)[0].get("value")
-            except Exception:  # noqa: BLE001
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("wifi_sn: siid 1/piid %s read failed: %s", piid, err)
                 continue
             if isinstance(val, str) and len(val) in _WIFI_SN_LENS and val.isupper():
                 return val
+            _LOGGER.debug("wifi_sn: siid 1/piid %s value %r did not match expected shape", piid, val)
         try:
             raw = self._dev.get_property_by(7, 45)[0].get("value", "")
-        except Exception:  # noqa: BLE001
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("wifi_sn: siid 7/piid 45 fallback read failed: %s", err)
             return None
         for part in str(raw).split(","):
             # The serial sits before an optional ";<uid>" suffix on siid 7/piid 45.
             p = part.replace('"', "").split(";")[0]
             if len(p) in _WIFI_SN_LENS and p.isalnum() and p.isupper():
                 return p
+        _LOGGER.debug("wifi_sn: siid 7/piid 45 value %r had no matching serial part", raw)
         return None
 
 
