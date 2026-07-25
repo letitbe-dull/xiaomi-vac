@@ -281,6 +281,13 @@ class XiaomiCloud:
             headers=h, timeout=10,
         )
 
+    def _any_domain_cookie(self, name: str) -> str | None:
+        """Find a cookie by name regardless of which domain set it."""
+        for c in self._s.cookies:
+            if c.name == name:
+                return c.value
+        return None
+
     def _finish_email_2fa(self, code: str) -> bool:
         h = {"User-Agent": self._agent, "Content-Type": "application/x-www-form-urlencoded"}
         context = self._2fa_ctx
@@ -351,8 +358,13 @@ class XiaomiCloud:
         r = self._s.get(sts, headers=h, allow_redirects=True, timeout=10)
         self.service_token = self._s.cookies.get("serviceToken", domain=".sts.api.io.mi.com")
         self.user_id = self.user_id or self._s.cookies.get("userId", domain=".xiaomi.com")
-        self.pass_token = (self.pass_token
-                           or self._s.cookies.get("passToken", domain=".xiaomi.com"))
+        # Unlike password/QR login, 2FA never returns passToken in a JSON body,
+        # so this cookie is the only source. Pinning the lookup to domain=
+        # ".xiaomi.com" silently returns None if Xiaomi actually scoped the
+        # cookie elsewhere for this flow, which permanently breaks refresh()
+        # (#12: 2FA login, map session expired immediately) — match by name
+        # across every domain instead of guessing one.
+        self.pass_token = self.pass_token or self._any_domain_cookie("passToken")
         for d in (".api.io.mi.com", ".io.mi.com", ".mi.com"):
             self._s.cookies.set("serviceToken", self.service_token, domain=d)
         return bool(self.service_token)
