@@ -899,3 +899,62 @@ XIAOMI_OV71GL = replace(
     profile_id='xiaomi.ov71gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov71gl:1",),
 )
+
+# xiaomi.vacuum.ov43gb — identical spec layout to ov21gl
+XIAOMI_OV43GB = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.ov43gb',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov43gb:2",),
+)
+
+# c107/d101/d102ev/d102gl/d109gl: same siid/piid layout as ov21gl, but their
+# sweep-type value list stops at 7. status_map keeps the full ov21gl table —
+# codes 22-24 are simply never reported by the shorter-spec models.
+XIAOMI_CORE_C107 = replace(
+    XIAOMI_CORE_OV21GL,
+    sweep_types={
+        'global': 1,
+        'zone': 2,
+        'area': 3,
+        'edge': 4,
+        'costum': 5,
+        'point': 6,
+        'custom_area': 7,
+    },
+)
+
+# xiaomi.vacuum.c107
+XIAOMI_C107 = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.c107',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c107:2",),
+    core=XIAOMI_CORE_C107,
+)
+
+# xiaomi.vacuum.d101 — identical spec layout to c107
+XIAOMI_D101 = replace(
+    XIAOMI_C107,
+    profile_id='xiaomi.d101',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-d101:3",),
+)
+
+# xiaomi.vacuum.d102ev — identical spec layout to c107
+XIAOMI_D102EV = replace(
+    XIAOMI_C107,
+    profile_id='xiaomi.d102ev',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-d102ev:1",),
+)
+
+# xiaomi.vacuum.d102gl — identical spec layout to c107
+XIAOMI_D102GL = replace(
+    XIAOMI_C107,
+    profile_id='xiaomi.d102gl',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-d102gl:1",),
+)
+
+# xiaomi.vacuum.d109gl — identical spec layout to c107
+XIAOMI_D109GL = replace(
+    XIAOMI_C107,
+    profile_id='xiaomi.d109gl',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-d109gl:2",),
+)

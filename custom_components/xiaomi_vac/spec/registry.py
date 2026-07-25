@@ -46,8 +46,14 @@ from .profiles.xiaomi import (
     XIAOMI_C101EU,
     XIAOMI_C102CN,
     XIAOMI_C104,
+    XIAOMI_C107,
+    XIAOMI_D101,
+    XIAOMI_D102EV,
+    XIAOMI_D102GL,
+    XIAOMI_D109GL,
     XIAOMI_D110CH,
     XIAOMI_OV21GL,
+    XIAOMI_OV43GB,
     XIAOMI_OV71GL,
 )
 from .types import ModelProfile
@@ -79,10 +85,16 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "xiaomi.vacuum.c102gl": XIAOMI_C102CN,  # Alias: spec-verified same layout as xiaomi.vacuum.c102cn.
     "xiaomi.vacuum.c103": XIAOMI_C101,  # Alias: spec-verified same layout as xiaomi.vacuum.c101.
     "xiaomi.vacuum.c104": XIAOMI_C104,
+    "xiaomi.vacuum.c107": XIAOMI_C107,
+    "xiaomi.vacuum.d101": XIAOMI_D101,
+    "xiaomi.vacuum.d102ev": XIAOMI_D102EV,
+    "xiaomi.vacuum.d102gl": XIAOMI_D102GL,
     "xiaomi.vacuum.d103cn": XIAOMI_C102CN,  # Alias: spec-verified same layout as xiaomi.vacuum.c102cn.
     "xiaomi.vacuum.d106gl": XIAOMI_C101EU,  # Alias: spec-verified same layout as xiaomi.vacuum.c101eu.
+    "xiaomi.vacuum.d109gl": XIAOMI_D109GL,
     "xiaomi.vacuum.d110ch": XIAOMI_D110CH,
     "xiaomi.vacuum.ov21gl": XIAOMI_OV21GL,
+    "xiaomi.vacuum.ov43gb": XIAOMI_OV43GB,
     "xiaomi.vacuum.ov71gl": XIAOMI_OV71GL,
     # --- viomi --------------------------------------------------------------
     "viomi.vacuum.v12": VIOMI_V12,
