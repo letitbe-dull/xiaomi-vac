@@ -40,9 +40,9 @@ const modelShort = (m) => {
 };
 // shape 1 is the default fallback for unmapped models
 const MODEL_SHAPE = Object.fromEntries([
-  [1, ["dreame.mb1808","dreame.mc1808","xiaomi.vacuum.ov21gl","dreame.md1808","dreame.p2008","dreame.p2140a","dreame.p2140o","dreame.p2140p","ijai.v10","ijai.v14"]],
+  [1, ["dreame.mb1808","dreame.mc1808","xiaomi.ov21gl","xiaomi.ov43gb","dreame.md1808","dreame.p2008","dreame.p2140a","dreame.p2140o","dreame.p2140p","ijai.v10","ijai.v14"]],
   [2, ["dreame.p2029","dreame.p2028","dreame.p2028a","dreame.p2150b","dreame.p2150o"]],
-  [3, ["ijai.v2","ijai.v3","vacuum.c104","rockrobo.v1","xiaomi.d110ch","xiaomi.d103cn","xiaomi.d102gl","xiaomi.d102ev","xiaomi.d101","xiaomi.c107","xiaomi.c102gl","xiaomi.c102cn","xiaomi.c101eu","xiaomi.c101","dreame.p2114a","dreame.p2114o","dreame.r2210","dreame.r2209","dreame.r2211o","dreame.r2228","dreame.r228o","dreame.r2228o","dreame.r2228z","dreame.r2232a","dreame.r2233","dreame.r2246","dreame.r2247","dreame.r2254","dreame.s5"]],
+  [3, ["ijai.v2","ijai.v3","xiaomi.c104","rockrobo.v1","xiaomi.d110ch","xiaomi.d103cn","xiaomi.d102gl","xiaomi.d102ev","xiaomi.d101","xiaomi.c107","xiaomi.c102gl","xiaomi.c102cn","xiaomi.c101eu","xiaomi.c101","dreame.p2114a","dreame.p2114o","dreame.r2210","dreame.r2209","dreame.r2211o","dreame.r2228","dreame.r2228o","dreame.r2228z","dreame.r2232a","dreame.r2233","dreame.r2246","dreame.r2247","dreame.r2254","dreame.s5"]],
   [4, ["ijai.v17","ijai.v18","ijai.v19","xiaomi.b106eu"]],
   [5, ["dreame.p2041","dreame.p2041o"]],
   [6, ["dreame.p2009","dreame.p2036"]],
@@ -50,7 +50,7 @@ const MODEL_SHAPE = Object.fromEntries([
   [8, ["ijai.v13","ijai.v1","viomi.v24"]],
   [9, ["dreame.p1248o"]],
   [10, ["xiaomi.d106gl","xiaomi.c103","xiaomi.b108gl"]],
-  [11, ["viomi.v12","xiaomi.vacuum.ov71gl","viomi.v13","xiaomi.b106bk","xiaomi.d109gl","dreame.r2215","dreame.r2216o","dreame.r2235"]],
+  [11, ["viomi.v12","xiaomi.ov71gl","viomi.v13","xiaomi.b106bk","xiaomi.d109gl","dreame.r2215","dreame.r2216o","dreame.r2235"]],
   [12, ["xiaomi.b112","xiaomi.b112gl","xiaomi.c108","viomi.v45"]],
   [13, ["xiaomi.b112bk"]],
   [14, ["viomi.v19"]],
