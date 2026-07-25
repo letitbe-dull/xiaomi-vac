@@ -17,8 +17,15 @@ class DeviceCommunicationError(Exception):
     """Raised when a required device property cannot be read."""
 
 
-# Lengths the firmware uses for the wifi serial that seeds the map AES key.
-_WIFI_SN_LENS = (18, 20)
+# Length range for the wifi serial that seeds the map AES key. Firmware isn't
+# consistent here — v3 reports 19, the old code only allowed 18 or 20 — so this
+# is a range rather than a whitelist (issue #4).
+_WIFI_SN_MIN_LEN = 16
+_WIFI_SN_MAX_LEN = 24
+
+
+def _is_wifi_sn(value: str) -> bool:
+    return _WIFI_SN_MIN_LEN <= len(value) <= _WIFI_SN_MAX_LEN and value.isupper()
 
 
 @dataclass
@@ -319,7 +326,7 @@ class IjaiVacuumDevice:
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("wifi_sn: siid 1/piid %s read failed: %s", piid, err)
                 continue
-            if isinstance(val, str) and len(val) in _WIFI_SN_LENS and val.isupper():
+            if isinstance(val, str) and _is_wifi_sn(val):
                 return val
             _LOGGER.debug("wifi_sn: siid 1/piid %s value %r did not match expected shape", piid, val)
         try:
@@ -330,7 +337,7 @@ class IjaiVacuumDevice:
         for part in str(raw).split(","):
             # The serial sits before an optional ";<uid>" suffix on siid 7/piid 45.
             p = part.replace('"', "").split(";")[0]
-            if len(p) in _WIFI_SN_LENS and p.isalnum() and p.isupper():
+            if _is_wifi_sn(p) and p.isalnum():
                 return p
         _LOGGER.debug("wifi_sn: siid 7/piid 45 value %r had no matching serial part", raw)
         return None
