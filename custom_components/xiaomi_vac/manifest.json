@@ -18,7 +18,7 @@
     "vacuum-map-parser-base==0.1.5",
     "pycryptodome==3.23.0",
     "Pillow==12.2.0",
-    "paho-mqtt==1.6.1"
+    "paho-mqtt==2.1.0"
   ],
   "version": "1.2.1"
 }

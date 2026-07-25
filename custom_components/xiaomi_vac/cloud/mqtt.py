@@ -28,10 +28,11 @@ _RECONNECT_MAX = 60
 
 _RC_NOT_AUTHORIZED = 5
 
-# Home Assistant pins paho-mqtt==1.6.1 in its own package_constraints.txt, so
-# despite anything a custom integration may put in manifest.json, the runtime
-# library is 1.6.x. The MQTTv3.1.1 callback signatures below match that API
-# (client, userdata, flags, rc) / (client, userdata, rc) — no CallbackAPIVersion.
+# Home Assistant's own package_constraints.txt pins the paho-mqtt version, so
+# whatever manifest.json requests, the runtime library is whatever HA ships —
+# 2.1.0 as of HA 2026.7.3 (was 1.6.1 in HA 2025.1). The callback signatures
+# below target the CallbackAPIVersion.VERSION2 API paho-mqtt 2.x calls back
+# with: (client, userdata, flags, reason_code, properties).
 
 _TOPIC_PROPERTIES_CHANGED = "properties_changed"
 _TOPIC_EVENT_OCCURED = "event_occured"
@@ -126,7 +127,7 @@ class MiotMqttClient:
     # --- paho callbacks (network thread) ---------------------------------
 
     def _on_connect(
-        self, client: mqtt.Client, _u: Any, _flags: Any, rc: int,
+        self, client: mqtt.Client, _u: Any, _flags: Any, rc: Any, _props: Any = None,
     ) -> None:
         if rc == 0:
             _LOGGER.debug("MQTT connected as %s", self._client_id)
@@ -142,7 +143,7 @@ class MiotMqttClient:
         _LOGGER.debug("MQTT connect failed rc=%s", rc)
 
     def _on_disconnect(
-        self, _client: mqtt.Client, _u: Any, rc: int,
+        self, _client: mqtt.Client, _u: Any, _flags: Any, rc: Any = None, _props: Any = None,
     ) -> None:
         # Auto-reconnect is handled by paho's own loop; just log at debug.
         _LOGGER.debug("MQTT disconnected rc=%s", rc)
@@ -203,7 +204,7 @@ class MiotMqttClient:
     # --- helpers ---------------------------------------------------------
 
     def _build_client(self, token: str) -> mqtt.Client:
-        client = mqtt.Client(client_id=self._client_id)
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=self._client_id)
         client.username_pw_set(_APP_ID, token)
         if self._tls_verify:
             client.tls_set_context(ssl.create_default_context())
