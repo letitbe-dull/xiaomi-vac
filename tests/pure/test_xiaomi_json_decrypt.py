@@ -56,8 +56,8 @@ def _encrypt_like_the_real_app(payload: dict, *, model: str, device_id: str) -> 
 ])
 def test_decrypt_round_trip(model):
     payload = {"map_id": 4, "height": 160, "width": 256, "map_data": "abc123"}
-    blob = _encrypt_like_the_real_app(payload, model=model, device_id="1190991420")
-    result = json.loads(decrypt_xiaomi_json_map(blob, model, "1190991420"))
+    blob = _encrypt_like_the_real_app(payload, model=model, device_id="1234567890")
+    result = json.loads(decrypt_xiaomi_json_map(blob, model, "1234567890"))
     assert result == payload
 
 
@@ -65,7 +65,7 @@ def test_decrypt_uses_only_last_16_chars_of_model():
     """Two model strings sharing the same last 16 chars must decrypt identically —
     proves the fix truncates rather than hashing/padding the full string."""
     payload = {"ok": True}
-    device_id = "1190991420"
+    device_id = "1234567890"
     long_model = "xiaomi.vacuum.ov42gl"
     same_suffix_model = "zzzzz" + long_model[-16:]
     assert long_model[-16:] == same_suffix_model[-16:]
@@ -78,19 +78,19 @@ def test_decrypt_uses_only_last_16_chars_of_model():
 def test_decrypt_rejects_wrong_version():
     envelope = json.dumps({"version": 1, "data": "irrelevant"}).encode("utf-8")
     with pytest.raises(ValueError, match="unsupported xiaomi map blob version"):
-        decrypt_xiaomi_json_map(envelope, "xiaomi.vacuum.ov42gl", "1190991420")
+        decrypt_xiaomi_json_map(envelope, "xiaomi.vacuum.ov42gl", "1234567890")
 
 
 def test_decrypt_rejects_non_json_input():
     with pytest.raises(json.JSONDecodeError):
-        decrypt_xiaomi_json_map(b"not json at all", "xiaomi.vacuum.ov42gl", "1190991420")
+        decrypt_xiaomi_json_map(b"not json at all", "xiaomi.vacuum.ov42gl", "1234567890")
 
 
 def test_decrypt_rejects_wrong_key_material():
     """A blob encrypted for one device must not silently decrypt for another —
     either PKCS7 unpadding or the trailing zlib decompress must reject it."""
     payload = {"map_id": 1}
-    blob = _encrypt_like_the_real_app(payload, model="xiaomi.vacuum.ov42gl", device_id="1190991420")
+    blob = _encrypt_like_the_real_app(payload, model="xiaomi.vacuum.ov42gl", device_id="1234567890")
     with pytest.raises(Exception):  # noqa: B017 - either ValueError (unpad) or zlib.error
         decrypt_xiaomi_json_map(blob, "xiaomi.vacuum.ov42gl", "9999999999")
 
@@ -116,10 +116,10 @@ def test_mapfetcher_unpack_xiaomi_bypasses_upstream_decrypt():
     upstream path is what's broken (see module docstring)."""
     model = "xiaomi.vacuum.ov42gl"
     payload = {"map_id": 4, "height": 160, "width": 256}
-    blob = _encrypt_like_the_real_app(payload, model=model, device_id="1190991420")
+    blob = _encrypt_like_the_real_app(payload, model=model, device_id="1234567890")
 
     fetcher = MapFetcher(
-        FakeCloud(), server="de", user_id="1", device_id="1190991420", model=model,
+        FakeCloud(), server="de", user_id="1", device_id="1234567890", model=model,
         mac="AA:BB:CC:DD:EE:FF", wifi_sn="SN", parser_brand="xiaomi")
 
     def _boom(*a, **kw):
@@ -145,10 +145,10 @@ def test_mapfetcher_fetch_full_chain_xiaomi_json():
         "resolution": 50, "origin_x": 0, "origin_y": 0,
         "map_data": base64.b64encode(zlib.compress(bytes([1] * 16))).decode("ascii"),
     }
-    blob = _encrypt_like_the_real_app(payload, model=model, device_id="1190991420")
+    blob = _encrypt_like_the_real_app(payload, model=model, device_id="1234567890")
 
     fetcher = MapFetcher(
-        FakeCloud(blob=blob), server="de", user_id="1", device_id="1190991420", model=model,
+        FakeCloud(blob=blob), server="de", user_id="1", device_id="1234567890", model=model,
         mac="AA:BB:CC:DD:EE:FF", wifi_sn="SN", parser_brand="xiaomi")
 
     result = fetcher.fetch()

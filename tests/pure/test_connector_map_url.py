@@ -15,7 +15,7 @@ from cloud.connector import XiaomiCloud
 
 def _cloud() -> XiaomiCloud:
     cloud = XiaomiCloud("user@example.com")
-    cloud.user_id = "1697322470"
+    cloud.user_id = "9876543210"
     return cloud
 
 
