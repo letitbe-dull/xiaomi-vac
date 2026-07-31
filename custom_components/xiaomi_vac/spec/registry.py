@@ -53,6 +53,7 @@ from .profiles.xiaomi import (
     XIAOMI_D109GL,
     XIAOMI_D110CH,
     XIAOMI_OV21GL,
+    XIAOMI_OV42GL,
     XIAOMI_OV43GB,
     XIAOMI_OV71GL,
 )
@@ -94,6 +95,7 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     "xiaomi.vacuum.d109gl": XIAOMI_D109GL,
     "xiaomi.vacuum.d110ch": XIAOMI_D110CH,
     "xiaomi.vacuum.ov21gl": XIAOMI_OV21GL,
+    "xiaomi.vacuum.ov42gl": XIAOMI_OV42GL,
     "xiaomi.vacuum.ov43gb": XIAOMI_OV43GB,
     "xiaomi.vacuum.ov71gl": XIAOMI_OV71GL,
     # --- viomi --------------------------------------------------------------

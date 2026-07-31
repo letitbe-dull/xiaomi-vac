@@ -140,6 +140,8 @@ def _profile(brand: str, profile_id: str):
         ("xiaomi", "xiaomi.e101gb", "xiaomi"),
         ("xiaomi", "xiaomi.ov21gl", "xiaomi"),
         ("xiaomi", "xiaomi.ov31gl", "xiaomi"),
+        ("xiaomi", "xiaomi.ov42gl", "xiaomi"),
+        ("xiaomi", "xiaomi.ov43gb", "xiaomi"),
         ("xiaomi", "xiaomi.ov71gl", "xiaomi"),
         ("xiaomi", "xiaomi.ov81gl", "xiaomi"),
         ("dreame", "dreame.p2008", "dreame"),

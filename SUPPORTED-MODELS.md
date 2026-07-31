@@ -88,5 +88,6 @@ Total supported models: 73
 - `xiaomi.vacuum.d106gl`
 - `xiaomi.vacuum.d109gl`
 - `xiaomi.vacuum.ov21gl`
+- `xiaomi.vacuum.ov42gl`
 - `xiaomi.vacuum.ov43gb`
 - `xiaomi.vacuum.ov71gl`

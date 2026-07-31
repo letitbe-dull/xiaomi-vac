@@ -57,10 +57,25 @@ def dreame_decrypt_cloud_blob(raw: bytes, enckey: str) -> bytes:
 # parser READMEs; assumed xiaomi-JSON by family resemblance — route to ijai
 # only if hardware testing contradicts this. Every other xiaomi.* profile is
 # an ijai-engine rebrand (RobotMap protobuf: c103/c104/b106eu etc.).
+#
+# ov42gl/ov43gb (2026-07-31): same reasoning as ov21gl — same siid=2 core
+# layout AND (ov42gl only, hardware-confirmed) the same siid=10 vacuum-map
+# service (Map Obj Name/Trajectory Obj Name/Map Management/Room Information),
+# so they belong to the same map family. Routing them through the *ijai*
+# parser/endpoint instead (the pre-fix behaviour: any xiaomi.* profile not in
+# this set falls back to "ijai") is the leading suspect for the live
+# "-6 invalid config for fds" cloud error on ov42gl: it picks the wrong
+# `get_interim_file_url_pro` endpoint (ijai-only, see map_url_endpoint())
+# instead of the plain `get_interim_file_url` this family actually needs, and
+# would hand a JSON blob to the ijai protobuf parser even if the URL fetch
+# succeeded. Needs a live camera-entity retest to confirm; ov43gb is added on
+# spec-family grounds only (no real device to test against yet).
 _XIAOMI_JSON_MAP_PROFILES = frozenset({
     "xiaomi.e101gb",
     "xiaomi.ov21gl",
     "xiaomi.ov31gl",
+    "xiaomi.ov42gl",
+    "xiaomi.ov43gb",
     "xiaomi.ov71gl",
     "xiaomi.ov81gl",
 })

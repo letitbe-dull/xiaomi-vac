@@ -907,6 +907,20 @@ XIAOMI_OV43GB = replace(
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov43gb:2",),
 )
 
+# xiaomi.vacuum.ov42gl (Xiaomi Robot Vacuum H50 Pro) — identical spec layout
+# to ov21gl. Unlike ov71gl/ov43gb (unverified aliases), this one is confirmed
+# against a real device's spec cache AND the public MIoT spec DB: every
+# siid/piid/aiid in the vendored ov42gl spec matches ov21gl's core exactly,
+# and the public value-lists for status (all 24 codes), fan_speed (piid 2/9,
+# despite the generic "mode" MIoT type), water_level (piid 2/10), mode
+# (piid 2/4, "Sweep Mop Type"), and sweep_type (piid 2/5) match ov21gl's
+# tables 1:1.
+XIAOMI_OV42GL = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.ov42gl',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov42gl:2",),
+)
+
 # c107/d101/d102ev/d102gl/d109gl: same siid/piid layout as ov21gl, but their
 # sweep-type value list stops at 7. status_map keeps the full ov21gl table —
 # codes 22-24 are simply never reported by the shorter-spec models.
