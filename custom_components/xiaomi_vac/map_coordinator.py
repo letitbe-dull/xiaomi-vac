@@ -367,10 +367,26 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
     def _fetch_slots(self) -> list[MapResult | None]:
         """Blocking: try every cloud slot for the active map this cycle.
 
-        A raised SessionExpired from an earlier slot short-circuits the rest —
-        the whole session is dead, not just this slot's blob.
+        Each slot's SessionExpired is caught independently instead of
+        short-circuiting the rest of the list: the object backing one slot
+        (e.g. Map Obj Name) can be permanently unavailable server-side while
+        a different object for the same device (e.g. Trajectory Obj Name)
+        still resolves fine — that's not a dead session, just a dead object.
+        SessionExpired is only re-raised when EVERY slot came back with no
+        URL, since that's the actual "whole session is dead" signal the
+        coordinator's refresh/reauth handling wants.
         """
-        return [self._fetcher.fetch(slot) for slot in _SLOTS]
+        results: list[MapResult | None] = []
+        any_resolved = False
+        for slot in _SLOTS:
+            try:
+                results.append(self._fetcher.fetch(slot))
+                any_resolved = True
+            except SessionExpired:
+                results.append(None)
+        if not any_resolved:
+            raise SessionExpired()
+        return results
 
     def _resolve_active_id(
         self, active_meta: dict | None, decoded: list[MapResult], maps_meta: list[dict],
@@ -461,7 +477,20 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 # re-auth (raises a reauth flow) rather than dead-end.
                 if not await self._refresh_and_persist():
                     raise ConfigEntryAuthFailed("Xiaomi cloud map session expired") from None
-                slot_results = await self.hass.async_add_executor_job(self._fetch_slots)
+                try:
+                    slot_results = await self.hass.async_add_executor_job(self._fetch_slots)
+                except SessionExpired:
+                    # The passToken renewal just above proved the account
+                    # credentials are valid, so a second empty map URL right
+                    # after isn't an auth problem — the cloud simply has
+                    # nothing to serve yet (no map uploaded under this
+                    # obj_name, region mismatch, transient hiccup). Reporting
+                    # this as ConfigEntryAuthFailed would force a reauth the
+                    # user can never satisfy (login keeps succeeding, then
+                    # immediately bounces back to reauth every cycle).
+                    raise UpdateFailed(
+                        "Xiaomi cloud has no map available (session is valid)"
+                    ) from None
 
             decoded = [r for r in slot_results if r is not None]
             active_meta = next((m for m in maps_meta if m.get("cur")), None)

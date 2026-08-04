@@ -422,25 +422,36 @@ class XiaomiCloud:
 
     def map_url(self, server: str, did: str, map_name: str = "0",
                 endpoint: str = "get_interim_file_url_pro") -> str | None:
+        """Mint a signed download URL for one map object.
+
+        Tries the alternate endpoint (get_interim_file_url vs. _pro) on ANY
+        failure, not just code -8 — some brands (observed live: 3irobotic-
+        manufactured xiaomi.* models like ov42gl) reject the "wrong" endpoint
+        for their account with other codes too (e.g. -6 "invalid config for
+        fds"), and there's no complete list of which codes mean "wrong
+        endpoint" vs. an actual dead object/session. Always trying both is
+        more robust than chasing individual error codes.
+        """
         obj = f"{self.user_id}/{did}/{map_name}"
+        resp = self._try_map_url(server, obj, endpoint)
+        if resp is not None:
+            return resp
+
+        alt = ("get_interim_file_url" if endpoint == "get_interim_file_url_pro"
+               else "get_interim_file_url_pro")
+        alt_resp = self._try_map_url(server, obj, alt)
+        if alt_resp is not None:
+            _LOGGER.debug("map_url: %s failed, succeeded with %s", endpoint, alt)
+            return alt_resp
+        return None
+
+    def _try_map_url(self, server: str, obj_name: str, endpoint: str) -> str | None:
         resp = self._call(self._api_url(server) + f"/v2/home/{endpoint}",
-                          {"data": f'{{"obj_name":"{obj}"}}'})
+                          {"data": f'{{"obj_name":"{obj_name}"}}'})
         try:
             return resp["result"]["url"]
         except (TypeError, KeyError):
-            pass
-        if isinstance(resp, dict) and resp.get("code") == -8:
-            alt = ("get_interim_file_url" if endpoint == "get_interim_file_url_pro"
-                   else "get_interim_file_url_pro")
-            resp2 = self._call(self._api_url(server) + f"/v2/home/{alt}",
-                               {"data": f'{{"obj_name":"{obj}"}}'})
-            try:
-                url = resp2["result"]["url"]
-                _LOGGER.debug("map_url: %s rejected (code -8), succeeded with %s", endpoint, alt)
-                return url
-            except (TypeError, KeyError):
-                pass
-        return None
+            return None
 
     def download(self, url: str) -> bytes | None:
         r = self._s.get(url, timeout=15)

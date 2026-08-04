@@ -159,6 +159,11 @@ class MapFetcher:
         dreame with enckey: if the parser has a model-specific IV, delegate to
         parser.unpack_map (it applies AES-CBC with that IV). Otherwise use the
         Tasshack zero-IV chain via dreame_decrypt_cloud_blob.
+        xiaomi: bypasses parser.unpack_map (vacuum_map_parser_xiaomi's own
+        decrypt() is broken for this whole model family, see
+        xiaomi_json_decrypt.py) and decrypts locally instead. Returns a JSON
+        *string*, not bytes, same contract as the upstream decrypt() this
+        replaces (parser.parse() only accepts str or dict).
         All other paths go through parser.unpack_map normally.
         """
         if self._brand == "dreame" and self._enckey is not None:
@@ -166,6 +171,9 @@ class MapFetcher:
             if DreameMapDataParser.IVs.get(self._model) is not None:
                 return self._parser.unpack_map(raw, enckey=self._enckey)
             return dreame_decrypt_cloud_blob(raw, self._enckey)
+        if self._brand == "xiaomi":
+            from .xiaomi_json_decrypt import decrypt_xiaomi_json_map
+            return decrypt_xiaomi_json_map(raw, self._model, self._device_id)
         return self._parser.unpack_map(raw, **self._unpack_kw)
 
     def fetch(self, slot: str = "0") -> MapResult | None:
@@ -249,5 +257,8 @@ class MapFetcher:
             attributes=attributes,
             vector=vector,
             map_id=vector.get("map_id"),
-            content_hash=hashlib.sha256(unpacked).hexdigest(),
+            # xiaomi's _unpack returns a str (JSON text), every other brand bytes.
+            content_hash=hashlib.sha256(
+                unpacked.encode("utf-8") if isinstance(unpacked, str) else unpacked
+            ).hexdigest(),
         )

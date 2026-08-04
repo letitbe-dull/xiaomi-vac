@@ -253,9 +253,13 @@ async def test_map_coordinator_session_expiry_triggers_pass_token_refresh(
 
     fake_result = _fake_result(map_id=1)
     fetcher = MagicMock()
-    # First attempt: slot "0" raises SessionExpired (short-circuits slot "1").
-    # Retry after refresh: slot "0" decodes, slot "1" doesn't.
-    fetcher.fetch.side_effect = [SessionExpired("token dead"), fake_result, None]
+    # First attempt: both slots raise SessionExpired (every slot is tried
+    # independently now, so a refresh is only triggered once neither
+    # resolves). Retry after refresh: slot "0" decodes, slot "1" doesn't.
+    fetcher.fetch.side_effect = [
+        SessionExpired("token dead"), SessionExpired("token dead"),
+        fake_result, None,
+    ]
     coord._fetcher = fetcher
 
     async def _exec(fn, *a):
@@ -293,6 +297,68 @@ async def test_map_coordinator_session_expiry_refresh_fails_raises_auth_failed(
         pytest.raises(ConfigEntryAuthFailed),
     ):
         await coord._async_update_data()
+
+
+async def test_map_coordinator_session_still_expired_after_refresh_raises_update_failed(
+    hass: HomeAssistant,
+) -> None:
+    """A second SessionExpired right after a *successful* passToken refresh is
+    not an auth problem (refresh just proved the credentials are good) — it
+    must surface as UpdateFailed, not bounce the user back into reauth."""
+    coord = _map_coord(hass)
+
+    fetcher = MagicMock()
+    fetcher.fetch.side_effect = SessionExpired("dead")
+    coord._fetcher = fetcher
+
+    async def _exec(fn, *a):
+        return fn(*a)
+
+    with (
+        patch.object(coord, "_refresh_and_persist", new=AsyncMock(return_value=True)),
+        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+        pytest.raises(UpdateFailed),
+    ):
+        await coord._async_update_data()
+
+
+async def test_map_coordinator_serves_surviving_slot_when_other_slot_is_permanently_dead(
+    hass: HomeAssistant,
+) -> None:
+    """One cloud object (e.g. Map Obj Name) can be permanently unavailable
+    ("-6 invalid config for fds"-style) while a different object for the
+    same device (e.g. Trajectory Obj Name) still resolves fine. _fetch_slots
+    must try every slot independently and serve from whichever one works,
+    never demanding a reauth just because ONE slot is dead."""
+    coord = _map_coord(hass)
+
+    fake_result = _fake_result(map_id=1)
+    fetcher = MagicMock()
+
+    def _fetch(slot):
+        if slot == "0":
+            raise SessionExpired("this object is permanently dead")
+        return fake_result
+
+    fetcher.fetch.side_effect = _fetch
+    coord._fetcher = fetcher
+
+    async def _exec(fn, *a):
+        return fn(*a)
+
+    mock_refresh = AsyncMock(return_value=True)
+    with (
+        patch.object(coord, "_refresh_and_persist", new=mock_refresh),
+        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        result = await coord._async_update_data()
+
+    assert result.map_id == fake_result.map_id
+    assert result.image_png == fake_result.image_png
+    # Slot "1" resolved on the very first pass — no refresh/reauth needed.
+    mock_refresh.assert_not_awaited()
 
 
 async def test_map_coordinator_none_result_resets_fetcher_and_raises(
