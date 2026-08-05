@@ -226,7 +226,16 @@ class DreameConsumablesCapability:
     mop_left_time: Prop | None = None
     reset_mop: Action | None = None
     detergent_life: Prop | None = None
+    detergent_left_time: Prop | None = None
     reset_detergent: Action | None = None
+    # dust-bag service (its own siid, e.g. xiaomi.ov42gl's siid 19): added
+    # 2026-08-01 for a xiaomi-brand profile that reuses this dataclass's
+    # percent+hours shape (not a dreame-only concept, just modeled here
+    # first) — every other field stays untouched, so existing dreame
+    # profiles are unaffected.
+    dust_bag_life: Prop | None = None
+    dust_bag_left_time: Prop | None = None
+    reset_dust_bag: Action | None = None
 
 
 @dataclass(frozen=True)

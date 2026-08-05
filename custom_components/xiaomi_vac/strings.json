@@ -187,6 +187,12 @@
       },
       "mop_life": {
         "name": "Mop life"
+      },
+      "dust_bag_life": {
+        "name": "Dust bag life"
+      },
+      "detergent_life": {
+        "name": "Detergent life"
       }
     },
     "select": {

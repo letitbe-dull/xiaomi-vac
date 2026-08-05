@@ -13,6 +13,7 @@ from ..types import (
     ConsumablesCapability,
     CoreCapability,
     DndCapability,
+    DreameConsumablesCapability,
     MapCapability,
     ModelProfile,
     PointZoneCapability,
@@ -919,6 +920,20 @@ XIAOMI_OV42GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov42gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov42gl:2",),
+    # Consumables (2026-08-01): read straight off the live device's own cached
+    # MIoT spec (.storage/xiaomi_home/miot_specs/...xiaomi-ov42gl:1_en.dict),
+    # hardware-confirmed for THIS model — not extended to ov71gl/ov43gb (only
+    # aliased on spec-family grounds, unverified) or ov21gl. Main/side brush
+    # are two separate brush-cleaner service instances (siid 12/13); filter
+    # siid 14; detergent (mop-solution tank) siid 18; dust bag siid 19 — each
+    # exposes life-level (piid 1, %) + left-time (piid 2 or 4, hours).
+    consumables=DreameConsumablesCapability(
+        main_brush_life=Prop(12, 1), main_brush_left_time=Prop(12, 2),
+        side_brush_life=Prop(13, 1), side_brush_left_time=Prop(13, 2),
+        filter_life=Prop(14, 1), filter_left_time=Prop(14, 2),
+        detergent_life=Prop(18, 1), detergent_left_time=Prop(18, 4),
+        dust_bag_life=Prop(19, 1), dust_bag_left_time=Prop(19, 2),
+    ),
 )
 
 # c107/d101/d102ev/d102gl/d109gl: same siid/piid layout as ov21gl, but their
