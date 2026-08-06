@@ -883,6 +883,13 @@ XIAOMI_CORE_OV21GL = CoreCapability(
 # xiaomi.vacuum.ov21gl
 # No `map=` MapCapability: multi-map is unsupported by design for this
 # generation — device.map_list() returns [] (see map_parsers.py / device.py).
+# Consumables (2026-08-06): hardware-confirmed by a real ov21gl owner
+# (letitbe-dull/xiaomi-vac#20 comment, tomasloksa) — this model has NO
+# detergent/mop-solution-tank service at all; instead the mop PAD itself
+# carries a life-level (siid 9), unlike ov42gl's separate detergent(18)+
+# no-mop-pad layout. Do not copy this consumables block onto ov71gl/ov43gb
+# (still unverified aliases, see the family-resemblance note above) without
+# separate confirmation.
 XIAOMI_OV21GL = ModelProfile(
     profile_id='xiaomi.ov21gl',
     brand='xiaomi',
@@ -892,20 +899,32 @@ XIAOMI_OV21GL = ModelProfile(
         room_ids=Prop(2, 15),
         start=Action(2, 16, in_piid=15),
     ),
+    consumables=DreameConsumablesCapability(
+        main_brush_life=Prop(12, 1), main_brush_left_time=Prop(12, 2),
+        side_brush_life=Prop(13, 1), side_brush_left_time=Prop(13, 2),
+        filter_life=Prop(14, 1), filter_left_time=Prop(14, 2),
+        mop_life=Prop(9, 1), mop_left_time=Prop(9, 2),
+        dust_bag_life=Prop(19, 1), dust_bag_left_time=Prop(19, 2),
+    ),
 )
 
-# xiaomi.vacuum.ov71gl — identical spec layout to ov21gl
+# xiaomi.vacuum.ov71gl — identical core spec layout to ov21gl, but consumables
+# are unverified on this alias — explicitly cleared so it doesn't silently
+# inherit ov21gl's hardware-confirmed siid/piid table via replace().
 XIAOMI_OV71GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov71gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov71gl:1",),
+    consumables=None,
 )
 
-# xiaomi.vacuum.ov43gb — identical spec layout to ov21gl
+# xiaomi.vacuum.ov43gb — identical core spec layout to ov21gl, consumables
+# unverified (see ov71gl note above).
 XIAOMI_OV43GB = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov43gb',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov43gb:2",),
+    consumables=None,
 )
 
 # xiaomi.vacuum.ov42gl (Xiaomi Robot Vacuum H50 Pro) — identical spec layout
@@ -952,12 +971,15 @@ XIAOMI_CORE_C107 = replace(
     },
 )
 
-# xiaomi.vacuum.c107
+# xiaomi.vacuum.c107 — consumables unverified on this family (see ov71gl note
+# above), explicitly cleared so it and its d10x aliases below don't silently
+# inherit ov21gl's hardware-confirmed siid/piid table via replace().
 XIAOMI_C107 = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.c107',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c107:2",),
     core=XIAOMI_CORE_C107,
+    consumables=None,
 )
 
 # xiaomi.vacuum.d101 — identical spec layout to c107

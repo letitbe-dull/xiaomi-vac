@@ -131,6 +131,7 @@ class IjaiVacuumDevice:
                 "main_brush_life": cons.main_brush_life,
                 "side_brush_life": cons.side_brush_life,
                 "filter_life": cons.filter_life,
+                "mop_life": cons.mop_life,
                 "dust_bag_life": cons.dust_bag_life,
                 "detergent_life": cons.detergent_life,
             }
@@ -165,7 +166,7 @@ class IjaiVacuumDevice:
             main_brush_life=_as_int(vals.get(cons_props.get("main_brush_life"))),
             side_brush_life=_as_int(vals.get(cons_props.get("side_brush_life"))),
             filter_life=_as_int(vals.get(cons_props.get("filter_life"))),
-            mop_life=None,
+            mop_life=_as_int(vals.get(cons_props.get("mop_life"))),
             dust_bag_life=_as_int(vals.get(cons_props.get("dust_bag_life"))),
             detergent_life=_as_int(vals.get(cons_props.get("detergent_life"))),
             clean_area=None,

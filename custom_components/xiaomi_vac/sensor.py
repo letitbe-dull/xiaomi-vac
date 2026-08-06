@@ -79,6 +79,12 @@ _ALL_SENSORS: tuple[XiaomiSensorDescription, ...] = (
         supported_fn=_has_consumable("filter_life"),
     ),
     XiaomiSensorDescription(
+        key="mop_life", translation_key="mop_life", icon="mdi:layers-triple-outline",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.mop_life,
+        supported_fn=_has_consumable("mop_life"),
+    ),
+    XiaomiSensorDescription(
         key="dust_bag_life", translation_key="dust_bag_life", icon="mdi:trash-can-outline",
         native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.dust_bag_life,
