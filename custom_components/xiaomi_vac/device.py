@@ -334,9 +334,14 @@ class IjaiVacuumDevice:
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("wifi_sn: siid 7/piid 45 fallback read failed: %s", err)
             return None
-        for part in str(raw).split(","):
+        # The raw value is a bracketed list rendered as a string (e.g.
+        # '[0,0,...,"XXXX"]'), not real JSON. Strip the outer brackets first
+        # so the first and last elements do not retain a stray '[' / ']'
+        # that would otherwise fail the isalnum() check below (serial in
+        # last list position never matched, e.g. ijai.vacuum.v10).
+        for part in str(raw).strip("[]").split(","):
             # The serial sits before an optional ";<uid>" suffix on siid 7/piid 45.
-            p = part.replace('"', "").split(";")[0]
+            p = part.replace('"', "").split(";")[0].strip()
             if _is_wifi_sn(p) and p.isalnum():
                 return p
         _LOGGER.debug("wifi_sn: siid 7/piid 45 value %r had no matching serial part", raw)

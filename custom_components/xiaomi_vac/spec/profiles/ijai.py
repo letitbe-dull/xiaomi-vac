@@ -533,6 +533,12 @@ IJAI_V10 = ModelProfile(
         arrange_room=Action(10, 8, in_piids=(6, 11, 13), out_piids=(6, 7, 18)),
         split_room=Action(10, 9, in_piids=(6, 9, 12, 13), out_piids=(6, 7, 18)),
     ),
+    room_clean=RoomCleanCapability(
+        clean_room_ids=Prop(7, 24),
+        clean_room_mode=Prop(7, 25),
+        clean_room_oper=Prop(7, 26),
+        set_room_clean=Action(7, 3, in_piids=(24, 25, 26)),
+    ),
     schedule=ScheduleCapability(
         service=8,
         add=Action(8, 1, in_piids=(1, 2, 3, 4, 5, 6, 11, 14, 12, 7, 8, 9, 17, 19)),
