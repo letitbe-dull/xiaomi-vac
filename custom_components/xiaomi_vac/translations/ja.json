@@ -62,7 +62,7 @@
     "abort": {
       "already_configured": "このロボット掃除機はすでにセットアップされています。",
       "reauth_successful": "再度ログインしました。ライブマップが復元されました。",
-      "login_failed": "Xiaomiが拒否しました。メールとパスワードを確認して、もう一度試してください。",
+      "login_failed": "Xiaomiが拒否しました（{reason}）。メールとパスワードを確認して、もう一度試してください。",
       "no_devices": "このアカウントにはサポートされているロボット掃除機がありません。",
       "unsupported_model": "このモデルはまだサポートされていません（ijai/Xiaomi品のijai掃除機のみ）。"
     }

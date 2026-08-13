@@ -62,7 +62,7 @@
     "abort": {
       "already_configured": "Esta aspiradora ya está configurada.",
       "reauth_successful": "Ha iniciado sesión de nuevo. El mapa en directo ha sido restaurado.",
-      "login_failed": "Xiaomi rechazó eso. Verifique su correo electrónico y contraseña, luego intente de nuevo.",
+      "login_failed": "Xiaomi rechazó eso ({reason}). Verifique su correo electrónico y contraseña, luego intente de nuevo.",
       "no_devices": "No hay aspiradoras compatibles en esta cuenta.",
       "unsupported_model": "Este modelo aún no es compatible (solo aspiradoras ijai/marca Xiaomi)."
     }

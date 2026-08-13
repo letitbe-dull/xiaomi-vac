@@ -62,7 +62,7 @@
     "abort": {
       "already_configured": "此吸尘器已经配置。",
       "reauth_successful": "您已重新登录。实时地图已恢复。",
-      "login_failed": "小米拒绝了。请检查您的电子邮件和密码，然后重试。",
+      "login_failed": "小米拒绝了（{reason}）。请检查您的电子邮件和密码，然后重试。",
       "no_devices": "此账户中没有支持的吸尘器。",
       "unsupported_model": "目前不支持此型号（仅限ijai/小米品牌ijai吸尘器）。"
     }

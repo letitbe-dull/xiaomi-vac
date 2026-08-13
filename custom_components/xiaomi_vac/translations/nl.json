@@ -62,7 +62,7 @@
     "abort": {
       "already_configured": "Deze stofzuiger is al ingesteld.",
       "reauth_successful": "U bent weer ingelogd. De live kaart is hersteld.",
-      "login_failed": "Xiaomi weigert dit. Controleer uw e-mail en wachtwoord en probeer het opnieuw.",
+      "login_failed": "Xiaomi weigert dit ({reason}). Controleer uw e-mail en wachtwoord en probeer het opnieuw.",
       "no_devices": "Geen ondersteunde stofzuigers op deze account.",
       "unsupported_model": "Dit model wordt nog niet ondersteund (alleen ijai/Xiaomi-merk ijai stofzuigers)."
     }
