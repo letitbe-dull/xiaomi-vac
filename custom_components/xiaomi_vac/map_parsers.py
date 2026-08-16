@@ -70,8 +70,22 @@ def dreame_decrypt_cloud_blob(raw: bytes, enckey: str) -> bytes:
 # would hand a JSON blob to the ijai protobuf parser even if the URL fetch
 # succeeded. Needs a live camera-entity retest to confirm; ov43gb is added on
 # spec-family grounds only (no real device to test against yet).
+#
+# c107/d101/d102ev/d102gl/d109gl (2026-08-13): same siid=2 core layout as
+# ov21gl, so the same map family. d109gl is hardware-confirmed: before this
+# fix the ijai fallback produced "Could not decrypt map at slot 0: Data must
+# be aligned to block boundary in ECB mode" every cycle (map camera stuck
+# unavailable); routing to the xiaomi JSON parser fixes it (decrypt key comes
+# from model[-16:], see xiaomi_json_decrypt.py) and the live map + card work.
+# c107/d101/d102ev/d102gl share the identical replace(XIAOMI_C107, ...)
+# profile layout and are added on spec-family grounds only (no hardware yet).
 _XIAOMI_JSON_MAP_PROFILES = frozenset({
     "xiaomi.e101gb",
+    "xiaomi.d109gl", #confirmed
+    "xiaomi.c107",
+    "xiaomi.d101",
+    "xiaomi.d102ev",
+    "xiaomi.d102gl",
     "xiaomi.ov21gl",
     "xiaomi.ov31gl",
     "xiaomi.ov42gl",

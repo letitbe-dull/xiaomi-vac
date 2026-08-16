@@ -173,6 +173,21 @@ def test_dreame_phase1_hub_profiles_route_to_dreame_parser(model):
     assert profile.map is not None
     assert map_parsers.parser_key(profile) == "dreame"
 
+@pytest.mark.parametrize(
+    "model",
+    [
+        "xiaomi.vacuum.d109gl",
+        "xiaomi.vacuum.c107",
+        "xiaomi.vacuum.d101",
+        "xiaomi.vacuum.d102ev",
+        "xiaomi.vacuum.d102gl",
+    ],
+)
+def test_d109gl_family_routes_to_xiaomi_json_parser(model):
+    from spec.registry import get_profile
+    profile = get_profile(model)
+    assert profile is not None
+    assert map_parsers.parser_key(profile) == "xiaomi"
 
 def test_has_ijai_grid_only_ijai():
     assert map_parsers.has_ijai_grid("ijai") is True
