@@ -62,7 +62,7 @@
     "abort": {
       "already_configured": "Este aspirador já está configurado.",
       "reauth_successful": "Você fez login novamente. O mapa ao vivo foi restaurado.",
-      "login_failed": "Xiaomi recusou. Verifique seu e-mail e senha e tente novamente.",
+      "login_failed": "Xiaomi recusou ({reason}). Verifique seu e-mail e senha e tente novamente.",
       "no_devices": "Nenhum aspirador suportado nesta conta.",
       "unsupported_model": "Este modelo ainda não é suportado (apenas aspiradores ijai/Xiaomi)."
     }

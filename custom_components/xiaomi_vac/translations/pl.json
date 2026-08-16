@@ -62,7 +62,7 @@
     "abort": {
       "already_configured": "Ten odkurzacz jest już skonfigurowany.",
       "reauth_successful": "Jesteś ponownie zalogowany. Mapa na żywo została przywrócona.",
-      "login_failed": "Xiaomi odrzuciła to. Sprawdź swój e-mail i hasło, a następnie spróbuj ponownie.",
+      "login_failed": "Xiaomi odrzuciła to ({reason}). Sprawdź swój e-mail i hasło, a następnie spróbuj ponownie.",
       "no_devices": "Na tym koncie nie ma obsługiwanych odkurzaczy.",
       "unsupported_model": "Ten model nie jest jeszcze obsługiwany (tylko odkurzacze ijai/Xiaomi)."
     }
