@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -20,7 +20,7 @@ from . import XiaomiConfigEntry
 from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
 from .device import VacuumStatus
-from .spec.types import ModelProfile
+from .spec.types import DreameConsumablesCapability, ModelProfile
 
 # Read-only platform fed by the coordinator; no device writes to serialise.
 PARALLEL_UPDATES = 0
@@ -34,10 +34,18 @@ class XiaomiSensorDescription(SensorEntityDescription):
     supported_fn: Callable[[ModelProfile], bool] | None = None
 
 
-# Canonical sensor catalogue.  Sensors whose data the coordinator cannot yet
-# populate (consumable-life, clean area/time — parked pending a dedicated
-# coordinator) are omitted here; they will be re-added with a supported_fn
-# predicate once the implementation is in place.
+def _has_consumable(attr: str) -> Callable[[ModelProfile], bool]:
+    """supported_fn factory: True when profile.consumables is the
+    percent+hours-shaped DreameConsumablesCapability AND has `attr` set."""
+    return lambda p: (
+        isinstance(p.consumables, DreameConsumablesCapability)
+        and getattr(p.consumables, attr) is not None
+    )
+
+
+# Canonical sensor catalogue.  Clean area/time still have no populating
+# coordinator support and stay omitted; consumable-life (2026-08-01) is now
+# wired end to end (device.py polls it, gated the same way below).
 _ALL_SENSORS: tuple[XiaomiSensorDescription, ...] = (
     XiaomiSensorDescription(
         key="status", translation_key="status",
@@ -51,6 +59,42 @@ _ALL_SENSORS: tuple[XiaomiSensorDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY, native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT, value_fn=lambda s: s.battery,
         supported_fn=lambda p: p.core is not None and p.core.battery is not None,
+    ),
+    XiaomiSensorDescription(
+        key="main_brush_life", translation_key="main_brush_life", icon="mdi:broom",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.main_brush_life,
+        supported_fn=_has_consumable("main_brush_life"),
+    ),
+    XiaomiSensorDescription(
+        key="side_brush_life", translation_key="side_brush_life", icon="mdi:broom",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.side_brush_life,
+        supported_fn=_has_consumable("side_brush_life"),
+    ),
+    XiaomiSensorDescription(
+        key="filter_life", translation_key="filter_life", icon="mdi:air-filter",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.filter_life,
+        supported_fn=_has_consumable("filter_life"),
+    ),
+    XiaomiSensorDescription(
+        key="mop_life", translation_key="mop_life", icon="mdi:layers-triple-outline",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.mop_life,
+        supported_fn=_has_consumable("mop_life"),
+    ),
+    XiaomiSensorDescription(
+        key="dust_bag_life", translation_key="dust_bag_life", icon="mdi:trash-can-outline",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.dust_bag_life,
+        supported_fn=_has_consumable("dust_bag_life"),
+    ),
+    XiaomiSensorDescription(
+        key="detergent_life", translation_key="detergent_life", icon="mdi:cup-water",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.detergent_life,
+        supported_fn=_has_consumable("detergent_life"),
     ),
 )
 

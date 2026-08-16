@@ -101,6 +101,7 @@ def load_sensor_module(monkeypatch: pytest.MonkeyPatch):
         native_unit_of_measurement: str | None = None
         state_class: str | None = None
         entity_category: str | None = None
+        icon: str | None = None
 
     class _SensorDeviceClass(SimpleNamespace):
         ENUM = "enum"

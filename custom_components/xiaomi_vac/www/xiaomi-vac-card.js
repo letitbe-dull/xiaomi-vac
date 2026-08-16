@@ -91,7 +91,18 @@ const parseRGBA = (s) => {
 const MDI = {
   play: "mdi:play", pause: "mdi:pause", dock: "mdi:home-map-marker",
   locate: "mdi:map-marker-radius", fan: "mdi:fan", water: "mdi:water", map: "mdi:layers",
+  tools: "mdi:tools",
 };
+// Consumable sensors created by sensor.py (translation_key/icon/label kept in
+// sync with that file's XiaomiSensorDescription catalogue by hand — there is
+// no shared source of truth between the Python and JS sides of this card).
+const CONSUMABLES = [
+  ["main_brush_life", "mdi:broom", "Main brush"],
+  ["side_brush_life", "mdi:broom", "Side brush"],
+  ["filter_life", "mdi:air-filter", "Filter"],
+  ["dust_bag_life", "mdi:trash-can-outline", "Dust bag"],
+  ["detergent_life", "mdi:cup-water", "Detergent"],
+];
 // `charging` overlays a bolt — docked-and-charging reads identically to
 // docked-and-full otherwise (same grey accent, same fill bar).
 const batteryIcon = (p, charging) =>
@@ -115,6 +126,7 @@ const TOGGLE_DEFAULTS = {
   show_active_map: true,
   show_room_labels: true,
   allow_room_cleaning: true,
+  show_consumables: true,
 };
 
 class XiaomiVacCard extends HTMLElement {
@@ -157,6 +169,7 @@ class XiaomiVacCard extends HTMLElement {
       this._config.water || `select.${this._base()}_water_level`,
       this._config.fan || `select.${this._base()}_fan_speed`,
       this._activeMapEid(),
+      ...CONSUMABLES.map(([key]) => this._consumableEid(key)).filter(Boolean),
     ];
     return eids.some((e) => (a.states[e]) !== (b.states[e]));
   }
@@ -177,6 +190,26 @@ class XiaomiVacCard extends HTMLElement {
       if (found) { this._cachedMapEid = found; return found; }
     }
     return `select.${this._base()}_active_map`;   // fallback if registry lookup misses
+  }
+  // Same registry-lookup pattern as _activeMapEid(): the consumable sensors'
+  // entity_id can carry an area-name prefix HA auto-generates on first setup
+  // (e.g. "sensor.nappali_julika_neni_main_brush_life"), so guessing from the
+  // vacuum's own object_id would miss them — resolve by device_id + the
+  // translation_key sensor.py assigns each one instead.
+  _consumableEid(key) {
+    this._consumEidCache = this._consumEidCache || {};
+    if (this._consumEidCache[key] && this._st(this._consumEidCache[key])) return this._consumEidCache[key];
+    const ents = this._hass && this._hass.entities;
+    const vacEnt = ents && ents[this._config.vacuum];
+    const deviceId = vacEnt && vacEnt.device_id;
+    if (ents && deviceId) {
+      const found = Object.keys(ents).find((eid) =>
+        eid.startsWith("sensor.") &&
+        ents[eid].device_id === deviceId &&
+        ents[eid].translation_key === key);
+      if (found) { this._consumEidCache[key] = found; return found; }
+    }
+    return null;
   }
   getCardSize() { return 10; }   // ~50px/unit; the card is a fixed 520px
   connectedCallback() {
@@ -316,6 +349,24 @@ class XiaomiVacCard extends HTMLElement {
           box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transition:opacity .18s,transform .18s;
           pointer-events:none;white-space:nowrap;cursor:pointer;border:0}
         .roomtag.show{opacity:1;transform:translateX(-50%) translateY(-5px);pointer-events:auto}
+        /* accessory-status panel: a collapsible sheet above the tray, toggled by
+           the .act-consumables button — same frosted-glass treatment as .tray */
+        .consum-panel{position:absolute;left:14px;right:14px;bottom:74px;z-index:8;
+          background:color-mix(in srgb,var(--xv-card) 88%,transparent);
+          backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+          border:.5px solid color-mix(in srgb,var(--xv-ink) 8%,transparent);border-radius:16px;
+          box-shadow:0 8px 30px rgba(0,0,0,.18);padding:0 14px;max-height:0;overflow:hidden;
+          opacity:0;transform:translateY(6px);pointer-events:none;transition:opacity .18s,transform .18s,max-height .22s,padding .22s}
+        .consum-panel.show{opacity:1;transform:translateY(0);pointer-events:auto;max-height:280px;overflow:auto;padding:8px 14px}
+        .consum-row{display:flex;align-items:center;gap:10px;padding:7px 0}
+        .consum-row+.consum-row{border-top:1px solid color-mix(in srgb,var(--xv-ink) 8%,transparent)}
+        .consum-row ha-icon{--mdc-icon-size:20px;color:var(--xv-muted);flex:0 0 auto}
+        .consum-row .cn{flex:1 1 auto;font-size:13px;color:var(--xv-ink);font-weight:500}
+        .consum-row .cbar{width:56px;height:5px;border-radius:3px;
+          background:color-mix(in srgb,var(--xv-ink) 10%,transparent);overflow:hidden;flex:0 0 auto}
+        .consum-row .cbar i{display:block;height:100%;border-radius:3px}
+        .consum-row .cpct{width:34px;text-align:right;font-size:12px;font-weight:600;color:var(--xv-muted);flex:0 0 auto}
+        .act-consumables.on{background:var(--xv-accent);color:#fff}
         /* uniform segmented control (cf. the native climate card): every button
            equal width, the active action filled with the state accent */
         .tray{position:absolute;left:14px;right:14px;bottom:14px;z-index:7;
@@ -335,7 +386,7 @@ class XiaomiVacCard extends HTMLElement {
         .b:focus-visible{outline:2px solid var(--xv-accent);outline-offset:2px}
         /* narrow cards: shrink uniformly, then drop water before things spill */
         @container (max-width:340px){ .tray{gap:5px;padding:5px} .b{height:44px} .b ha-icon{--mdc-icon-size:22px} }
-        @container (max-width:240px){ .cyc-water{display:none} }
+        @container (max-width:240px){ .cyc-water{display:none} .act-consumables{display:none} }
         @media (prefers-reduced-motion:reduce){.track.anim{transition:none}.dot,.b{transition:none}
           .b:active{transform:none}}
       </style>
@@ -347,6 +398,7 @@ class XiaomiVacCard extends HTMLElement {
       <div class="dots"></div>
       <div class="toast"></div>
       <button class="roomtag"></button>
+      <div class="consum-panel"></div>
       <div class="tray">
         <button class="b act-start" title="Start / pause" aria-label="Start or pause"><ha-icon icon="${MDI.play}"></ha-icon></button>
         <button class="b act-dock" title="Return to dock" aria-label="Return to dock"><ha-icon icon="${MDI.dock}"></ha-icon></button>
@@ -354,6 +406,7 @@ class XiaomiVacCard extends HTMLElement {
         <button class="b cyc-fan" title="Suction" aria-label="Cycle suction level"><ha-icon icon="${MDI.fan}"></ha-icon></button>
         <button class="b cyc-water" title="Water level" aria-label="Cycle water level"><ha-icon icon="${MDI.water}"></ha-icon></button>
         <button class="b cyc-map" title="Active map" aria-label="Cycle active map"><ha-icon icon="${MDI.map}"></ha-icon></button>
+        <button class="b act-consumables" title="Accessories" aria-label="Show accessory status"><ha-icon icon="${MDI.tools}"></ha-icon></button>
       </div>`;
     this.appendChild(this._root);
 
@@ -374,6 +427,10 @@ class XiaomiVacCard extends HTMLElement {
       this._cycleSelect(this._config.water || `select.${this._base()}_water_level`);
     q(".cyc-map").onclick = () => this._cycleSelect(this._activeMapEid());
     q(".roomtag").onclick = () => this._cleanSelected();
+    q(".act-consumables").onclick = () => {
+      q(".consum-panel").classList.toggle("show");
+      q(".act-consumables").classList.toggle("on", q(".consum-panel").classList.contains("show"));
+    };
 
     this._setupSwipe();
     this._buildPages();
@@ -767,6 +824,26 @@ class XiaomiVacCard extends HTMLElement {
     const nm = q(".pg-img .nm");
     if (nm && vac) nm.textContent = vac.attributes.friendly_name || "Vacuum";
 
+    const showConsumables = this._enabled("show_consumables") &&
+      CONSUMABLES.some(([key]) => this._consumableEid(key));
+    q(".act-consumables").style.display = showConsumables ? "" : "none";
+    if (showConsumables) {
+      q(".consum-panel").innerHTML = CONSUMABLES.map(([key, icon, label]) => {
+        const eid = this._consumableEid(key);
+        const st = eid && this._st(eid);
+        const pct = st ? Number(st.state) : null;
+        const has = pct != null && !Number.isNaN(pct);
+        const clamped = has ? Math.max(0, Math.min(100, pct)) : 0;
+        const color = !has ? "var(--xv-muted)" : clamped < 20 ? "#e05252" : clamped < 50 ? "#e0a952" : "#4caf7d";
+        return `<div class="consum-row"><ha-icon icon="${icon}"></ha-icon><span class="cn">${esc(label)}</span>` +
+          `<span class="cbar"><i style="width:${clamped}%;background:${color}"></i></span>` +
+          `<span class="cpct" style="color:${has ? color : ""}">${has ? clamped + "%" : "—"}</span></div>`;
+      }).join("");
+    } else {
+      q(".consum-panel").classList.remove("show");
+      q(".act-consumables").classList.remove("on");
+    }
+
     this._updateAnim(state, vac && vac.attributes.model);
   }
 }
@@ -795,6 +872,7 @@ class XiaomiVacCardEditor extends HTMLElement {
           show_active_map: "Show active map control",
           show_room_labels: "Show room labels",
           allow_room_cleaning: "Allow room cleaning",
+          show_consumables: "Show accessory status button",
         }[s.name] || s.name);
       this._form.addEventListener("value-changed", (e) =>
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: e.detail.value }, bubbles: true, composed: true })));
@@ -816,6 +894,7 @@ class XiaomiVacCardEditor extends HTMLElement {
       { name: "show_active_map", selector: { boolean: {} } },
       { name: "show_room_labels", selector: { boolean: {} } },
       { name: "allow_room_cleaning", selector: { boolean: {} } },
+      { name: "show_consumables", selector: { boolean: {} } },
     ];
   }
 }
