@@ -29,14 +29,6 @@ def _rle(grid: bytes) -> list[int]:
     return out
 
 
-def _pt(p: Any) -> dict[str, float]:
-    d = {"x": p.x, "y": p.y}
-    a = getattr(p, "phi", None)
-    if a is not None:
-        d["a"] = a
-    return d
-
-
 # --- room-contour tracing -------------------------------------------------
 # The firmware's roomChain is a coarse ~8-vertex cartoon of each room. The
 # labelled occupancy grid is ground truth: one byte/cell, room id 10-59 (or the
@@ -250,39 +242,100 @@ def _empty_grid() -> dict[str, Any]:
     }
 
 
-def vector_map(md: Any, unpacked: bytes, *, ijai_grid: bool = True) -> dict[str, Any]:
+def vector_map(
+    md: Any, unpacked: bytes, *, ijai_grid: bool = True, scale: float = 1.0,
+    carpets: list | None = None, xiaomi_grid: dict | None = None,
+    path: list | None = None,
+) -> dict[str, Any]:
     """Assemble the card contract: grid (this module) + vector overlays (md).
 
-    `md` is the parsed vacuum_map_parser_base.MapData. All overlay coords are in
-    metres. `ijai_grid` is True only when `unpacked` is an ijai `RobotMap`
-    protobuf (the sole source of the crisp labelled grid); other brands pass
-    False and get the overlays-only contract.
-    """
-    out = extract_grid(unpacked) if ijai_grid else _empty_grid()
+    `md` is the parsed vacuum_map_parser_base.MapData. All overlay coords are
+    expected in METRES by the card's SVG (font sizes, icon radii, padding are
+    all metre-scale constants). `ijai_grid` is True only when `unpacked` is an
+    ijai `RobotMap` protobuf (the sole source of the crisp labelled grid);
+    other brands pass False and get the overlays-only contract.
 
-    if md.path is not None:
-        out["path"] = [[p.x, p.y] for sub in md.path.path for p in sub]
+    `scale` converts `md`'s NATIVE coordinate unit to metres — 1.0 for
+    brands whose MapData is already metre-scale (ijai; presumably
+    dreame/viomi too). The xiaomi-JSON brand's raw MIoT position unit is
+    millimetres, not metres (confirmed 2026-08-01: room bbox extents came out
+    ~10700x5900 unscaled — a 10km-wide "room" — which silently made every
+    text label and the vacuum-position dot microscopic relative to the SVG
+    viewBox, not actually missing). Callers pass `scale=0.001` for that case.
+
+    `carpets` (optional): raw detected-carpet rectangles as 8-number flat
+    lists `[x1,y1,x2,y2,x3,y3,x4,y4]`, same native unit as everything else
+    in `md` — the xiaomi-JSON blob's own "carpets" field, which neither
+    `vacuum_map_parser_xiaomi` nor this module's MapData source parses on
+    its own (see the 2026-08-01 map.py `_draw_carpets` note). Caller is
+    responsible for extracting them from the raw payload; this just scales
+    and passes them through.
+
+    `xiaomi_grid` (optional): the pre-built {size, bounds, resolution,
+    grid_rle, legend} contract from `map.py`'s `MapFetcher._parse_xiaomi_grid`
+    — already-decoded raw occupancy grid for xiaomi-JSON devices (already in
+    METRES, no further `scale` multiplication needed here since that
+    conversion happened at extraction time). Ignored when `ijai_grid` is
+    True (ijai's own `extract_grid` is authoritative there).
+
+    `path` (optional): the xiaomi-JSON blob's own "paths" trajectory, as a
+    list of independent segments (each a list of `(x, y)` mm tuples),
+    already filtered down to the real contiguous run AND split on the
+    "new leg" `type` marker by `map.py`'s `MapFetcher._parse_path` (that
+    field's array is a fixed-size buffer with unwritten `{0,0}` sentinel
+    slots, and drawing every real point as ONE continuous line produces
+    physically-impossible straight cuts through walls between legs —
+    confirmed live 2026-08-04, see `_parse_path`'s docstring). Takes
+    priority over `md.path` when both are given; in practice they're
+    mutually exclusive (only xiaomi ever passes `path`, only ijai's own
+    MapData ever populates `md.path`).
+
+    Output contract for `out["path"]`: always a list of segments (never a
+    flat point list), i.e. `[[[x,y],[x,y],...], [[x,y],...], ...]` — one
+    inner list per line the card should draw independently. `md.path.path`
+    (ijai) is ALSO already shaped as sub-paths internally, so this unifies
+    both brands under one contract instead of the previous flat-list shape
+    (which silently joined ijai's own sub-paths together the same
+    physically-wrong way — a latent, previously-unnoticed instance of the
+    exact same bug this was written to fix for xiaomi).
+    """
+    if ijai_grid:
+        out = extract_grid(unpacked)
+    elif xiaomi_grid:
+        out = {**_empty_grid(), **xiaomi_grid}
+    else:
+        out = _empty_grid()
+
+    if carpets:
+        out["carpets"] = [[v * scale for v in c] for c in carpets if len(c) == 8]
+
+    if path:
+        out["path"] = [[[x * scale, y * scale] for x, y in seg] for seg in path if len(seg) >= 2]
+    elif md.path is not None:
+        out["path"] = [
+            [[p.x * scale, p.y * scale] for p in sub] for sub in md.path.path if len(sub) >= 2
+        ]
     if md.charger is not None:
-        out["charger"] = _pt(md.charger)
+        out["charger"] = {"x": md.charger.x * scale, "y": md.charger.y * scale}
     if md.vacuum_position is not None:
-        out["vacuum"] = _pt(md.vacuum_position)
+        out["vacuum"] = {"x": md.vacuum_position.x * scale, "y": md.vacuum_position.y * scale}
     if md.goto is not None:
-        out["goto"] = _pt(md.goto)
+        out["goto"] = {"x": md.goto.x * scale, "y": md.goto.y * scale}
 
     out["rooms"] = [
         {
             "id": rid,
             "name": r.name,
-            "cx": r.pos_x,
-            "cy": r.pos_y,
-            "bbox": [r.x0, r.y0, r.x1, r.y1],
+            "cx": r.pos_x * scale,
+            "cy": r.pos_y * scale,
+            "bbox": [r.x0 * scale, r.y0 * scale, r.x1 * scale, r.y1 * scale],
         }
         for rid, r in (md.rooms or {}).items()
     ]
-    out["walls"] = [[w.x0, w.y0, w.x1, w.y1] for w in (md.walls or [])]
-    out["no_go"] = [a.as_list() for a in (md.no_go_areas or [])]
-    out["no_mop"] = [a.as_list() for a in (md.no_mopping_areas or [])]
-    out["zones"] = [[z.x0, z.y0, z.x1, z.y1] for z in (md.zones or [])]
+    out["walls"] = [[w.x0 * scale, w.y0 * scale, w.x1 * scale, w.y1 * scale] for w in (md.walls or [])]
+    out["no_go"] = [[v * scale for v in a.as_list()] for a in (md.no_go_areas or [])]
+    out["no_mop"] = [[v * scale for v in a.as_list()] for a in (md.no_mopping_areas or [])]
+    out["zones"] = [[z.x0 * scale, z.y0 * scale, z.x1 * scale, z.y1 * scale] for z in (md.zones or [])]
     out["vacuum_room"] = md.vacuum_room
     out["vacuum_room_name"] = md.vacuum_room_name
     return out

@@ -570,6 +570,15 @@ class XiaomiVacCard extends HTMLElement {
     }
     const rooms = m.rooms || [];
     const idIndex = roomIndexById(rooms);
+    // Room-id encoding range is brand-specific (ijai's own labelled grid
+    // uses its room ids directly, 10-59/60-109 for "selected"; xiaomi-JSON
+    // devices' real room ids can be small, e.g. 3-6 in a 4-room home, well
+    // outside that window) — read the actual bounds from `m.legend` instead
+    // of assuming ijai's numbers, so both brands' rasters decode correctly.
+    const lg = m.legend || {};
+    const rMin = lg.room_min ?? 10, rMax = lg.room_max ?? 59;
+    const sMin = lg.selected_room_min ?? 60, sMax = lg.selected_room_max ?? 109;
+    const selOffset = sMin - rMin;
     const cv = document.createElement("canvas");
     cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d");
@@ -578,8 +587,8 @@ class XiaomiVacCard extends HTMLElement {
       for (let col = 0; col < W; col++) {
         const v = grid[row * W + col];
         let lab = null;
-        if (v >= 10 && v <= 59) lab = v;
-        else if (v >= 60 && v <= 109) lab = v - 50;  // selected-room cell value
+        if (v >= rMin && v <= rMax) lab = v;
+        else if (v >= sMin && v <= sMax) lab = v - selOffset;  // selected-room cell value
         if (lab == null) continue;
         const t = ROOM_TINTS[(idIndex[lab] ?? 0) % ROOM_TINTS.length];
         const [r, gg, bb, a] = parseRGBA(this._sel.has(lab) ? t[1] : t[0]);
@@ -627,28 +636,47 @@ class XiaomiVacCard extends HTMLElement {
     const dpath = (rings) => rings.map(ring).join("");  // multi-ring → even-odd fill
 
     let s = `<svg viewBox="${vbx} ${vby} ${vw} ${vh}" preserveAspectRatio="xMidYMid meet">`;
-    // Room fills: prefer the pixel raster (the segment layer). The traced paths
-    // then carry no visible paint — they're just transparent tap/focus targets,
-    // so any imperfect ring geometry never shows.
+    // Room fills: the full rectangular footprint (bbox for xiaomi devices,
+    // no room_chains yet — see map_vector.py) stays visible everywhere as a
+    // light tint, and the pixel raster (true scanned shape, when available)
+    // paints on top of it — so the real floor area reads as "cut out" of
+    // the rectangle (more saturated where both layers overlap) rather than
+    // replacing it outright.
     const raster = this._roomRaster(m);
-    if (raster) {
-      s += `<image class="rmfill" href="${raster.href}" x="${raster.x}" y="${raster.y}" width="${raster.w}" height="${raster.h}" preserveAspectRatio="none" style="image-rendering:crisp-edges;image-rendering:pixelated"/>`;
-    }
     polys.forEach((p) => {
       const t = ROOM_TINTS[(idIndex[p.id] ?? 0) % ROOM_TINTS.length];
       const nm = (rooms[idIndex[p.id]] && rooms[idIndex[p.id]].name) || `Room ${p.id}`;
-      // raster present → transparent hit target; no raster → solid vector fill
-      const fill = raster ? "transparent" : t[0];
-      s += `<path class="rm" data-id="${p.id}" role="button" tabindex="0" aria-pressed="false" aria-label="Clean ${esc(nm)}" d="${dpath(p.rings)}" fill="${fill}" stroke="none"/>`;
+      s += `<path class="rm" data-id="${p.id}" role="button" tabindex="0" aria-pressed="false" aria-label="Clean ${esc(nm)}" d="${dpath(p.rings)}" fill="${t[0]}" stroke="none"/>`;
     });
+    if (raster) {
+      // pointer-events:none so taps still reach the .rm rectangles beneath —
+      // this image is purely visual, not a second hit-target layer.
+      s += `<image class="rmfill" href="${raster.href}" x="${raster.x}" y="${raster.y}" width="${raster.w}" height="${raster.h}" preserveAspectRatio="none" style="image-rendering:crisp-edges;image-rendering:pixelated;pointer-events:none"/>`;
+    }
     // virtual walls — a user-drawn no-cross line, not real geometry, so render it
     // as a faint dashed hint rather than a solid bar that fights the rooms
     (m.walls || []).forEach((w) => {
       s += `<line x1="${tx(w[0])}" y1="${ty(w[1])}" x2="${tx(w[2])}" y2="${ty(w[3])}" stroke="var(--xv-muted)" stroke-width="0.05" stroke-linecap="round" stroke-dasharray="0.16 0.13" opacity=".35"/>`;
     });
-    if (m.path && m.path.length > 1) {
-      s += `<polyline points="${m.path.map(([x, y]) => `${tx(x)},${ty(y)}`).join(" ")}" fill="none" stroke="var(--xv-accent)" stroke-width="0.07" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
-    }
+    // `m.path` is a list of independent segments (each is its own line —
+    // never connected to the previous segment's end). Joining every point
+    // into a single polyline draws physically-impossible straight cuts
+    // through walls wherever the backend data has a "new leg" break (e.g.
+    // between rooms).
+    (m.path || []).forEach((seg) => {
+      if (seg && seg.length > 1) {
+        s += `<polyline points="${seg.map(([x, y]) => `${tx(x)},${ty(y)}`).join(" ")}" fill="none" stroke="var(--xv-accent)" stroke-width="0.07" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
+      }
+    });
+    // detected carpets — drawn after rooms/walls/path but BEFORE room-name
+    // text and the vacuum/charger icons, so those always paint on top and
+    // stay legible even where a carpet (e.g. a hallway runner) is large
+    // enough to sit right under a room's label.
+    (m.carpets || []).forEach((c) => {
+      if (!Array.isArray(c) || c.length !== 8) return;
+      const pts = [[c[0], c[1]], [c[2], c[3]], [c[4], c[5]], [c[6], c[7]]];
+      s += `<path d="${ring(pts)}" fill="#d2aa5a" fill-opacity="0.28" stroke="#d2aa5a" stroke-opacity="0.55" stroke-width="0.03"/>`;
+    });
     if (this._enabled("show_room_labels")) rooms.forEach((r) => {
       if (r.cx == null || !r.name) return;
       // Full name, uppercased. Let it overflow the room rather than truncate —
