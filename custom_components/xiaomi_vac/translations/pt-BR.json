@@ -46,6 +46,29 @@
           "device": "Aspirador"
         }
       },
+      "miot_oauth": {
+        "title": "Ativar autenticação do mapa em tempo real",
+        "description": "Opcional. Isso prepara o caminho MQTT do mapa ao vivo. Ignore para manter o comportamento atual do mapa por polling.",
+        "data": {
+          "enable_miot_oauth": "Ativar OAuth para atualizações em tempo real do mapa"
+        }
+      },
+      "miot_oauth_auth": {
+        "title": "Vincular OAuth da Xiaomi",
+        "description": "Abra o link do OAuth da Xiaomi. O Home Assistant continuará automaticamente depois que a Xiaomi redirecionar de volta.",
+        "data": {}
+      },
+      "miot_oauth_code": {
+        "title": "Cole o código OAuth da Xiaomi",
+        "description": "O callback automático não concluiu. Abra este link, aprove o acesso e cole o código da barra de endereço de redirecionamento (após 'CODE=' e antes '&'):\n\n{authorize_url}",
+        "data": {
+          "code": "Código OAuth"
+        }
+      },
+      "miot_oauth_finish": {
+        "title": "OAuth da Xiaomi vinculado",
+        "description": "A autenticação do mapa em tempo real está pronta."
+      },
       "reauth_confirm": {
         "title": "Faça login novamente no Xiaomi",
         "description": "Sua sessão expirou e não conseguiu ser renovada automaticamente. Faça login novamente para restaurar o mapa ao vivo.",
@@ -57,14 +80,73 @@
     },
     "error": {
       "unsupported_model": "Este modelo ainda não é suportado.",
-      "cannot_connect": "Não foi possível alcançar o aspirador neste IP com este token."
+      "cannot_connect": "Não foi possível alcançar o aspirador neste IP com este token.",
+      "oauth_failed": "O OAuth da Xiaomi falhou. Tente abrir o link novamente ou cole o código manualmente.",
+      "oauth_region_failed": "Não foi possível identificar a região do OAuth da Xiaomi a partir desse código."
+    },
+    "progress": {
+      "miot_oauth_auth": "Abra o [OAuth da Xiaomi]({authorize_url}) em uma nova aba. Depois da aprovação, a Xiaomi deve voltar ao Home Assistant e esta etapa continuará automaticamente."
     },
     "abort": {
       "already_configured": "Este aspirador já está configurado.",
       "reauth_successful": "Você fez login novamente. O mapa ao vivo foi restaurado.",
       "login_failed": "Xiaomi recusou ({reason}). Verifique seu e-mail e senha e tente novamente.",
+      "login_verification_required": "Xiaomi bloqueou este login e exige verificação da conta. Faça login em account.xiaomi.com (ou no aplicativo Xiaomi Home), conclua qualquer verificação solicitada e tente novamente.",
       "no_devices": "Nenhum aspirador suportado nesta conta.",
       "unsupported_model": "Este modelo ainda não é suportado (apenas aspiradores ijai/Xiaomi)."
+    }
+  },
+  "options": {
+    "step": {
+      "miot_oauth_auth": {
+        "title": "Vincular OAuth da Xiaomi",
+        "description": "Abra o link do OAuth da Xiaomi. O Home Assistant continuará automaticamente depois que a Xiaomi redirecionar de volta.",
+        "data": {}
+      },
+      "miot_oauth_code": {
+        "title": "Cole o código OAuth da Xiaomi",
+        "description": "O callback automático não concluiu. Abra este link, aprove o acesso e cole o código da barra de endereço de redirecionamento (após 'CODE=' e antes '&'):\n\n{authorize_url}",
+        "data": {
+          "code": "Código OAuth"
+        }
+      },
+      "miot_oauth_finish": {
+        "title": "OAuth da Xiaomi vinculado",
+        "description": "A autenticação do mapa em tempo real está pronta."
+      }
+    },
+    "error": {
+      "oauth_failed": "O OAuth da Xiaomi falhou. Tente abrir o link novamente ou cole o código manualmente.",
+      "oauth_region_failed": "Não foi possível identificar a região do OAuth da Xiaomi a partir desse código."
+    },
+    "progress": {
+      "miot_oauth_auth": "Abra o [OAuth da Xiaomi]({authorize_url}) em uma nova aba. Depois da aprovação, a Xiaomi deve voltar ao Home Assistant e esta etapa continuará automaticamente."
+    },
+    "abort": {
+      "oauth_local_only": "Este aspirador foi adicionado apenas no modo local, então não há sessão da nuvem Xiaomi para vincular o OAuth."
+    }
+  },
+  "issues": {
+    "oauth_missing": {
+      "title": "Ative o mapa ao vivo em tempo real",
+      "fix_flow": {
+        "step": {
+          "link": {
+            "title": "Vincular OAuth da Xiaomi",
+            "description": "Seu aspirador funciona, mas o mapa está em atualização lenta. Vincule o OAuth da Xiaomi para obter o mapa ao vivo em tempo real (MQTT). Abra este link, aprove o acesso e cole o código da barra de endereço de redirecionamento (após 'CODE=' e antes '&'):\n\n{authorize_url}",
+            "data": {
+              "code": "Código OAuth"
+            }
+          }
+        },
+        "error": {
+          "oauth_failed": "O OAuth da Xiaomi falhou. Recomece o vínculo e cole o novo código.",
+          "oauth_region_failed": "Não foi possível identificar a região do OAuth da Xiaomi a partir desse código."
+        },
+        "abort": {
+          "entry_gone": "Este aspirador não está mais configurado."
+        }
+      }
     }
   },
   "entity": {
@@ -104,7 +186,13 @@
         "name": "Vida útil do filtro"
       },
       "mop_life": {
-        "name": "Vida útil do pano de limpeza"
+        "name": "Vida útil do Mop"
+      },
+      "dust_bag_life": {
+        "name": "Vida útil do coletor de poeira"
+      },
+      "detergent_life": {
+        "name": "Vida útil do detergente"
       }
     },
     "select": {
@@ -177,22 +265,22 @@
           "strong": "Forte",
           "full_speed": "Velocidade máxima (Máx.)",
           "auto": "Automático",
-          "sweep": "Varredura",
-          "sweep_and_mop": "Varredura e limpeza",
-          "mop": "Limpeza",
+          "sweep": "Aspirar",
+          "sweep_and_mop": "Aspirar e esfregar",
+          "mop": "Esfregar",
           "medium": "Velocidade média",
-          "sweepandmop": "Varredura e limpeza",
-          "sweep_then_mop": "Varrer e depois limpar",
-          "sweep_mop": "Varredura e limpeza",
-          "sweep_before_mopping": "Varrer antes de limpar"
+          "sweepandmop": "Aspirar e esfregar",
+          "sweep_then_mop": "Aspirar e depois esfregar",
+          "sweep_mop": "Aspirar e esfregar",
+          "sweep_before_mopping": "Aspirar antes de esfregar"
         }
       },
       "sweep_type": {
-        "name": "Tipo de varredura",
+        "name": "Tipo de aspiração",
         "state": {
-          "global": "Global",
-          "mop": "Limpeza",
-          "edge": "Seguimento de borda",
+          "global": "Geral",
+          "mop": "Esfregar",
+          "edge": "Contorno",
           "area": "Área",
           "point": "Ponto",
           "remote": "Controle remoto",
@@ -200,10 +288,10 @@
           "room": "Personalização de cômodo",
           "floor": "Personalização de piso",
           "control": "Controle remoto",
-          "total": "Limpeza global",
-          "wall": "Limpeza de borda",
-          "zone": "Limpeza de zona",
-          "corner": "Seguimento de borda",
+          "total": "Limpeza geral",
+          "wall": "Limpar dos cantos",
+          "zone": "Limpeza por zona",
+          "corner": "Limpeza dos cantos",
           "man": "Controle remoto",
           "roomprefer": "Personalização de cômodo",
           "materialprefer": "Personalização de piso",
@@ -246,6 +334,16 @@
         "segments": {
           "name": "Cômodos",
           "description": "Lista de IDs de cômodo para limpar (do atributo \"rooms\" da câmera do mapa)."
+        }
+      }
+    },
+    "refresh_map": {
+      "name": "Atualizar mapa",
+      "description": "Liga brevemente o aspirador para sair da base, enviar um mapa novo e depois devolvê-lo à base.",
+      "fields": {
+        "confirm_movement": {
+          "name": "Confirmar movimento",
+          "description": "Precisa ser verdadeiro. O aspirador sai da base por um instante e retorna."
         }
       }
     }
