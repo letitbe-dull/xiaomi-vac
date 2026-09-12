@@ -907,6 +907,11 @@ XIAOMI_OV21GL = ModelProfile(
         dust_bag_life=Prop(19, 1), dust_bag_left_time=Prop(19, 2),
     ),
 )
+XIAOMI_OV31GL = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.ov31gl',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov31gl:1",),
+)
 
 # xiaomi.vacuum.ov71gl — identical core spec layout to ov21gl, but consumables
 # are unverified on this alias — explicitly cleared so it doesn't silently
