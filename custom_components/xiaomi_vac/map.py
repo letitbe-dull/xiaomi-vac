@@ -201,8 +201,16 @@ class MapFetcher:
             _LOGGER.debug("Map download failed (slot %s)", slot)
             return None
 
+        import zlib
+        
+        if raw.startswith(b"\x78\x9c"):
+            try:
+                raw = zlib.decompress(raw)
+            except Exception:
+                pass
+
         try:
-            unpacked = self._unpack(raw)
+            unpacked = raw if raw.startswith(b"\x08") else self._unpack(raw)
         except Exception as ex:  # noqa: BLE001
             # Decrypt/decompress failed: a corrupt blob OR (routinely, per the
             # map-reliability plan) an undecryptable "Key B" blob at this slot.
