@@ -9,6 +9,7 @@ from dataclasses import replace
 
 from ..types import (
     Action,
+    BaseStationCapability,
     CleanHistoryCapability,
     ConsumablesCapability,
     CoreCapability,
@@ -897,7 +898,7 @@ XIAOMI_OV21GL = ModelProfile(
     core=XIAOMI_CORE_OV21GL,
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 15),
-        start=Action(2, 16, in_piid=15),
+        start=Action(2, 16, in_piid=15, named_inputs=True),
     ),
     consumables=DreameConsumablesCapability(
         main_brush_life=Prop(12, 1), main_brush_left_time=Prop(12, 2),
@@ -907,10 +908,38 @@ XIAOMI_OV21GL = ModelProfile(
         dust_bag_life=Prop(19, 1), dust_bag_left_time=Prop(19, 2),
     ),
 )
+
+XIAOMI_CORE_OV31GL = replace(
+    XIAOMI_CORE_OV21GL,
+    sweep_type=None,
+    sweep_types={},
+    sweep_route=Prop(2, 74),
+    clean_times=Prop(2, 8),
+    sweep_routes={'quick': 1, 'daily': 2, 'careful': 3},
+    clean_time_options={'one_time': 1, 'two_times': 2},
+)
+
 XIAOMI_OV31GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov31gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov31gl:1",),
+    core=XIAOMI_CORE_OV31GL,
+    max_properties=5,
+    base_station=BaseStationCapability(
+        working_status=Prop(2, 18),
+        drying_time=Prop(2, 31),
+        auto_mop_dry=Prop(2, 34),
+        auto_water_change=Prop(2, 35),
+        drying_progress=Prop(2, 88),
+        dry_left_time=Prop(2, 90),
+        sewage_tank_status=Prop(2, 97),
+        water_tank_status=Prop(2, 98),
+        start_drying=Action(2, 20),
+        stop_drying=Action(2, 32),
+        start_mop_wash=Action(2, 19),
+        stop_mop_wash=Action(2, 31),
+        empty_dust_bin=Action(2, 18),
+    ),
 )
 
 # xiaomi.vacuum.ov71gl — identical core spec layout to ov21gl, but consumables

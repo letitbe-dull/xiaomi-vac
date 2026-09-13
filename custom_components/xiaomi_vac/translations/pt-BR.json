@@ -167,6 +167,32 @@
           "error": "Erro"
         }
       },
+      "base_station_status": {
+        "name": "Status da base",
+        "state": {
+          "idle": "Pronta",
+          "drying": "Secando os mops",
+          "washing_mops": "Lavando os mops",
+          "dust_collection": "Aspirando o pó do coletor de poeira",
+          "unknown": "Desconhecido"
+        }
+      },
+      "sewage_tank_status": {
+        "name": "Reservatório de água suja",
+        "state": {
+          "not_full": "Não está cheio",
+          "full": "Cheio",
+          "unknown": "Desconhecido"
+        }
+      },
+      "water_tank_status": {
+        "name": "Reservatório de água limpa",
+        "state": {
+          "not_empty": "Não está vazio",
+          "empty": "Vazio",
+          "unknown": "Desconhecido"
+        }
+      },
       "battery": {
         "name": "Bateria"
       },
@@ -186,18 +212,32 @@
         "name": "Vida útil do filtro"
       },
       "mop_life": {
-        "name": "Vida útil do Mop"
+        "name": "Vida útil dos mops"
       },
       "dust_bag_life": {
         "name": "Vida útil do coletor de poeira"
       },
       "detergent_life": {
         "name": "Vida útil do detergente"
+      },
+      "drying_progress": {
+        "name": "Progresso da secagem dos mops"
+      },
+      "dry_left_time": {
+        "name": "Tempo restante da secagem dos mops"
       }
     },
     "select": {
+      "drying_time": {
+        "name": "Duração da secagem dos mops",
+        "state": {
+          "2_hours": "2 horas",
+          "3_hours": "3 horas",
+          "4_hours": "4 horas"
+        }
+      },
       "fan_speed": {
-        "name": "Velocidade do ventilador",
+        "name": "Velocidade",
         "state": {
           "quiet": "Silencioso",
           "standard": "Padrão",
@@ -308,6 +348,21 @@
           "ai_hosting": "Hospedagem de IA"
         }
       },
+      "sweep_route": {
+        "name": "Tipo do caminho",
+        "state": {
+          "quick": "Rápido",
+          "daily": "Padrão",
+          "careful": "Minucioso"
+        }
+      },
+      "clean_times": {
+        "name": "Passar quantas vezes",
+        "state": {
+          "one_time": "1 vez",
+          "two_times": "2 vezes"
+        }
+      },
       "active_map": {
         "name": "Mapa ativo"
       }
@@ -318,6 +373,23 @@
       },
       "alarm": {
         "name": "Encontrar aspirador (bip)"
+      },
+      "auto_mop_dry": {
+        "name": "Secagem automática dos mops"
+      },
+      "mop_drying": {
+        "name": "Secar mops"
+      }
+    },
+    "button": {
+      "find_vacuum": {
+        "name": "Encontrar aspirador"
+      },
+      "wash_mops": {
+        "name": "Lavar mops"
+      },
+      "empty_dust_bin": {
+        "name": "Esvaziar coletor de poeira"
       }
     },
     "number": {
