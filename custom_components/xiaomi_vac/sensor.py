@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -95,6 +95,45 @@ _ALL_SENSORS: tuple[XiaomiSensorDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.detergent_life,
         supported_fn=_has_consumable("detergent_life"),
+    ),
+    XiaomiSensorDescription(
+        key="drying_progress", translation_key="drying_progress", icon="mdi:progress-clock",
+        native_unit_of_measurement=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda s: s.drying_progress,
+        supported_fn=lambda p: p.base_station is not None and p.base_station.drying_progress is not None,
+    ),
+    XiaomiSensorDescription(
+        key="dry_left_time", translation_key="dry_left_time", icon="mdi:timer-sand",
+        native_unit_of_measurement=UnitOfTime.MINUTES, state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda s: s.dry_left_time,
+        supported_fn=lambda p: p.base_station is not None and p.base_station.dry_left_time is not None,
+    ),
+    XiaomiSensorDescription(
+        key="base_station_status", translation_key="base_station_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=["idle", "drying", "washing_mops", "dust_collection", "unknown"],
+        value_fn=lambda s: s.base_station_status,
+        supported_fn=lambda p: p.base_station is not None and p.base_station.working_status is not None,
+    ),
+    XiaomiSensorDescription(
+        key="sewage_tank_status", translation_key="sewage_tank_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=["not_full", "full", "unknown"],
+        value_fn=lambda s: {
+            0: "not_full",
+            1: "full",
+        }.get(s.sewage_tank_status, "unknown"),
+        supported_fn=lambda p: p.base_station is not None and p.base_station.sewage_tank_status is not None,
+    ),
+    XiaomiSensorDescription(
+        key="water_tank_status", translation_key="water_tank_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=["not_empty", "empty", "unknown"],
+        value_fn=lambda s: {
+            0: "not_empty",
+            1: "empty",
+        }.get(s.water_tank_status, "unknown"),
+        supported_fn=lambda p: p.base_station is not None and p.base_station.water_tank_status is not None,
     ),
 )
 

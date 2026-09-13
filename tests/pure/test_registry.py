@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from spec.registry import MODEL_PROFILES, card_baseline_gaps, get_profile, is_supported
+from spec.types import Action, Prop
 
 _ACTIVITIES = {"cleaning", "paused", "idle", "returning", "docked", "error"}
 _VALUE_TABLES = ("fan_speeds", "water_levels", "modes", "sweep_types")
@@ -19,19 +20,41 @@ def test_unknown_model_resolves_to_none_and_is_not_supported() -> None:
     assert is_supported("roborock.vacuum.a01") is False
 
 
+def test_xiaomi_exposes_base_station_controls() -> None:
+    profile = get_profile("xiaomi.vacuum.ov31gl")
+    assert profile is not None
+    assert profile.settings is None
+    assert profile.base_station is not None
+    assert profile.base_station.auto_mop_dry == Prop(2, 34)
+    assert profile.base_station.start_drying == Action(2, 20)
+    assert profile.base_station.start_mop_wash == Action(2, 19)
+    assert profile.base_station.empty_dust_bin == Action(2, 18)
+    assert profile.base_station.sewage_tank_status == Prop(2, 97)
+    assert profile.base_station.water_tank_status == Prop(2, 98)
+    assert profile.consumables is not None
+    assert profile.consumables.detergent_life is None
+    assert profile.consumables.detergent_left_time is None
+    assert profile.core is not None
+    assert profile.core.sweep_type is None
+    assert profile.core.sweep_route == Prop(2, 74)
+    assert profile.core.clean_times == Prop(2, 8)
+    assert profile.core.sweep_routes == {"quick": 1, "daily": 2, "careful": 3}
+    assert profile.core.clean_time_options == {"one_time": 1, "two_times": 2}
+
+
 def test_registry_counts_match_card_baseline() -> None:
     supported = [model for model in MODEL_PROFILES if is_supported(model)]
     rejected = [model for model in MODEL_PROFILES if not is_supported(model)]
 
-    assert len(MODEL_PROFILES) == 95
-    assert len(supported) == 74
-    assert len(rejected) == 21
+    assert len(MODEL_PROFILES) == 96
+    assert len(supported) == 77
+    assert len(rejected) == 19
 
 
 def test_distinct_core_count_matches_promoted_profiles() -> None:
     cores = {repr(profile.core) for profile in MODEL_PROFILES.values() if profile.core}
 
-    assert len(cores) == 23
+    assert len(cores) == 24
 
 
 def test_registered_profiles_include_spec_notes() -> None:

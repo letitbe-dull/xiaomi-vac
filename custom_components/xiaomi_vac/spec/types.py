@@ -20,6 +20,9 @@ class Action:
     # return outputs. in_piid stays for the common single-input case.
     in_piids: tuple[int, ...] = ()
     out_piids: tuple[int, ...] = ()
+    # Some firmware requires action inputs as {piid, value} objects instead of
+    # the positional values accepted by the generic MIoT action API.
+    named_inputs: bool = False
 
 
 @dataclass(frozen=True)
@@ -126,6 +129,24 @@ class SettingsCapability:
     carpet_avoid: Prop | None = None
     map_encrypt: Prop | None = None
     multi_prop_vacuum: Prop | None = None
+
+
+@dataclass(frozen=True)
+class BaseStationCapability:
+    """Base-station controls exposed by the vacuum MIoT service."""
+    working_status: Prop | None = None
+    drying_time: Prop | None = None
+    auto_mop_dry: Prop | None = None
+    auto_water_change: Prop | None = None
+    drying_progress: Prop | None = None
+    dry_left_time: Prop | None = None
+    sewage_tank_status: Prop | None = None
+    water_tank_status: Prop | None = None
+    start_drying: Action | None = None
+    stop_drying: Action | None = None
+    start_mop_wash: Action | None = None
+    stop_mop_wash: Action | None = None
+    empty_dust_bin: Action | None = None
 
 
 @dataclass(frozen=True)
@@ -324,6 +345,8 @@ class CoreCapability:
     fan_speed: Prop | None = None
     water_level: Prop | None = None
     sweep_type: Prop | None = None       # dreame has none -> stays None
+    sweep_route: Prop | None = None
+    clean_times: Prop | None = None
     repeat: Prop | None = None
     alarm: Prop | None = None
     volume: Prop | None = None
@@ -339,6 +362,8 @@ class CoreCapability:
     water_levels: dict[str, int] = field(default_factory=dict)
     modes: dict[str, int] = field(default_factory=dict)
     sweep_types: dict[str, int] = field(default_factory=dict)
+    sweep_routes: dict[str, int] = field(default_factory=dict)
+    clean_time_options: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -352,6 +377,7 @@ class ModelProfile:
     room_clean: RoomCleanCapability | None = None
     schedule: ScheduleCapability | DreameScheduleCapability | None = None
     settings: SettingsCapability | DreameSettingsCapability | None = None
+    base_station: BaseStationCapability | None = None
     consumables: ConsumablesCapability | DreameConsumablesCapability | None = None
     clean_history: CleanHistoryCapability | DreameCleanHistoryCapability | None = None
     dnd: DndCapability | DreameDndCapability | None = None

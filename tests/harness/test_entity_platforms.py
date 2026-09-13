@@ -20,14 +20,19 @@ from custom_components.xiaomi_vac.const import (
     CONF_USER_ID,
     CONF_USERNAME,
 )
+from custom_components.xiaomi_vac.button import (
+    BaseActionButton,
+    async_setup_entry as button_setup,
+)
 from custom_components.xiaomi_vac.select import (
     XiaomiActiveMapSelect,
     XiaomiVacuumSelect,
     async_setup_entry as select_setup,
 )
-from custom_components.xiaomi_vac.spec.types import Action, MapCapability
+from custom_components.xiaomi_vac.spec.types import Action, BaseStationCapability, MapCapability, Prop
 from custom_components.xiaomi_vac.switch import (
     AlarmSwitch,
+    MopDryingSwitch,
     RepeatSwitch,
     async_setup_entry as switch_setup,
 )
@@ -70,6 +75,8 @@ def _make_coordinator(core_overrides: dict | None = None) -> MagicMock:
     core.water_levels = {"off": 0, "low": 1}
     core.modes = None              # no mode select
     core.sweep_types = None        # no sweep_type select
+    core.sweep_routes = None       # no cleaning-path select
+    core.clean_time_options = None # no clean-times select
 
     if core_overrides:
         for k, v in core_overrides.items():
@@ -187,7 +194,7 @@ async def test_select_setup_creates_nothing_when_all_absent(hass: HomeAssistant)
 # ---------------------------------------------------------------------------
 
 
-async def test_switch_setup_creates_repeat_and_alarm(hass: HomeAssistant) -> None:
+async def test_switch_setup_omits_alarm_when_locate_action_exists(hass: HomeAssistant) -> None:
     coord = _make_coordinator()
     entry = _make_entry()
     entry.runtime_data.control = coord
@@ -197,7 +204,37 @@ async def test_switch_setup_creates_repeat_and_alarm(hass: HomeAssistant) -> Non
 
     types = {type(e) for e in added}
     assert RepeatSwitch in types
-    assert AlarmSwitch in types
+    assert AlarmSwitch not in types
+
+
+async def test_switch_setup_creates_mop_drying_switch(hass: HomeAssistant) -> None:
+    coord = _make_coordinator()
+    coord.device.profile.base_station = BaseStationCapability(
+        auto_mop_dry=Prop(2, 34),
+        start_drying=Action(2, 20),
+        stop_drying=Action(2, 32),
+        working_status=Prop(2, 18),
+    )
+    coord.data.base_station_mode = 1
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+
+    added: list = []
+    await switch_setup(hass, entry, lambda entities: added.extend(entities))
+
+    drying = next(entity for entity in added if isinstance(entity, MopDryingSwitch))
+    assert drying.is_on is True
+
+
+async def test_button_setup_creates_find_vacuum_button(hass: HomeAssistant) -> None:
+    coord = _make_coordinator()
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+
+    added: list = []
+    await button_setup(hass, entry, lambda entities: added.extend(entities))
+
+    assert any(isinstance(entity, BaseActionButton) for entity in added)
 
 
 async def test_switch_setup_no_entities_when_absent(hass: HomeAssistant) -> None:

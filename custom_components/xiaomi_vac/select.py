@@ -13,7 +13,7 @@ from . import XiaomiConfigEntry
 from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
 from .map_coordinator import XiaomiMapCoordinator
-from .spec.types import MapCapability
+from .spec.types import BaseStationCapability, MapCapability
 from .vacuum import _cloud_set_current_map, _has_cloud_session
 
 # Serialise commands to the device (one MIoT write at a time).
@@ -23,11 +23,19 @@ _LOGGER = logging.getLogger(__name__)
 
 # (key, core attr holding {name: raw}, VacuumStatus attr with current raw, device setter)
 SELECTS = (
-    ("fan_speed", "fan_speeds", "fan_speed_raw", "set_fan_speed"),
-    ("water_level", "water_levels", "water_level_raw", "set_water_level"),
     ("mode", "modes", "mode_raw", "set_mode"),
+    ("water_level", "water_levels", "water_level_raw", "set_water_level"),
     ("sweep_type", "sweep_types", "sweep_type_raw", "set_sweep_type"),
+    ("sweep_route", "sweep_routes", "sweep_route_raw", "set_sweep_route"),
+    ("clean_times", "clean_time_options", "clean_times_raw", "set_clean_times"),
+    ("fan_speed", "fan_speeds", "fan_speed_raw", "set_fan_speed"),
 )
+
+MOP_DRYING_OPTIONS = {
+    "2_hours": 1,
+    "3_hours": 2,
+    "4_hours": 3,
+}
 
 
 async def async_setup_entry(
@@ -42,6 +50,9 @@ async def async_setup_entry(
         for cfg in SELECTS
         if getattr(core, cfg[1])
     ]
+    base = coordinator.device.profile.base_station
+    if isinstance(base, BaseStationCapability) and base.drying_time is not None:
+        entities.append(DryingTimeSelect(coordinator, entry))
 
     map_coordinator = entry.runtime_data.map
     cap = coordinator.device.profile.map
@@ -79,6 +90,32 @@ class XiaomiVacuumSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntit
     async def async_select_option(self, option: str) -> None:
         setter = getattr(self.coordinator.device, self._setter)
         await self.hass.async_add_executor_job(setter, option)
+        await self.coordinator.async_request_refresh()
+
+
+class DryingTimeSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "drying_time"
+    _attr_options = list(MOP_DRYING_OPTIONS)
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator)
+        base = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{base}_drying_time"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
+
+    @property
+    def current_option(self) -> str | None:
+        return next(
+            (option for option, value in MOP_DRYING_OPTIONS.items()
+             if value == self.coordinator.data.drying_time),
+            None,
+        )
+
+    async def async_select_option(self, option: str) -> None:
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_drying_time, option
+        )
         await self.coordinator.async_request_refresh()
 
 

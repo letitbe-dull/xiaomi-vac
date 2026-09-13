@@ -167,6 +167,32 @@
           "error": "Error"
         }
       },
+      "base_station_status": {
+        "name": "Base station status",
+        "state": {
+          "idle": "Idle",
+          "drying": "Drying mops",
+          "washing_mops": "Washing mops",
+          "dust_collection": "Collecting dust",
+          "unknown": "Unknown"
+        }
+      },
+      "sewage_tank_status": {
+        "name": "Dirty water tank",
+        "state": {
+          "not_full": "Not full",
+          "full": "Full",
+          "unknown": "Unknown"
+        }
+      },
+      "water_tank_status": {
+        "name": "Clean water tank",
+        "state": {
+          "not_empty": "Not empty",
+          "empty": "Empty",
+          "unknown": "Unknown"
+        }
+      },
       "battery": {
         "name": "Battery"
       },
@@ -193,9 +219,23 @@
       },
       "detergent_life": {
         "name": "Detergent life"
+      },
+      "drying_progress": {
+        "name": "Mop drying progress"
+      },
+      "dry_left_time": {
+        "name": "Mop drying time remaining"
       }
     },
     "select": {
+      "drying_time": {
+        "name": "Mop drying duration",
+        "state": {
+          "2_hours": "2 hours",
+          "3_hours": "3 hours",
+          "4_hours": "4 hours"
+        }
+      },
       "fan_speed": {
         "name": "Fan speed",
         "state": {
@@ -308,6 +348,21 @@
           "ai_hosting": "AI Hosting"
         }
       },
+      "sweep_route": {
+        "name": "Cleaning path",
+        "state": {
+          "quick": "Quick",
+          "daily": "Standard",
+          "careful": "Deep"
+        }
+      },
+      "clean_times": {
+        "name": "Clean how many times",
+        "state": {
+          "one_time": "Once",
+          "two_times": "Twice"
+        }
+      },
       "active_map": {
         "name": "Active map"
       }
@@ -318,6 +373,23 @@
       },
       "alarm": {
         "name": "Find vacuum (beep)"
+      },
+      "auto_mop_dry": {
+        "name": "Automatic mop drying"
+      },
+      "mop_drying": {
+        "name": "Dry mops"
+      }
+    },
+    "button": {
+      "find_vacuum": {
+        "name": "Find vacuum"
+      },
+      "wash_mops": {
+        "name": "Wash mops"
+      },
+      "empty_dust_bin": {
+        "name": "Empty dust bin"
       }
     },
     "number": {
