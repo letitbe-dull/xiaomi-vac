@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from miio import MiotDevice
 
 from .spec.registry import card_baseline_gaps, get_profile
-from .spec.types import CoreCapability, DreameConsumablesCapability, MapCapability, ModelProfile
+from .spec.types import CoreCapability, MapCapability, ModelProfile, consumable_life_props
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ class VacuumStatus:
     repeat_raw: int | None
     alarm_raw: int | None
     volume_raw: int | None
+    door_state_raw: int | None
     main_brush_life: int | None
     side_brush_life: int | None
     filter_life: int | None
@@ -119,28 +120,21 @@ class IjaiVacuumDevice:
     def status(self) -> VacuumStatus:
         c = self.core
         # Lean core (decision 2026-06-25): clean-area/time are still NOT in
-        # core, parked -> always None below. Consumable life (2026-08-01):
-        # populated when profile.consumables is the percent+hours-shaped
-        # DreameConsumablesCapability (life-level props only here — the
-        # left-time/hours props exist on the profile but aren't polled, no
-        # consumer needs them yet).
+        # core, parked -> always None below. Consumable life: populated from
+        # either capability shape via consumable_life_props() (life-level props
+        # only — the left-time/hours props exist on the profile but aren't
+        # polled, no consumer needs them yet). The ijai shape also carries the
+        # door/box state (Vaschetta).
         cons = self.profile.consumables
-        cons_props: dict[str, "object"] = {}
-        if isinstance(cons, DreameConsumablesCapability):
-            cons_props = {
-                "main_brush_life": cons.main_brush_life,
-                "side_brush_life": cons.side_brush_life,
-                "filter_life": cons.filter_life,
-                "mop_life": cons.mop_life,
-                "dust_bag_life": cons.dust_bag_life,
-                "detergent_life": cons.detergent_life,
-            }
+        life = consumable_life_props(cons)
+        door_state = getattr(cons, "door_state", None)
         # Batch all non-None props in one get_properties call (chunked when
         # profile.max_properties is set — e.g. IJAI_CORE_LEGACY devices).
         poll = [p for p in (
             c.status, c.battery, c.fault, c.fan_speed, c.water_level,
             c.mode, c.sweep_type, c.repeat, c.alarm, c.volume,
-            *cons_props.values(),
+            *life.values(),
+            door_state,
         ) if p is not None]
         vals = self._batch_get(poll)
         _raw = vals.get(c.status)
@@ -163,12 +157,13 @@ class IjaiVacuumDevice:
             repeat_raw=_as_int(vals.get(c.repeat)),
             alarm_raw=_as_int(vals.get(c.alarm)),
             volume_raw=_as_int(vals.get(c.volume)),
-            main_brush_life=_as_int(vals.get(cons_props.get("main_brush_life"))),
-            side_brush_life=_as_int(vals.get(cons_props.get("side_brush_life"))),
-            filter_life=_as_int(vals.get(cons_props.get("filter_life"))),
-            mop_life=_as_int(vals.get(cons_props.get("mop_life"))),
-            dust_bag_life=_as_int(vals.get(cons_props.get("dust_bag_life"))),
-            detergent_life=_as_int(vals.get(cons_props.get("detergent_life"))),
+            door_state_raw=_as_int(vals.get(door_state)),
+            main_brush_life=_as_int(vals.get(life.get("main_brush_life"))),
+            side_brush_life=_as_int(vals.get(life.get("side_brush_life"))),
+            filter_life=_as_int(vals.get(life.get("filter_life"))),
+            mop_life=_as_int(vals.get(life.get("mop_life"))),
+            dust_bag_life=_as_int(vals.get(life.get("dust_bag_life"))),
+            detergent_life=_as_int(vals.get(life.get("detergent_life"))),
             clean_area=None,
             clean_time=None,
         )
@@ -260,6 +255,70 @@ class IjaiVacuumDevice:
             cap.clean_room_ids.piid: ",".join(str(r) for r in room_ids),
         }
         return cap.set_room_clean, [values[piid] for piid in cap.set_room_clean.in_piids]
+
+    # --- zone (area) cleaning -------------------------------------------
+    def _point_zone(self):
+        cap = self.profile.map
+        if isinstance(cap, MapCapability):
+            return cap.point_zone
+        return None
+
+    def zone_clean_action(self):
+        """The set-zone-point action for this model, or None."""
+        pz = self._point_zone()
+        return None if pz is None else pz.set_zone_point
+
+    def zone_clean_start_action(self):
+        """The start-zone-clean action for this model, or None."""
+        pz = self._point_zone()
+        return None if pz is None else pz.start_zone_clean
+
+    def zone_clean_params(self, x0: float, y0: float, x1: float, y1: float) -> list[str] | None:
+        """set-zone-point params for a rectangle in the map's metre space.
+
+        ijai expects a single ``"[x0,y0,x1,y1,1]"`` string in *millimetres*.
+        The integration's map vector/camera coordinates are metres (see
+        ``map_vector`` bounds/resolution), hence the x1000.
+        """
+        if self.zone_clean_action() is None:
+            return None
+        mm = [round(v * 1000) for v in (x0, y0, x1, y1)]
+        return [f"[{mm[0]},{mm[1]},{mm[2]},{mm[3]},1]"]
+
+    def _action_piid(self, action, values) -> dict:
+        """Call an action whose MIoT spec declares piid-keyed inputs.
+
+        The device rejects the bare-value form for these ("user ack timeout",
+        -9999); each value must be sent as ``{"piid": p, "value": v}``, exactly
+        as xiaomi_miot's ``in_params`` does. Actions without declared inputs
+        fall through to the plain form.
+        """
+        piids = action.in_piids or (
+            (action.in_piid,) if action.in_piid is not None else ()
+        )
+        if not piids:
+            return self._action(action, values)
+        params = [{"piid": p, "value": v} for p, v in zip(piids, values)]
+        return self._action(action, params)
+
+    def clean_zone(self, x0: float, y0: float, x1: float, y1: float) -> None:
+        """Start an area (zone) clean for the given metre rectangle.
+
+        Two MIoT steps, both required (verified on ijai.vacuum.v19):
+
+        1. ``set-zone-point`` (9/8) stores the rectangle (mm, piid-keyed string)
+           and returns the map id/type/timestamp — on its own it does NOT start
+           anything; the robot stays docked.
+        2. ``start-zone-clean`` (9/3, no args) actually starts the clean.
+        """
+        action = self.zone_clean_action()
+        params = self.zone_clean_params(x0, y0, x1, y1)
+        if action is None or params is None:
+            raise ValueError(f"{self.model} has no zone-clean capability")
+        self._action_piid(action, params)
+        start = self.zone_clean_start_action()
+        if start is not None:
+            self._action(start, [])
 
     # --- maps ------------------------------------------------------------
     def map_list(self) -> list[dict]:

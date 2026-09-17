@@ -100,6 +100,36 @@ def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
     assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
+def test_clean_zone_sets_piid_keyed_zone_then_starts(monkeypatch):
+    """Two MIoT steps, both hardware-verified on ijai.vacuum.v19:
+
+    - set-zone-point (9/8) takes the rectangle as a *piid-keyed* string in
+      millimetres (raw values are rejected with -9999 "user ack timeout"), and
+      only stores it;
+    - start-zone-clean (9/3, no args) is what actually starts the clean.
+    """
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v19")
+
+    device.clean_zone(-1.5, 2.25, -0.5, 3.0)
+
+    assert _last_calls() == [
+        ("action", 9, 8, [{"piid": 2, "value": "[-1500,2250,-500,3000,1]"}]),
+        ("action", 9, 3, []),
+    ]
+
+
+def test_clean_zone_raises_when_profile_has_no_point_zone(monkeypatch):
+    """A dreame profile carries a blob map (no point_zone) — zone clean must
+    raise rather than silently no-op."""
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "dreame.vacuum.p2008")
+
+    assert device.zone_clean_action() is None
+    with pytest.raises(ValueError):
+        device.clean_zone(0.0, 0.0, 1.0, 1.0)
+
+
 def test_request_map_upload_prefers_upload_by_mapid_ii(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")

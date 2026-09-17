@@ -170,6 +170,15 @@
       "battery": {
         "name": "Battery"
       },
+      "door_state": {
+        "name": "Dust/water tank",
+        "state": {
+          "none": "None",
+          "dust_box": "Dust box",
+          "water_box": "Water box",
+          "two_in_one": "Two-in-one"
+        }
+      },
       "clean_area": {
         "name": "Clean area"
       },

@@ -88,6 +88,15 @@
       "battery": {
         "name": "Batteria"
       },
+      "door_state": {
+        "name": "Vaschetta",
+        "state": {
+          "none": "Nessuna",
+          "dust_box": "Vaschetta polvere",
+          "water_box": "Vaschetta acqua",
+          "two_in_one": "Due in uno"
+        }
+      },
       "clean_area": {
         "name": "Area pulita"
       },

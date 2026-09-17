@@ -8,10 +8,6 @@ from .helpers import load_sensor_module
 _DEAD_KEYS = {
     "clean_area",
     "clean_time",
-    "main_brush_life",
-    "side_brush_life",
-    "filter_life",
-    "mop_life",
 }
 
 
@@ -64,14 +60,18 @@ def test_build_sensors_ijai_v17_no_dead_sensors(monkeypatch):
 
 
 def test_build_sensors_ijai_v17_exact_set(monkeypatch):
-    """Exactly {status, battery} for ijai.v17 at launch (no extras, no missing)."""
+    """The v17-family sensor set: status + battery + the four consumable
+    life-levels (2026-09-17) + the door/box state (Vaschetta)."""
     sensor = load_sensor_module(monkeypatch)
     profile = _ijai_v17_profile(monkeypatch)
 
     sensors = sensor.build_sensors(profile)
     keys = {d.key for d in sensors}
 
-    assert keys == {"status", "battery"}
+    assert keys == {
+        "status", "battery", "door_state",
+        "main_brush_life", "side_brush_life", "filter_life", "mop_life",
+    }
 
 
 def test_build_sensors_profile_without_battery_omits_battery(monkeypatch):

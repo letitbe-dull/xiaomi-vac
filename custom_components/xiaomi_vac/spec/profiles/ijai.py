@@ -943,11 +943,22 @@ IJAI_V17 = ModelProfile(
         map_encrypt=Prop(7, 55),
         multi_prop_vacuum=Prop(7, 45),
     ),
+    # Consumable life-levels (2026-09-17): read straight off a real ijai
+    # v19 device's own cached MIoT spec (urn:...:ijai-v19:1). Each `-life`
+    # prop (% remaining) sits one piid below its `-hours` counterpart on the
+    # sweep service: side-brush 8/9, main-brush 10/11, hypa/filter 12/13,
+    # mop 14/15. Verified on v19 hardware; not extended to the other ijai
+    # profiles (v1/v2/v3/v10/v13/v14) which share this field layout but are
+    # unconfirmed against their own specs.
     consumables=ConsumablesCapability(
         side_brush_hours=Prop(7, 9),
         main_brush_hours=Prop(7, 11),
         hypa_hours=Prop(7, 13),
         mop_hours=Prop(7, 15),
+        side_brush_life=Prop(7, 8),
+        main_brush_life=Prop(7, 10),
+        hypa_life=Prop(7, 12),
+        mop_life=Prop(7, 14),
         door_state=Prop(7, 3),
         cloth_state=Prop(7, 4),
         reset_consumable=Action(7, 1, in_piid=17),

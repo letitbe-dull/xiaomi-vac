@@ -158,6 +158,20 @@ action:
       segments: [12]
 ```
 
+### `xiaomi_vac.clean_zone`
+
+Cleans a rectangular area (zone). Coordinates are `[x0, y0, x1, y1]` in the
+map's **metre** space — the same space the map camera/vector endpoint and the
+bundled card use (draw a rectangle on the card, or take the numbers from the
+map attributes).
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `entity_id` | The vacuum entity. | `vacuum.xiaomi_robot_vacuum_s10` |
+| `zone` | Rectangle as `[x0, y0, x1, y1]` in metres. | `[-1.5, 2.2, -0.4, 3.1]` |
+
+Only models whose profile exposes a point/zone capability (e.g. `ijai.vacuum.v17`/`v18`/`v19`) support this. The bundled card shows a draw tool on the map page (unless `allow_zone_cleaning: false`): tap it, drag a rectangle, then tap **Clean this area**.
+
 ## Supported models
 
 These are the [67 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.

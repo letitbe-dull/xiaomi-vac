@@ -67,6 +67,13 @@ async def async_setup_entry(
         "async_clean_segment",
     )
     platform.async_register_entity_service(
+        "clean_zone",
+        {vol.Required("zone"): vol.All(
+            cv.ensure_list, [vol.Coerce(float)], vol.Length(min=4, max=4)
+        )},
+        "async_clean_zone",
+    )
+    platform.async_register_entity_service(
         "refresh_map",
         {vol.Required("confirm_movement"): vol.All(cv.boolean, vol.Equal(True))},
         "async_refresh_map",
@@ -159,6 +166,34 @@ class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity
             raise HomeAssistantError(f"Room cleaning failed: {err}") from err
         await self.coordinator.async_request_refresh()
 
+    async def async_clean_zone(self, zone: list[float]) -> None:
+        """Clean a rectangular area (zone) given as [x0, y0, x1, y1] in the
+        map's metre coordinate space (same space the map camera/vector use)."""
+        x0, y0, x1, y1 = (float(v) for v in zone)
+        data = self._entry.data
+        if _has_cloud_session(data):
+            try:
+                await self.hass.async_add_executor_job(
+                    _cloud_clean_zone, data, self._device, x0, y0, x1, y1
+                )
+                _LOGGER.debug("%s: zone-clean served via cloud", self._device.model)
+                await self.coordinator.async_request_refresh()
+                return
+            except Exception as cloud_err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "%s: cloud zone-clean failed, falling back to local: %s",
+                    self._device.model,
+                    cloud_err,
+                )
+        try:
+            await self.hass.async_add_executor_job(
+                self._device.clean_zone, x0, y0, x1, y1
+            )
+            _LOGGER.debug("%s: zone-clean served via local", self._device.model)
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(f"Zone cleaning failed: {err}") from err
+        await self.coordinator.async_request_refresh()
+
 
 def _has_cloud_session(data: dict) -> bool:
     return all(
@@ -226,6 +261,34 @@ def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[i
         if _cloud_action_ok(response):
             return
     raise ValueError("Xiaomi cloud rejected every room-clean action")
+
+
+def _cloud_clean_zone(
+    data: dict, device: IjaiVacuumDevice,
+    x0: float, y0: float, x1: float, y1: float,
+) -> None:
+    action = device.zone_clean_action()
+    params = device.zone_clean_params(x0, y0, x1, y1)
+    if action is None or params is None:
+        raise ValueError(f"{device.model} has no supported zone-clean action")
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    server, did = str(data[CONF_SERVER]), str(data[CONF_DEVICE_ID])
+    # The cloud takes the spec-order values (bare, not piid-keyed).
+    response = cloud.cloud_action(server, did, action.siid, action.aiid, params)
+    if not _cloud_action_ok(response):
+        raise ValueError(f"Xiaomi cloud rejected zone-clean: {response}")
+    # 9/8 only stores the rectangle; 9/3 actually starts (verified on v19).
+    start = device.zone_clean_start_action()
+    if start is not None:
+        response = cloud.cloud_action(server, did, start.siid, start.aiid, [])
+        if not _cloud_action_ok(response):
+            raise ValueError(f"Xiaomi cloud rejected start-zone-clean: {response}")
 
 
 def _cloud_set_current_map(data: dict, device: IjaiVacuumDevice, map_id: int) -> None:

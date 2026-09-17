@@ -223,12 +223,12 @@ def test_ov71gl_and_ov43gb_do_not_inherit_ov21gl_consumables(monkeypatch):
 
 
 def test_status_consumables_not_polled_for_profile_without_them(monkeypatch):
-    """A profile with no DreameConsumablesCapability (e.g. plain ijai) must
-    not attempt to read any consumable prop at all — confirms the
-    isinstance-gated poll list in device.py, not just that the result comes
-    back None."""
+    """A profile whose `consumables` is None (e.g. the unverified
+    xiaomi.ov71gl alias) must not attempt to read any consumable prop — the
+    poll list is built from the profile, so an absent capability polls
+    nothing and the fields come back None."""
     device_mod = load_device_module(monkeypatch)
-    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov71gl")
     status_prop = device.core.status
     FakeMiotDevice.property_values = {(status_prop.siid, status_prop.piid): 5}
 
@@ -237,3 +237,61 @@ def test_status_consumables_not_polled_for_profile_without_them(monkeypatch):
     assert status.main_brush_life is None
     assert status.dust_bag_life is None
     assert status.detergent_life is None
+
+
+# --- ijai v17/v18/v19: life-level props on the sweep service (2026-09-17) --
+def _ijai_v17_profile(monkeypatch):
+    """Return the real IJAI_V17 ModelProfile (no HA needed)."""
+    pkg_root = Path(__file__).resolve().parents[2] / "custom_components" / "xiaomi_vac"
+    pkg = ModuleType("xiaomi_vac")
+    pkg.__path__ = [str(pkg_root)]
+    sys.modules.setdefault("xiaomi_vac", pkg)
+
+    spec_pkg = ModuleType("xiaomi_vac.spec")
+    spec_pkg.__path__ = [str(pkg_root / "spec")]
+    sys.modules.setdefault("xiaomi_vac.spec", spec_pkg)
+
+    for name in list(sys.modules):
+        if name.startswith("xiaomi_vac.spec.") and "profiles" in name:
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    profiles_mod = importlib.import_module("xiaomi_vac.spec.profiles.ijai")
+    return profiles_mod.IJAI_V17
+
+
+def test_build_sensors_ijai_v17_has_life_sensors_and_door_state(monkeypatch):
+    """ijai.v17 exposes the four percent-life sensors plus the door/box
+    state — and no dreame-only dust-bag/detergent sensors."""
+    sensor = load_sensor_module(monkeypatch)
+    profile = _ijai_v17_profile(monkeypatch)
+
+    sensors = sensor.build_sensors(profile)
+    keys = {d.key for d in sensors}
+
+    assert {"main_brush_life", "side_brush_life", "filter_life", "mop_life", "door_state"} <= keys
+    assert keys.isdisjoint({"dust_bag_life", "detergent_life"})
+
+
+def test_status_returns_ijai_life_values_and_door_state(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v19")
+    status_prop = device.core.status
+    cons = device.profile.consumables
+
+    FakeMiotDevice.property_values = {
+        (status_prop.siid, status_prop.piid): 5,
+        (cons.main_brush_life.siid, cons.main_brush_life.piid): 59,
+        (cons.side_brush_life.siid, cons.side_brush_life.piid): 19,
+        (cons.hypa_life.siid, cons.hypa_life.piid): 19,
+        (cons.mop_life.siid, cons.mop_life.piid): 70,
+        (cons.door_state.siid, cons.door_state.piid): 3,
+    }
+
+    status = device.status()
+
+    assert status.main_brush_life == 59
+    assert status.side_brush_life == 19
+    # ijai's hypa-life is surfaced as the canonical filter_life
+    assert status.filter_life == 19
+    assert status.mop_life == 70
+    assert status.door_state_raw == 3

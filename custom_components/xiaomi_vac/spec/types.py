@@ -130,11 +130,21 @@ class SettingsCapability:
 
 @dataclass(frozen=True)
 class ConsumablesCapability:
-    """Lifetime hours and accessory presence (siid sweep)."""
+    """Lifetime hours and accessory presence (siid sweep).
+
+    `*_life` are the percent-remaining props that sit next to each `*_hours`
+    prop on ijai's sweep service (e.g. `side-brush-life` piid 8 / `side-brush-
+    hours` piid 9); they feed the same percent sensors as the dreame-native
+    `DreameConsumablesCapability` shape via `consumable_life_props()`.
+    """
     side_brush_hours: Prop | None = None
     main_brush_hours: Prop | None = None
     hypa_hours: Prop | None = None
     mop_hours: Prop | None = None
+    side_brush_life: Prop | None = None
+    main_brush_life: Prop | None = None
+    hypa_life: Prop | None = None
+    mop_life: Prop | None = None
     door_state: Prop | None = None
     cloth_state: Prop | None = None
     reset_consumable: Action | None = None
@@ -236,6 +246,39 @@ class DreameConsumablesCapability:
     dust_bag_life: Prop | None = None
     dust_bag_left_time: Prop | None = None
     reset_dust_bag: Action | None = None
+
+
+# Canonical percent-life keys consumed by device.py/sensor.py. Both capability
+# shapes normalise to these so the sensor catalogue stays shape-agnostic; only
+# the filter differs by brand (ijai surfaces it as `hypa-life`).
+CONSUMABLE_LIFE_KEYS = (
+    "main_brush_life",
+    "side_brush_life",
+    "filter_life",
+    "mop_life",
+    "dust_bag_life",
+    "detergent_life",
+)
+
+
+def consumable_life_props(consumables) -> dict[str, Prop | None]:
+    """Canonical percent-life prop map for either consumables shape.
+
+    Returns {sensor key -> Prop | None} for the keys the shape can carry;
+    a key the shape doesn't model is omitted (so callers get ``None``).
+    ``filter_life`` maps to ijai's ``hypa_life`` (the HEPA filter) so
+    ``device.py``/``sensor.py`` stay brand-agnostic.
+    """
+    if isinstance(consumables, DreameConsumablesCapability):
+        return {k: getattr(consumables, k) for k in CONSUMABLE_LIFE_KEYS}
+    if isinstance(consumables, ConsumablesCapability):
+        return {
+            "main_brush_life": consumables.main_brush_life,
+            "side_brush_life": consumables.side_brush_life,
+            "filter_life": consumables.hypa_life,
+            "mop_life": consumables.mop_life,
+        }
+    return {}
 
 
 @dataclass(frozen=True)

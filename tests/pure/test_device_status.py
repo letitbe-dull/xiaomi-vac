@@ -71,6 +71,8 @@ def test_status_skips_absent_core_props(monkeypatch):
 
 
 def test_lean_core_fields_stay_parked(monkeypatch):
+    """clean-area/time remain outside core and parked at None (consumable
+    life is polled now — covered by tests/pure/test_consumables.py)."""
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
     status_prop = device.core.status
@@ -78,10 +80,6 @@ def test_lean_core_fields_stay_parked(monkeypatch):
 
     status = device.status()
 
-    assert status.main_brush_life is None
-    assert status.side_brush_life is None
-    assert status.filter_life is None
-    assert status.mop_life is None
     assert status.clean_area is None
     assert status.clean_time is None
 
