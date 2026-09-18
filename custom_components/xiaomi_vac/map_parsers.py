@@ -203,7 +203,7 @@ def unpack_kwargs(
             "owner_id": owner_id,
             "device_id": device_id,
             "model": model,
-            "device_mac": device_mac,
+            "device_mac": "device_mac": device_mac.replace(":", "").upper(),
         }
     if brand == "xiaomi":
         return {"model": model, "device_id": device_id}
