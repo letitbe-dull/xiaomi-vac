@@ -55,6 +55,18 @@ def _shape_pairs() -> list[tuple[str, int]]:
     return pairs
 
 
+def test_zone_clean_models_match_verified_profile_family() -> None:
+    src = _CARD.read_text(encoding="utf-8")
+    match = re.search(r"const ZONE_CLEAN_MODELS = new Set\(\[(.*?)\]\);", src, re.S)
+
+    assert match
+    assert set(re.findall(r'"([^"]+)"', match.group(1))) == {
+        "ijai.vacuum.v17",
+        "ijai.vacuum.v18",
+        "ijai.vacuum.v19",
+    }
+
+
 def test_shape_keys_are_short_form() -> None:
     """A key containing '.vacuum.' can never match modelShort() output."""
     long_form = sorted(key for key, _shape in _shape_pairs() if ".vacuum." in key)

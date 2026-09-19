@@ -253,6 +253,46 @@ class IjaiVacuumDevice:
         }
         return cap.set_room_clean, [values[piid] for piid in cap.set_room_clean.in_piids]
 
+    def _point_zone(self):
+        if self.profile.profile_id != "ijai.v17":
+            return None
+        cap = self.profile.map
+        return cap.point_zone if isinstance(cap, MapCapability) else None
+
+    def zone_clean_action(self):
+        """Return the verified set-zone-point Action."""
+        point_zone = self._point_zone()
+        return point_zone.set_zone_point if point_zone is not None else None
+
+    def zone_clean_start_action(self):
+        """Return the verified start-zone-clean Action."""
+        point_zone = self._point_zone()
+        return point_zone.start_zone_clean if point_zone is not None else None
+
+    def zone_clean_params(
+        self, x0: float, y0: float, x1: float, y1: float
+    ) -> list[str] | None:
+        """Build zone-clean parameters in device coordinates."""
+        if self.zone_clean_action() is None:
+            return None
+        mm = [round(value * 1000) for value in (x0, y0, x1, y1)]
+        return [f"[{mm[0]},{mm[1]},{mm[2]},{mm[3]},1]"]
+
+    def clean_zone(self, x0: float, y0: float, x1: float, y1: float) -> None:
+        """Start a verified zone clean."""
+        action = self.zone_clean_action()
+        start = self.zone_clean_start_action()
+        params = self.zone_clean_params(x0, y0, x1, y1)
+        if (
+            action is None
+            or action.in_piid is None
+            or start is None
+            or params is None
+        ):
+            raise ValueError(f"{self.model} has no verified zone-clean capability")
+        self._action(action, [{"piid": action.in_piid, "value": params[0]}])
+        self._action(start)
+
     # --- maps ------------------------------------------------------------
     def map_list(self) -> list[dict]:
         """Return [{'name', 'id', 'cur'}...] via get-map-list action.
