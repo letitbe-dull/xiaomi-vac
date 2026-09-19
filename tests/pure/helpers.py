@@ -53,6 +53,12 @@ class FakeMiotDevice:
             raise result
         return result
 
+    def send(self, method: str, payload):
+        self.calls.append(("send", method, payload))
+        return self.action_results.get(
+            (payload["siid"], payload["aiid"]), {"out": []}
+        )
+
     def info(self):
         return SimpleNamespace(mac_address=self.info_mac)
 
