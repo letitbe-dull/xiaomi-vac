@@ -9,6 +9,7 @@ from dataclasses import replace
 
 from ..types import (
     Action,
+    BaseStationCapability,
     CleanHistoryCapability,
     ConsumablesCapability,
     CoreCapability,
@@ -905,6 +906,35 @@ XIAOMI_OV21GL = ModelProfile(
         filter_life=Prop(14, 1), filter_left_time=Prop(14, 2),
         mop_life=Prop(9, 1), mop_left_time=Prop(9, 2),
         dust_bag_life=Prop(19, 1), dust_bag_left_time=Prop(19, 2),
+    ),
+)
+
+XIAOMI_CORE_OV31GL = replace(
+    XIAOMI_CORE_OV21GL,
+    sweep_type=None,
+    sweep_types={},
+)
+
+XIAOMI_OV31GL = replace(
+    XIAOMI_OV21GL,
+    profile_id="xiaomi.ov31gl",
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov31gl:1",),
+    core=XIAOMI_CORE_OV31GL,
+    max_properties=5,
+    consumables=None,
+    base_station=BaseStationCapability(
+        working_status=Prop(2, 18),
+        drying_time=Prop(2, 31),
+        drying_times={"2_hours": 1, "3_hours": 2, "4_hours": 3},
+        auto_mop_dry=Prop(2, 34),
+        drying_progress=Prop(2, 88),
+        dry_left_time=Prop(2, 90),
+        sewage_tank_status=Prop(2, 97),
+        water_tank_status=Prop(2, 98),
+        start_drying=Action(2, 20),
+        stop_drying=Action(2, 32),
+        start_mop_wash=Action(2, 19),
+        empty_dust_bin=Action(2, 18),
     ),
 )
 

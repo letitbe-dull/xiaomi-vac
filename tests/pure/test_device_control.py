@@ -61,6 +61,27 @@ def test_pause_uses_real_pause_action_when_present(monkeypatch):
     ]
 
 
+def test_base_station_controls_use_profile_actions(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+
+    device.set_auto_mop_dry(True)
+    device.set_drying_time("3_hours")
+    device.start_drying()
+    device.stop_drying()
+    device.start_mop_wash()
+    device.empty_dust_bin()
+
+    assert _last_calls() == [
+        ("set", 2, 34, True),
+        ("set", 2, 31, 2),
+        ("action", 2, 20, []),
+        ("action", 2, 32, []),
+        ("action", 2, 19, []),
+        ("action", 2, 18, []),
+    ]
+
+
 def test_set_fan_speed_uses_value_table(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
@@ -224,6 +245,51 @@ def test_status_sends_unbatched_read_on_v17(monkeypatch):
 
     assert device.profile.max_properties is None
     assert FakeMiotDevice.instances[-1].batch_max_properties == [None]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (0, "idle"),
+        (1, "drying"),
+        (2, "washing_mops"),
+        (3, "dust_collection"),
+        (99, "unknown"),
+    ],
+)
+def test_base_station_status_maps_working_mode(monkeypatch, mode, expected):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+    FakeMiotDevice.property_values = {
+        (2, 2): 14,
+        (2, 18): f'{{"mode": {mode}}}',
+    }
+
+    assert device.status().base_station_status == expected
+
+
+def test_base_station_status_reads_tanks_and_drying(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+    FakeMiotDevice.property_values = {
+        (2, 2): 14,
+        (2, 31): 2,
+        (2, 34): True,
+        (2, 88): 40,
+        (2, 90): 75,
+        (2, 97): 1,
+        (2, 98): 0,
+    }
+
+    status = device.status()
+
+    assert status.drying_time == 2
+    assert status.auto_mop_dry is True
+    assert status.drying_progress == 40
+    assert status.dry_left_time == 75
+    assert status.sewage_tank_status == 1
+    assert status.water_tank_status == 0
+    assert FakeMiotDevice.instances[-1].batch_max_properties == [5]
 
 
 def test_unsupported_property_and_action_raise_value_error(monkeypatch):
