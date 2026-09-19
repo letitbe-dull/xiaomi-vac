@@ -20,6 +20,7 @@ class Action:
     # return outputs. in_piid stays for the common single-input case.
     in_piids: tuple[int, ...] = ()
     out_piids: tuple[int, ...] = ()
+    named_inputs: bool = False
 
 
 @dataclass(frozen=True)
@@ -126,6 +127,23 @@ class SettingsCapability:
     carpet_avoid: Prop | None = None
     map_encrypt: Prop | None = None
     multi_prop_vacuum: Prop | None = None
+
+
+@dataclass(frozen=True)
+class BaseStationCapability:
+    """Base-station telemetry and controls."""
+    working_status: Prop | None = None
+    drying_time: Prop | None = None
+    drying_times: dict[str, int] = field(default_factory=dict)
+    auto_mop_dry: Prop | None = None
+    drying_progress: Prop | None = None
+    dry_left_time: Prop | None = None
+    sewage_tank_status: Prop | None = None
+    water_tank_status: Prop | None = None
+    start_drying: Action | None = None
+    stop_drying: Action | None = None
+    start_mop_wash: Action | None = None
+    empty_dust_bin: Action | None = None
 
 
 @dataclass(frozen=True)
@@ -382,6 +400,7 @@ class ModelProfile:
     room_clean: RoomCleanCapability | None = None
     schedule: ScheduleCapability | DreameScheduleCapability | None = None
     settings: SettingsCapability | DreameSettingsCapability | None = None
+    base_station: BaseStationCapability | None = None
     consumables: ConsumablesCapability | DreameConsumablesCapability | None = None
     clean_history: CleanHistoryCapability | DreameCleanHistoryCapability | None = None
     dnd: DndCapability | DreameDndCapability | None = None

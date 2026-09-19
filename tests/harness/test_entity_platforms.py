@@ -9,6 +9,10 @@ from homeassistant.components.vacuum import VacuumEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.xiaomi_vac.button import (
+    BaseActionButton,
+    async_setup_entry as button_setup,
+)
 from custom_components.xiaomi_vac.device import VacuumStatus
 from custom_components.xiaomi_vac.number import VolumeNumber, async_setup_entry as number_setup
 from custom_components.xiaomi_vac.const import (
@@ -21,13 +25,21 @@ from custom_components.xiaomi_vac.const import (
     CONF_USERNAME,
 )
 from custom_components.xiaomi_vac.select import (
+    DryingTimeSelect,
     XiaomiActiveMapSelect,
     XiaomiVacuumSelect,
     async_setup_entry as select_setup,
 )
-from custom_components.xiaomi_vac.spec.types import Action, MapCapability
+from custom_components.xiaomi_vac.spec.types import (
+    Action,
+    BaseStationCapability,
+    MapCapability,
+    Prop,
+)
 from custom_components.xiaomi_vac.switch import (
     AlarmSwitch,
+    AutoMopDrySwitch,
+    MopDryingSwitch,
     RepeatSwitch,
     async_setup_entry as switch_setup,
 )
@@ -81,6 +93,7 @@ def _make_coordinator(core_overrides: dict | None = None) -> MagicMock:
     device = MagicMock()
     device.model = "dreame.vacuum.p2008"
     device.core = core
+    device.profile.base_station = None
 
     coordinator = MagicMock()
     coordinator.device = device
@@ -185,6 +198,30 @@ async def test_select_setup_creates_nothing_when_all_absent(hass: HomeAssistant)
     assert added == []
 
 
+async def test_select_setup_creates_base_drying_time(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.async_request_refresh = AsyncMock()
+    coord.device.profile.base_station = BaseStationCapability(
+        drying_time=Prop(2, 31),
+        drying_times={"2_hours": 1, "3_hours": 2, "4_hours": 3},
+    )
+    coord.data.drying_time = 2
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+
+    added: list = []
+    await select_setup(hass, entry, lambda entities: added.extend(entities))
+
+    drying = next(entity for entity in added if isinstance(entity, DryingTimeSelect))
+    drying.hass = hass
+    assert drying.current_option == "3_hours"
+    await drying.async_select_option("4_hours")
+    coord.device.set_drying_time.assert_called_once_with("4_hours")
+    coord.async_request_refresh.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # Switch entity conditional creation
 # ---------------------------------------------------------------------------
@@ -210,6 +247,64 @@ async def test_switch_setup_no_entities_when_absent(hass: HomeAssistant) -> None
 
     added: list = []
     await switch_setup(hass, entry, lambda entities: added.extend(entities))
+    assert added == []
+
+
+async def test_switch_setup_creates_base_drying_switches(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.profile.base_station = BaseStationCapability(
+        working_status=Prop(2, 18),
+        auto_mop_dry=Prop(2, 34),
+        start_drying=Action(2, 20),
+        stop_drying=Action(2, 32),
+    )
+    coord.data.base_station_mode = 1
+    coord.data.auto_mop_dry = True
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+
+    added: list = []
+    await switch_setup(hass, entry, lambda entities: added.extend(entities))
+
+    auto = next(entity for entity in added if isinstance(entity, AutoMopDrySwitch))
+    drying = next(entity for entity in added if isinstance(entity, MopDryingSwitch))
+    assert auto.is_on is True
+    assert drying.is_on is True
+
+
+async def test_button_setup_creates_only_base_actions(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.profile.base_station = BaseStationCapability(
+        start_mop_wash=Action(2, 19),
+        empty_dust_bin=Action(2, 18),
+    )
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+
+    added: list = []
+    await button_setup(hass, entry, lambda entities: added.extend(entities))
+
+    assert all(isinstance(entity, BaseActionButton) for entity in added)
+    assert {entity.translation_key for entity in added} == {
+        "wash_mops",
+        "empty_dust_bin",
+    }
+
+
+async def test_button_setup_creates_nothing_without_base(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+
+    added: list = []
+    await button_setup(hass, entry, lambda entities: added.extend(entities))
+
     assert added == []
 
 

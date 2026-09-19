@@ -50,6 +50,14 @@ class VacuumStatus:
     detergent_life: int | None
     clean_area: int | None
     clean_time: int | None
+    base_station_mode: int | None = None
+    base_station_status: str | None = None
+    drying_time: int | None = None
+    drying_progress: int | None = None
+    dry_left_time: int | None = None
+    sewage_tank_status: int | None = None
+    water_tank_status: int | None = None
+    auto_mop_dry: bool | None = None
 
 
 class IjaiVacuumDevice:
@@ -114,12 +122,35 @@ class IjaiVacuumDevice:
     def _action(self, action, params=None) -> dict:
         if action is None:
             raise ValueError(f"{self.model} does not support this action")
-        return self._dev.call_action_by(action.siid, action.aiid, params or [])
+        call_params = params or []
+        if action.named_inputs:
+            input_piids = action.in_piids or (
+                (action.in_piid,) if action.in_piid is not None else ()
+            )
+            if len(input_piids) != len(call_params):
+                raise ValueError(
+                    f"Action {action.siid}/{action.aiid} expects "
+                    f"{len(input_piids)} named inputs, got {len(call_params)}"
+                )
+            return self._dev.send(
+                "action",
+                {
+                    "did": f"call-{action.siid}-{action.aiid}",
+                    "siid": action.siid,
+                    "aiid": action.aiid,
+                    "in": [
+                        {"piid": piid, "value": value}
+                        for piid, value in zip(input_piids, call_params)
+                    ],
+                },
+            )
+        return self._dev.call_action_by(action.siid, action.aiid, call_params)
 
     # --- telemetry -------------------------------------------------------
     def status(self) -> VacuumStatus:
         c = self.core
         cons = self.profile.consumables
+        base = self.profile.base_station
         life_props = consumable_life_props(cons)
         door_state = (
             getattr(cons, "door_state", None)
@@ -132,6 +163,13 @@ class IjaiVacuumDevice:
             c.status, c.battery, c.fault, c.fan_speed, c.water_level,
             c.mode, c.sweep_type, c.repeat, c.alarm, c.volume,
             *life_props.values(), door_state,
+            base.working_status if base is not None else None,
+            base.drying_progress if base is not None else None,
+            base.dry_left_time if base is not None else None,
+            base.drying_time if base is not None else None,
+            base.sewage_tank_status if base is not None else None,
+            base.water_tank_status if base is not None else None,
+            base.auto_mop_dry if base is not None else None,
         ) if p is not None]
         vals = self._batch_get(poll)
         _raw = vals.get(c.status)
@@ -163,6 +201,14 @@ class IjaiVacuumDevice:
             detergent_life=_as_int(vals.get(life_props.get("detergent_life"))),
             clean_area=None,
             clean_time=None,
+            base_station_mode=_base_station_mode(vals.get(base.working_status)) if base else None,
+            base_station_status=_base_station_status(vals.get(base.working_status)) if base else None,
+            drying_time=_as_int(vals.get(base.drying_time)) if base else None,
+            drying_progress=_as_int(vals.get(base.drying_progress)) if base else None,
+            dry_left_time=_as_int(vals.get(base.dry_left_time)) if base else None,
+            sewage_tank_status=_as_int(vals.get(base.sewage_tank_status)) if base else None,
+            water_tank_status=_as_int(vals.get(base.water_tank_status)) if base else None,
+            auto_mop_dry=_as_bool(vals.get(base.auto_mop_dry)) if base else None,
         )
 
     # --- control ---------------------------------------------------------
@@ -206,6 +252,32 @@ class IjaiVacuumDevice:
 
     def set_volume(self, value: int) -> None:
         self._set(self.core.volume, int(value))
+
+    def set_auto_mop_dry(self, on: bool) -> None:
+        base = self.profile.base_station
+        self._set(base.auto_mop_dry if base else None, on)
+
+    def set_drying_time(self, option: str) -> None:
+        base = self.profile.base_station
+        if base is None or base.drying_time is None:
+            raise ValueError(f"{self.model} does not support drying time")
+        self._set(base.drying_time, base.drying_times[option])
+
+    def start_drying(self) -> None:
+        base = self.profile.base_station
+        self._action(base.start_drying if base else None)
+
+    def stop_drying(self) -> None:
+        base = self.profile.base_station
+        self._action(base.stop_drying if base else None)
+
+    def start_mop_wash(self) -> None:
+        base = self.profile.base_station
+        self._action(base.start_mop_wash if base else None)
+
+    def empty_dust_bin(self) -> None:
+        base = self.profile.base_station
+        self._action(base.empty_dust_bin if base else None)
 
     def clean_segments(self, room_ids: list[int | str]) -> None:
         cap = self.profile.room_clean
@@ -365,3 +437,26 @@ def _as_int(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _as_bool(value) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _base_station_mode(value) -> int | None:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+    return _as_int(value.get("mode")) if isinstance(value, dict) else _as_int(value)
+
+
+def _base_station_status(value) -> str | None:
+    mode = _base_station_mode(value)
+    return {
+        0: "idle",
+        1: "drying",
+        2: "washing_mops",
+        3: "dust_collection",
+    }.get(mode, "unknown" if mode is not None else None)
