@@ -428,6 +428,111 @@ async def test_vacuum_clean_segment_does_not_cloud_retry_other_failures(
     coord.async_request_refresh.assert_not_awaited()
 
 
+async def test_vacuum_clean_zone_uses_local_without_cloud(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.zone_clean_action.return_value = SimpleNamespace(siid=9, aiid=8)
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {}
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud") as cloud_cls:
+        await vac.async_clean_zone(zone=[-1.5, 2.25, -0.5, 3.0])
+
+    cloud_cls.assert_not_called()
+    coord.device.clean_zone.assert_called_once_with(-1.5, 2.25, -0.5, 3.0)
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_vacuum_clean_zone_uses_cloud_first(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.zone_clean_action.return_value = SimpleNamespace(siid=9, aiid=8)
+    coord.device.zone_clean_start_action.return_value = SimpleNamespace(siid=9, aiid=3)
+    coord.device.zone_clean_params.return_value = ["[-1500,2250,-500,3000,1]"]
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {
+        CONF_USERNAME: "user@example.com",
+        CONF_USER_ID: "uid",
+        CONF_SSECURITY: "ssec",
+        CONF_SERVICE_TOKEN: "svc",
+        CONF_PASS_TOKEN: "pass",
+        CONF_SERVER: "sg",
+        CONF_DEVICE_ID: "did123",
+    }
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+    cloud = MagicMock()
+    cloud.cloud_action.side_effect = [{"code": 0}, {"code": 0}]
+
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
+        await vac.async_clean_zone(zone=[-1.5, 2.25, -0.5, 3.0])
+
+    coord.device.clean_zone.assert_not_called()
+    cloud.cloud_action.assert_has_calls(
+        [
+            call("sg", "did123", 9, 8, ["[-1500,2250,-500,3000,1]"]),
+            call("sg", "did123", 9, 3, []),
+        ]
+    )
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_vacuum_clean_zone_falls_back_to_local(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.zone_clean_action.return_value = SimpleNamespace(siid=9, aiid=8)
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {
+        CONF_USERNAME: "user@example.com",
+        CONF_USER_ID: "uid",
+        CONF_SSECURITY: "ssec",
+        CONF_SERVICE_TOKEN: "svc",
+        CONF_PASS_TOKEN: "pass",
+        CONF_SERVER: "sg",
+        CONF_DEVICE_ID: "did123",
+    }
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+    cloud = MagicMock()
+    cloud.restore_session.side_effect = RuntimeError("cloud session invalid")
+
+    with patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud", return_value=cloud):
+        await vac.async_clean_zone(zone=[-1.5, 2.25, -0.5, 3.0])
+
+    coord.device.clean_zone.assert_called_once_with(-1.5, 2.25, -0.5, 3.0)
+    coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_vacuum_clean_zone_rejects_unverified_model(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator()
+    coord.device.zone_clean_action.return_value = None
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entry.data = {}
+    vac = XiaomiVacuum(coord, entry)
+    vac.hass = hass
+
+    with (
+        patch("custom_components.xiaomi_vac.vacuum.XiaomiCloud") as cloud_cls,
+        pytest.raises(HomeAssistantError, match="no verified zone-clean capability"),
+    ):
+        await vac.async_clean_zone(zone=[0.0, 0.0, 1.0, 1.0])
+
+    cloud_cls.assert_not_called()
+    coord.device.clean_zone.assert_not_called()
+    coord.async_request_refresh.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Command dispatch: select entity
 # ---------------------------------------------------------------------------

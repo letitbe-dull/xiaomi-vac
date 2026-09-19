@@ -108,6 +108,30 @@ def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
     assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
+@pytest.mark.parametrize(
+    "model", ["ijai.vacuum.v17", "ijai.vacuum.v18", "ijai.vacuum.v19"]
+)
+def test_clean_zone_sets_piid_keyed_zone_then_starts(monkeypatch, model):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", model)
+
+    device.clean_zone(-1.5, 2.25, -0.5, 3.0)
+
+    assert _last_calls() == [
+        ("action", 9, 8, [{"piid": 2, "value": "[-1500,2250,-500,3000,1]"}]),
+        ("action", 9, 3, []),
+    ]
+
+
+def test_clean_zone_rejects_unverified_point_zone_profile(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+
+    assert device.zone_clean_action() is None
+    with pytest.raises(ValueError):
+        device.clean_zone(0.0, 0.0, 1.0, 1.0)
+
+
 def test_request_map_upload_prefers_upload_by_mapid_ii(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")

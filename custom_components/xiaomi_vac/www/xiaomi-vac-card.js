@@ -91,8 +91,13 @@ const parseRGBA = (s) => {
 const MDI = {
   play: "mdi:play", pause: "mdi:pause", dock: "mdi:home-map-marker",
   locate: "mdi:map-marker-radius", fan: "mdi:fan", water: "mdi:water", map: "mdi:layers",
-  tools: "mdi:tools",
+  tools: "mdi:tools", zone: "mdi:vector-rectangle",
 };
+const ZONE_CLEAN_MODELS = new Set([
+  "ijai.vacuum.v17",
+  "ijai.vacuum.v18",
+  "ijai.vacuum.v19",
+]);
 // Union across all models — `key` is the translation_key sensor.py assigns,
 // kept in sync with its XiaomiSensorDescription catalogue by hand.
 // _consumableRows() drops the ones a given device doesn't expose.
@@ -127,6 +132,7 @@ const TOGGLE_DEFAULTS = {
   show_active_map: true,
   show_room_labels: true,
   allow_room_cleaning: true,
+  allow_zone_cleaning: true,
   show_consumables: true,
 };
 
@@ -144,6 +150,8 @@ class XiaomiVacCard extends HTMLElement {
     this._pendSel = {};           // optimistic select values, keyed by entity_id
     this._pendSelT = {};
     this._mapsData = [];          // list of map vectors from the endpoint
+    this._zoneMode = false;
+    this._zoneRect = null;
     this._pages = [];
     this._pos = 1; this._real = 0;
     this._fetchedFor = null;
@@ -338,6 +346,24 @@ class XiaomiVacCard extends HTMLElement {
           font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:5px 10px;
           border-radius:9px;box-shadow:0 4px 12px color-mix(in srgb,var(--xv-accent) 40%,transparent);
           pointer-events:none}
+        .zone-btn{position:absolute;top:64px;left:20px;z-index:5;width:36px;height:36px;border:0;border-radius:11px;
+          background:color-mix(in srgb,var(--xv-card) 88%,transparent);
+          backdrop-filter:blur(12px) saturate(180%);-webkit-backdrop-filter:blur(12px) saturate(180%);
+          color:var(--xv-ink);display:grid;place-items:center;cursor:pointer;
+          box-shadow:0 2px 10px rgba(0,0,0,.14);transition:background .2s,color .2s}
+        .zone-btn ha-icon{--mdc-icon-size:20px}
+        .zone-btn.on{background:var(--xv-accent);color:#fff}
+        .zone-btn:focus-visible{outline:2px solid var(--xv-accent);outline-offset:2px}
+        .pg-map.zoning svg{cursor:crosshair;touch-action:none}
+        .pg-map.zoning .rm{pointer-events:none}
+        .zone-rect{fill:color-mix(in srgb,var(--xv-accent) 20%,transparent);stroke:var(--xv-accent);
+          stroke-width:0.08;stroke-dasharray:0.22 0.14}
+        .zonetag{position:absolute;left:50%;bottom:150px;z-index:6;transform:translateX(-50%);
+          background:var(--xv-accent);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:12px;
+          box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transition:opacity .18s,transform .18s;
+          pointer-events:none;white-space:nowrap;cursor:pointer;border:0}
+        .zonetag.show{opacity:1;transform:translateX(-50%) translateY(-5px);pointer-events:auto}
+        .zonetag.show:not(.ready){opacity:.92;background:var(--xv-ink);color:var(--xv-card);cursor:default}
         .rm{cursor:pointer;transition:stroke-width .12s}
         /* a mouse click triggers :focus (not :focus-visible), so the UA default
            outline paints a near-black ring hugging the path — kill it on tap */
@@ -408,9 +434,11 @@ class XiaomiVacCard extends HTMLElement {
         <div class="status"><span class="dot"></span><span class="stxt" aria-live="polite">—</span></div>
         <div class="batt"><span class="btxt">—</span><span class="bicon"></span></div>
       </div>
+      <button class="zone-btn" title="Draw a cleaning zone" aria-label="Draw a cleaning zone" aria-pressed="false" style="display:none"><ha-icon icon="${MDI.zone}"></ha-icon></button>
       <div class="dots"></div>
       <div class="toast"></div>
       <button class="roomtag"></button>
+      <button class="zonetag"></button>
       <div class="consum-panel"></div>
       <div class="tray">
         <button class="b act-start" title="Start / pause" aria-label="Start or pause"><ha-icon icon="${MDI.play}"></ha-icon></button>
@@ -439,6 +467,8 @@ class XiaomiVacCard extends HTMLElement {
     q(".cyc-water").onclick = () =>
       this._cycleSelect(this._config.water || `select.${this._base()}_water_level`);
     q(".cyc-map").onclick = () => this._cycleSelect(this._activeMapEid());
+    q(".zone-btn").onclick = () => this._toggleZone();
+    q(".zonetag").onclick = () => this._confirmZone();
     q(".roomtag").onclick = () => this._cleanSelected();
     q(".act-consumables").onclick = () => {
       q(".consum-panel").classList.toggle("show");
@@ -513,7 +543,7 @@ class XiaomiVacCard extends HTMLElement {
   _wirePage() {
     this._root.querySelectorAll(".rm").forEach((r) => {
       const toggle = () => {
-        if (this._blockClick || !this._enabled("allow_room_cleaning")) return;
+        if (this._blockClick || this._zoneMode || !this._enabled("allow_room_cleaning")) return;
         const id = Number(r.dataset.id);
         this._sel.has(id) ? this._sel.delete(id) : this._sel.add(id);
         this._syncRooms();
@@ -523,6 +553,12 @@ class XiaomiVacCard extends HTMLElement {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
       };
     });
+    this._root.querySelectorAll(".pg-map").forEach((pg) => {
+      const svg = pg.querySelector("svg");
+      if (svg) this._wireZoneDraw(pg, svg);
+      pg.classList.toggle("zoning", !!this._zoneMode);
+    });
+    this._syncZoneBtn();
   }
   _setX(anim) {
     const track = this._root.querySelector(".track");
@@ -598,6 +634,7 @@ class XiaomiVacCard extends HTMLElement {
       else track.classList.remove("anim");
       this._real = ((this._pos - 1) % n + n) % n;
       this._sel.clear(); this._syncRooms(); this._renderDots();
+      this._syncZoneBtn();
       // a map refresh that arrived mid-gesture was deferred — apply it now
       if (this._pendingRebuild && !down) { this._pendingRebuild = false; this._buildPages(true); }
     });
@@ -773,6 +810,125 @@ class XiaomiVacCard extends HTMLElement {
     this._sel.clear(); this._syncRooms();
   }
 
+  _syncZoneBtn() {
+    const btn = this._root && this._root.querySelector(".zone-btn");
+    if (!btn) return;
+    const onMap = this._real >= this._mapOffset() && this._real < this._pages.length;
+    const vacuum = this._st(this._config.vacuum);
+    const supported = ZONE_CLEAN_MODELS.has(vacuum && vacuum.attributes.model);
+    const show = supported && this._enabled("allow_zone_cleaning") &&
+      this._enabled("show_map") && this._maps().length > 0 && onMap;
+    btn.style.display = show ? "" : "none";
+    if (!show && this._zoneMode) this._toggleZone();
+  }
+  _toggleZone() {
+    this._zoneMode = !this._zoneMode;
+    const btn = this._root.querySelector(".zone-btn");
+    if (btn) {
+      btn.classList.toggle("on", this._zoneMode);
+      btn.setAttribute("aria-pressed", this._zoneMode ? "true" : "false");
+    }
+    if (!this._zoneMode) { this._zoneRect = null; this._clearZoneRects(); }
+    this._root.querySelectorAll(".pg-map").forEach((pg) => pg.classList.toggle("zoning", this._zoneMode));
+    this._updateZoneTag();
+  }
+  _clearZoneRects() {
+    this._root.querySelectorAll(".zone-rect").forEach((el) => el.remove());
+  }
+  _svgToMetres(svg, e) {
+    if (!svg.getScreenCTM) return null;
+    const m = svg.getScreenCTM();
+    if (!m) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(m.inverse());
+    return { x: p.x, y: -p.y };
+  }
+  _rectFrom(a, b) {
+    return {
+      x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y),
+      x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y),
+    };
+  }
+  _paintZoneRect(svg, r) {
+    let el = svg.querySelector(".zone-rect");
+    if (!el) {
+      el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      el.setAttribute("class", "zone-rect");
+      svg.appendChild(el);
+    }
+    el.setAttribute("x", r.x0.toFixed(3));
+    el.setAttribute("y", (-r.y1).toFixed(3));
+    el.setAttribute("width", (r.x1 - r.x0).toFixed(3));
+    el.setAttribute("height", (r.y1 - r.y0).toFixed(3));
+  }
+  _wireZoneDraw(pg, svg) {
+    let drawing = false, start = null;
+    const onDown = (e) => {
+      if (!this._zoneMode || !this._enabled("allow_zone_cleaning")) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.stopPropagation();
+      start = this._svgToMetres(svg, e);
+      if (!start) return;
+      drawing = true;
+      this._zoneRect = null;
+      this._clearZoneRects();
+      this._updateZoneTag();
+      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+    };
+    const onMove = (e) => {
+      if (!drawing || !start) return;
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+      const cur = this._svgToMetres(svg, e);
+      if (cur) this._paintZoneRect(svg, this._rectFrom(start, cur));
+    };
+    const onUp = (e) => {
+      if (!drawing) return;
+      drawing = false;
+      e.stopPropagation();
+      const cur = this._svgToMetres(svg, e);
+      const r = cur && start ? this._rectFrom(start, cur) : null;
+      start = null;
+      if (r && r.x1 > r.x0 && r.y1 > r.y0) {
+        this._zoneRect = r;
+        this._paintZoneRect(svg, r);
+      } else {
+        this._clearZoneRects();
+      }
+      this._updateZoneTag();
+    };
+    svg.addEventListener("pointerdown", onDown);
+    svg.addEventListener("pointermove", onMove);
+    svg.addEventListener("pointerup", onUp);
+    svg.addEventListener("pointercancel", onUp);
+  }
+  _updateZoneTag() {
+    const tag = this._root && this._root.querySelector(".zonetag");
+    if (!tag) return;
+    if (this._zoneRect) {
+      tag.textContent = "Clean this area";
+      tag.classList.add("show", "ready");
+    } else if (this._zoneMode) {
+      tag.textContent = "Drag on the map to draw a zone";
+      tag.classList.add("show");
+      tag.classList.remove("ready");
+    } else {
+      tag.classList.remove("show", "ready");
+    }
+  }
+  _confirmZone() {
+    const r = this._zoneRect;
+    if (!r || !this._enabled("allow_zone_cleaning")) return;
+    this._svc("xiaomi_vac", "clean_zone", {
+      entity_id: this._config.vacuum,
+      zone: [r.x0, r.y0, r.x1, r.y1],
+    });
+    this._toast("Cleaning the selected area");
+    this._zoneRect = null;
+    if (this._zoneMode) this._toggleZone();
+  }
+
   /* ---------------- live update ---------------- */
   async _updateAnim(state, model) {
     const wrap = this._root && this._root.querySelector(".lottie-wrap");
@@ -863,6 +1019,7 @@ class XiaomiVacCard extends HTMLElement {
       q(".act-consumables").classList.remove("on");
     }
 
+    this._syncZoneBtn();
     this._updateAnim(state, vac && vac.attributes.model);
   }
 }
@@ -891,6 +1048,7 @@ class XiaomiVacCardEditor extends HTMLElement {
           show_active_map: "Show active map control",
           show_room_labels: "Show room labels",
           allow_room_cleaning: "Allow room cleaning",
+          allow_zone_cleaning: "Allow zone (area) cleaning",
           show_consumables: "Show consumable status button",
         }[s.name] || s.name);
       this._form.addEventListener("value-changed", (e) =>
@@ -913,6 +1071,7 @@ class XiaomiVacCardEditor extends HTMLElement {
       { name: "show_active_map", selector: { boolean: {} } },
       { name: "show_room_labels", selector: { boolean: {} } },
       { name: "allow_room_cleaning", selector: { boolean: {} } },
+      { name: "allow_zone_cleaning", selector: { boolean: {} } },
       { name: "show_consumables", selector: { boolean: {} } },
     ];
   }
