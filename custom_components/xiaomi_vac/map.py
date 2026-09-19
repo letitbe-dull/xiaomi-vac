@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import zlib
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageChops
@@ -34,6 +35,8 @@ _DREAME_ENCKEY_SIID = 6
 _DREAME_ENCKEY_PIID = 3
 
 _LOGGER = logging.getLogger(__name__)
+
+_RAW_ZLIB_MODELS = frozenset({"ijai.vacuum.v2"})
 
 
 def _patch_parse_rooms() -> None:
@@ -173,8 +176,14 @@ class MapFetcher:
         xiaomi_json_decrypt.py) and decrypts locally instead. Returns a JSON
         *string*, not bytes, same contract as the upstream decrypt() this
         replaces (parser.parse() only accepts str or dict).
+        Raw zlib Protobuf is accepted only for explicitly verified models.
         All other paths go through parser.unpack_map normally.
         """
+        if self._model in _RAW_ZLIB_MODELS and raw.startswith(b"\x78\x9c"):
+            unpacked = zlib.decompress(raw)
+            if not unpacked.startswith(b"\x08"):
+                raise ValueError("raw zlib map is not an ijai Protobuf frame")
+            return unpacked
         if self._brand == "dreame" and self._enckey is not None:
             from vacuum_map_parser_dreame.map_data_parser import DreameMapDataParser
             if DreameMapDataParser.IVs.get(self._model) is not None:
