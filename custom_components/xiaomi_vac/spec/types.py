@@ -129,6 +129,23 @@ class SettingsCapability:
 
 
 @dataclass(frozen=True)
+class BaseStationCapability:
+    """Base-station telemetry and controls."""
+    working_status: Prop | None = None
+    drying_time: Prop | None = None
+    drying_times: dict[str, int] = field(default_factory=dict)
+    auto_mop_dry: Prop | None = None
+    drying_progress: Prop | None = None
+    dry_left_time: Prop | None = None
+    sewage_tank_status: Prop | None = None
+    water_tank_status: Prop | None = None
+    start_drying: Action | None = None
+    stop_drying: Action | None = None
+    start_mop_wash: Action | None = None
+    empty_dust_bin: Action | None = None
+
+
+@dataclass(frozen=True)
 class ConsumablesCapability:
     """Lifetime hours and accessory presence (siid sweep)."""
     side_brush_hours: Prop | None = None
@@ -382,6 +399,7 @@ class ModelProfile:
     room_clean: RoomCleanCapability | None = None
     schedule: ScheduleCapability | DreameScheduleCapability | None = None
     settings: SettingsCapability | DreameSettingsCapability | None = None
+    base_station: BaseStationCapability | None = None
     consumables: ConsumablesCapability | DreameConsumablesCapability | None = None
     clean_history: CleanHistoryCapability | DreameCleanHistoryCapability | None = None
     dnd: DndCapability | DreameDndCapability | None = None

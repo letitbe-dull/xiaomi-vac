@@ -35,6 +35,15 @@ def _ijai_v17_profile(monkeypatch):
     return profiles_mod.IJAI_V17
 
 
+def _ov31gl_profile(monkeypatch):
+    """Return the real XIAOMI_OV31GL ModelProfile (no HA needed)."""
+    import importlib
+
+    _ijai_v17_profile(monkeypatch)
+    profiles_mod = importlib.import_module("xiaomi_vac.spec.profiles.xiaomi")
+    return profiles_mod.XIAOMI_OV31GL
+
+
 def test_build_sensors_ijai_v17_has_status_and_battery(monkeypatch):
     sensor = load_sensor_module(monkeypatch)
     profile = _ijai_v17_profile(monkeypatch)
@@ -93,3 +102,19 @@ def test_build_sensors_profile_without_battery_omits_battery(monkeypatch):
 
     assert "battery" not in keys
     assert "status" in keys
+
+
+def test_build_sensors_ov31gl_has_base_station_telemetry(monkeypatch):
+    sensor = load_sensor_module(monkeypatch)
+    profile = _ov31gl_profile(monkeypatch)
+
+    sensors = sensor.build_sensors(profile)
+    keys = {description.key for description in sensors}
+
+    assert {
+        "base_station_status",
+        "dry_left_time",
+        "drying_progress",
+        "sewage_tank_status",
+        "water_tank_status",
+    } <= keys
