@@ -119,28 +119,86 @@ class XiaomiCloud:
         return "ok" if self.service_token else "fail"
 
     # --- device discovery ----------------------------------------------
-    def list_vacuums(self) -> list[dict]:
-        """List all vacuum devices across servers with localip + token.
+    def list_vacuums(self, server: str | None = None) -> list[dict]:
+        """List owned and shared vacuum devices across Xiaomi servers.
 
-        Returns every device whose model string contains ``.vacuum.``; brand
-        filtering (supported vs. unsupported) is left to the caller.
+        ``home/device_list`` only returns devices owned by the account. Shared
+        homes are exposed by ``v2/homeroom/gethome_merged`` and their devices
+        by ``v2/home/home_device_list``; merge both sources before the caller
+        applies its supported-model filter.
         """
         found: dict[str, dict] = {}  # keyed by did to dedupe across servers
-        for srv in SERVERS:
+
+        def add_vacuum(device: dict, server: str, map_owner_id: str | int | None) -> None:
+            if not isinstance(device, dict):
+                return
+            model = device.get("model", "")
+            did = device.get("did")
+            if not did or not isinstance(model, str) or ".vacuum." not in model:
+                return
+            entry = found.setdefault(did, {"did": did, "server": server})
+            for key in ("name", "model", "mac", "localip", "token"):
+                value = device.get(key)
+                if value not in (None, ""):
+                    entry[key] = value
+            if map_owner_id not in (None, ""):
+                entry["map_owner_id"] = str(map_owner_id)
+
+        for srv in [server] if server else SERVERS:
             resp = self._call(self._api_url(srv) + "/home/device_list",
                               {"data": '{"getVirtualModel":false,"getHuamiDevices":0}'})
-            if not resp:
-                continue
-            for d in resp.get("result", {}).get("list", []):
-                model = d.get("model", "")
-                did = d.get("did")
-                if did in found or ".vacuum." not in model:
+            if resp:
+                device_result = resp.get("result") or {}
+                for device in device_result.get("list") or []:
+                    add_vacuum(device, srv, self.user_id)
+
+            homes_resp = self._call(
+                self._api_url(srv) + "/v2/homeroom/gethome_merged",
+                {"data": json.dumps({
+                    "fg": True,
+                    "fetch_share": True,
+                    "fetch_share_dev": True,
+                    "fetch_cariot": True,
+                    "limit": 300,
+                    "app_ver": 7,
+                    "plat_form": 0,
+                })},
+            )
+            home_result = (homes_resp or {}).get("result") or {}
+            homes = home_result.get("homelist") or []
+            for home in homes:
+                if not isinstance(home, dict):
                     continue
-                found[did] = {
-                    "name": d.get("name"), "did": did, "model": model,
-                    "mac": d.get("mac", ""), "localip": d.get("localip", ""),
-                    "token": d.get("token", ""), "server": srv,
-                }
+                home_id = int(home.get("id") or 0)
+                home_owner = int(home.get("uid") or 0)
+                if not home_id or not home_owner:
+                    continue
+                start_did = ""
+                has_more = True
+                while has_more:
+                    shared_resp = self._call(
+                        self._api_url(srv) + "/v2/home/home_device_list",
+                        {"data": json.dumps({
+                            "home_owner": home_owner,
+                            "home_id": home_id,
+                            "limit": 300,
+                            "start_did": start_did,
+                            "get_split_device": False,
+                            "support_smart_home": True,
+                            "get_cariot_device": True,
+                            "get_third_device": True,
+                        })},
+                    )
+                    result = (shared_resp or {}).get("result") or {}
+                    for device in result.get("device_info") or []:
+                        add_vacuum(device, srv, home_owner)
+                    next_did = result.get("max_did") or ""
+                    has_more = bool(
+                        result.get("has_more")
+                        and next_did
+                        and next_did != start_did
+                    )
+                    start_did = next_did
         return list(found.values())
 
     def restore_session(self, user_id, ssecurity, service_token, pass_token=None) -> None:
@@ -429,7 +487,8 @@ class XiaomiCloud:
         return self._call(url, {"data": json.dumps(body)})
 
     def map_url(self, server: str, did: str, map_name: str = "0",
-                endpoint: str = "get_interim_file_url_pro") -> str | None:
+                endpoint: str = "get_interim_file_url_pro",
+                map_owner_id: str | int | None = None) -> str | None:
         """Mint a signed download URL for one map object.
 
         Tries the alternate endpoint (get_interim_file_url vs. _pro) on ANY
@@ -440,7 +499,8 @@ class XiaomiCloud:
         endpoint" vs. an actual dead object/session. Always trying both is
         more robust than chasing individual error codes.
         """
-        obj = f"{self.user_id}/{did}/{map_name}"
+        owner_id = self.user_id if map_owner_id in (None, "") else map_owner_id
+        obj = f"{owner_id}/{did}/{map_name}"
         resp = self._try_map_url(server, obj, endpoint)
         if resp is not None:
             return resp

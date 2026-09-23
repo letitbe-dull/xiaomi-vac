@@ -35,6 +35,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_MAC,
+    CONF_MAP_OWNER_ID,
     CONF_MODEL,
     CONF_OAUTH_DEVICE_ID,
     CONF_PASS_TOKEN,
@@ -219,6 +220,9 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             data_updates={
                 CONF_USERNAME: self._data[CONF_USERNAME],
                 CONF_USER_ID: str(cloud.user_id),
+                CONF_MAP_OWNER_ID: self._get_reauth_entry().data.get(
+                    CONF_MAP_OWNER_ID, str(cloud.user_id)
+                ),
                 CONF_SSECURITY: cloud.ssecurity,
                 CONF_SERVICE_TOKEN: cloud.service_token,
                 CONF_PASS_TOKEN: cloud.pass_token or "",
@@ -331,6 +335,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_MAC: d["mac"],
                 CONF_SERVER: d["server"],
                 CONF_USER_ID: str(cloud.user_id),
+                CONF_MAP_OWNER_ID: str(d.get("map_owner_id") or cloud.user_id),
                 CONF_DEVICE_ID: str(d["did"]),
                 CONF_SSECURITY: cloud.ssecurity,
                 CONF_SERVICE_TOKEN: cloud.service_token,

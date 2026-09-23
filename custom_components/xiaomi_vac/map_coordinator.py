@@ -17,6 +17,7 @@ from .cloud.mqtt import MqttMessage
 from .const import (
     CONF_DEVICE_ID,
     CONF_MAC,
+    CONF_MAP_OWNER_ID,
     CONF_MODEL,
     CONF_PASS_TOKEN,
     CONF_SERVER,
@@ -302,6 +303,17 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                               d.get(CONF_PASS_TOKEN))
         self._cloud = cloud
 
+        map_owner_id = d.get(CONF_MAP_OWNER_ID)
+        if not map_owner_id:
+            devices = cloud.list_vacuums(server=d[CONF_SERVER])
+            selected = next(
+                (device for device in devices
+                 if str(device.get("did")) == str(d[CONF_DEVICE_ID])),
+                None,
+            )
+            map_owner_id = (selected or {}).get("map_owner_id") or d[CONF_USER_ID]
+            self._pending_entry_updates[CONF_MAP_OWNER_ID] = str(map_owner_id)
+
         brand = parser_key(self._device.profile)
         required = required_map_key_inputs(brand)
 
@@ -341,6 +353,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             cloud,
             server=d[CONF_SERVER],
             user_id=d[CONF_USER_ID],
+            map_owner_id=map_owner_id,
             device_id=d[CONF_DEVICE_ID],
             model=d[CONF_MODEL],
             mac=mac,
