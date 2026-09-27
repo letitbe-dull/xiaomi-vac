@@ -52,6 +52,7 @@ class XiaomiCloud:
         # resumable-login scratch state
         self.captcha_image: bytes | None = None
         self.login_error: str = ""  # Xiaomi's desc from the last failed login
+        self.login_code: int | None = None  # Xiaomi's code from the last failed login
         self._fields: dict = {}
         self._2fa_ctx: str | None = None
         self._lp_url: str | None = None
@@ -231,7 +232,11 @@ class XiaomiCloud:
             self._start_email_2fa(j["notificationUrl"])
             return "2fa"
         self.login_error = str(j.get("desc") or "")
-        _LOGGER.error("Xiaomi account sign-in rejected: %s", self.login_error or j)
+        self.login_code = j.get("code")
+        _LOGGER.error(
+            "Xiaomi account sign-in rejected: %s (code %s)",
+            self.login_error or j, self.login_code,
+        )
         return "fail"
 
     def login(

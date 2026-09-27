@@ -273,16 +273,25 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             if self.source == SOURCE_REAUTH:
                 return self._finish_reauth()
             return await self.async_step_devices()
-        # 登录验证失败 = Xiaomi blocked the sign-in pending account verification,
-        # not bad credentials. Point the user at Xiaomi's own sign-in first.
+        # 70016 (desc 登录验证失败) is Xiaomi's wrong-credentials reply: let them retype.
+        if getattr(self._cloud, "login_code", None) == 70016:
+            return self._show_credentials_form({"base": "invalid_auth"})
         reason_text = getattr(self._cloud, "login_error", "")
         if not isinstance(reason_text, str):
             reason_text = ""
-        if "登录验证失败" in reason_text:
-            return self.async_abort(reason="login_verification_required")
         return self.async_abort(
             reason="login_failed",
             description_placeholders={"reason": reason_text or "unknown"},
+        )
+
+    def _show_credentials_form(self, errors: dict[str, str]) -> ConfigFlowResult:
+        step_id = "reauth_confirm" if self.source == SOURCE_REAUTH else "credentials"
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=self.add_suggested_values_to_schema(
+                CRED_SCHEMA, {CONF_USERNAME: self._data.get(CONF_USERNAME, "")}
+            ),
+            errors=errors,
         )
 
     # --- device discovery + pick ----------------------------------------

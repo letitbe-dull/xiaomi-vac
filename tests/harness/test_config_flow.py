@@ -427,6 +427,57 @@ async def test_cloud_login_failed_aborts(hass: HomeAssistant) -> None:
     assert result["reason"] == "login_failed"
 
 
+def _wrong_password(self):
+    self.login_error = "登录验证失败"
+    self.login_code = 70016
+    return "fail"
+
+
+async def test_cloud_wrong_password_reshows_form(hass: HomeAssistant) -> None:
+    """Xiaomi's 70016 reply re-shows the credentials form with invalid_auth."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "credentials"}
+    )
+    with patch(
+        "custom_components.xiaomi_vac.config_flow.XiaomiCloud.begin_login",
+        autospec=True,
+        side_effect=_wrong_password,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_USERNAME: "user@example.com", CONF_PASSWORD: "wrong"},
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "credentials"
+    assert result["errors"] == {"base": "invalid_auth"}
+
+
+async def test_reauth_wrong_password_reshows_form(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id="AA:BB:CC:DD:EE:FF",
+        data={CONF_USERNAME: "user@example.com", CONF_MODEL: "dreame.vacuum.p2008"},
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+    with patch(
+        "custom_components.xiaomi_vac.config_flow.XiaomiCloud.begin_login",
+        autospec=True,
+        side_effect=_wrong_password,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_USERNAME: "user@example.com", CONF_PASSWORD: "wrong"},
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": "invalid_auth"}
+
+
 async def test_cloud_captcha_step_shown_when_required(hass: HomeAssistant) -> None:
     """begin_login returning 'captcha' must route to the captcha step."""
     result = await hass.config_entries.flow.async_init(
