@@ -8,7 +8,7 @@ import hashlib
 import json
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 import uuid
 
 import requests
@@ -76,6 +76,17 @@ def build_authorize_url(
             }
         )
     )
+
+
+def extract_oauth_code(text: str) -> str:
+    """Return the auth code from a pasted code or full redirect URL."""
+    text = text.strip()
+    if "code=" in text:
+        query = parse_qs(urlparse(text).query or text.split("?", 1)[-1])
+        codes = query.get("code")
+        if codes:
+            return codes[0].strip()
+    return text
 
 
 def oauth_host(region: str) -> str:

@@ -5,10 +5,16 @@ import hashlib
 import json
 from urllib.parse import parse_qs, urlparse
 
+from aiohttp.test_utils import make_mocked_request
+from homeassistant.helpers.http import current_request
+from yarl import URL
+
+from custom_components.xiaomi_vac.oauth_flow import oauth_callback_base
 from custom_components.xiaomi_vac.cloud.oauth import (
     OAUTH_APP_ID,
     build_authorize_url,
     exchange_code,
+    extract_oauth_code,
     refreshed_oauth_entry_updates,
     resolve_region_from_code,
 )
@@ -68,6 +74,36 @@ def test_resolve_region_from_code_prefix() -> None:
     assert resolve_region_from_code("ALSG_example", "tw") == "sg"
     assert resolve_region_from_code("unknown", "de") == "de"
     assert resolve_region_from_code("unknown", "tw") is None
+
+
+def test_extract_oauth_code_accepts_code_or_redirect_url() -> None:
+    assert extract_oauth_code("  ALSG_abc ") == "ALSG_abc"
+    assert (
+        extract_oauth_code(
+            "http://homeassistant.local:8123/api/webhook/x?code=ALDE_abc&state=s"
+        )
+        == "ALDE_abc"
+    )
+    assert extract_oauth_code("code=ALUS_abc&state=s") == "ALUS_abc"
+
+
+def test_oauth_callback_base_matches_browser_origin() -> None:
+    """Only a browser already on homeassistant.local:8123 gets the webhook."""
+    cases = {
+        "http://homeassistant.local:8123/config": "http://homeassistant.local:8123",
+        "https://homeassistant.local:8123/config": "https://homeassistant.local:8123",
+        "https://myha.duckdns.org/config": None,
+        "http://192.168.1.10:8123/config": None,
+        "http://homeassistant.local/config": None,
+    }
+    for url, expected in cases.items():
+        request = make_mocked_request("GET", url, headers={"Host": URL(url).authority})
+        token = current_request.set(request)
+        try:
+            assert oauth_callback_base() == expected, url
+        finally:
+            current_request.reset(token)
+    assert oauth_callback_base() is None
 
 
 def test_exchange_code_parses_tokens_and_early_expiry() -> None:

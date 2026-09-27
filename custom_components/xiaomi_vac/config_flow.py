@@ -27,6 +27,7 @@ from .cloud.oauth import (
     XiaomiOAuthError,
     build_authorize_url,
     exchange_code,
+    extract_oauth_code,
     generate_oauth_device_id,
     oauth_entry_updates,
     resolve_region_from_code,
@@ -49,7 +50,7 @@ from .const import (
     DOMAIN,
 )
 from .device import IjaiVacuumDevice
-from .oauth_flow import OAuthCodeLink
+from .oauth_flow import OAuthCodeLink, oauth_callback_base
 from .spec.registry import is_supported
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,6 +136,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
         self._title = ""
         self._oauth_link: OAuthCodeLink | None = None
+        self._oauth_base: str | None = None
         self._oauth_task: asyncio.Task[dict[str, Any]] | None = None
         self._oauth_error: str | None = None
 
@@ -356,7 +358,11 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         """Offer optional MIoT OAuth for future MQTT live-map support."""
         if user_input is not None:
             if user_input["enable_miot_oauth"]:
-                return await self.async_step_miot_oauth_auth()
+                # Xiaomi only redirects to homeassistant.local:8123; paste elsewhere.
+                self._oauth_base = oauth_callback_base()
+                if self._oauth_base:
+                    return await self.async_step_miot_oauth_auth()
+                return await self.async_step_miot_oauth_code()
             return self._create_entry()
         return self.async_show_form(
             step_id="miot_oauth", data_schema=OAUTH_CHOICE_SCHEMA
@@ -370,7 +376,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data.setdefault(CONF_OAUTH_DEVICE_ID, generate_oauth_device_id())
         )
         if self._oauth_task is None:
-            self._oauth_link = OAuthCodeLink(self.hass, device_id)
+            self._oauth_link = OAuthCodeLink(self.hass, device_id, self._oauth_base)
             self._oauth_link.register()
             self._oauth_task = self.hass.async_create_task(
                 _async_exchange_linked_oauth(
@@ -423,7 +429,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data.setdefault(CONF_OAUTH_DEVICE_ID, generate_oauth_device_id())
         )
         if user_input is not None:
-            code = user_input["code"].strip()
+            code = extract_oauth_code(user_input["code"])
             try:
                 self._data.update(
                     await _async_exchange_manual_oauth(
@@ -471,6 +477,7 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         self._oauth_device_id: str | None = None
         self._oauth_link: OAuthCodeLink | None = None
+        self._oauth_base: str | None = None
         self._oauth_task: asyncio.Task[dict[str, Any]] | None = None
         self._oauth_error: str | None = None
 
@@ -480,7 +487,10 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
         # OAuth needs a cloud session (server/user); local-only entries can't.
         if not self.config_entry.data.get(CONF_SERVER):
             return self.async_abort(reason="oauth_local_only")
-        return await self.async_step_miot_oauth_auth()
+        self._oauth_base = oauth_callback_base()
+        if self._oauth_base:
+            return await self.async_step_miot_oauth_auth()
+        return await self.async_step_miot_oauth_code()
 
     async def async_step_miot_oauth_auth(
         self, user_input: dict[str, Any] | None = None
@@ -493,7 +503,7 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
         device_id = self._oauth_device_id
 
         if self._oauth_task is None:
-            self._oauth_link = OAuthCodeLink(self.hass, device_id)
+            self._oauth_link = OAuthCodeLink(self.hass, device_id, self._oauth_base)
             self._oauth_link.register()
             self._oauth_task = self.hass.async_create_task(
                 _async_exchange_linked_oauth(
@@ -554,7 +564,7 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
             )
         device_id = self._oauth_device_id
         if user_input is not None:
-            code = user_input["code"].strip()
+            code = extract_oauth_code(user_input["code"])
             try:
                 data.update(
                     await _async_exchange_manual_oauth(

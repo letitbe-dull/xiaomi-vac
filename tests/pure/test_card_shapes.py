@@ -31,6 +31,7 @@ _KNOWN_MISSING_SHAPE = {
     "dreame.vacuum.r2104",
     "dreame.vacuum.r2205",
     "ijai.vacuum.v15",
+    "ijai.vacuum.v16",
     "viomi.vacuum.v18",
 }
 

@@ -14,11 +14,25 @@ from homeassistant.components.webhook import (
     async_unregister as webhook_async_unregister,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.http import current_request
+from yarl import URL
 
 from .cloud.oauth import OAUTH_REDIRECT_URI, build_authorize_url, oauth_state
 from .const import DOMAIN
 
 _OAUTH_LINKS = "oauth_links"
+_OAUTH_HOST = URL(OAUTH_REDIRECT_URI)
+
+
+def oauth_callback_base() -> str | None:
+    """Return the redirect base if the browser is on Xiaomi's allowed host."""
+    request = current_request.get()
+    if request is None:
+        return None
+    url = request.url
+    if url.host != _OAUTH_HOST.host or url.port != _OAUTH_HOST.port:
+        return None
+    return f"{url.scheme}://{url.host}:{url.port}"
 
 
 @dataclass(frozen=True)
@@ -32,11 +46,13 @@ class OAuthCodeResult:
 class OAuthCodeLink:
     """One-shot OAuth callback link backed by a Home Assistant webhook."""
 
-    def __init__(self, hass: HomeAssistant, device_id: str) -> None:
+    def __init__(
+        self, hass: HomeAssistant, device_id: str, base_url: str = OAUTH_REDIRECT_URI
+    ) -> None:
         self.hass = hass
         self.device_id = device_id
         self.webhook_id = f"{DOMAIN}_oauth_{uuid.uuid4().hex}"
-        self.redirect_uri = f"{OAUTH_REDIRECT_URI}{webhook_async_generate_path(self.webhook_id)}"
+        self.redirect_uri = f"{base_url}{webhook_async_generate_path(self.webhook_id)}"
         self.authorize_url = build_authorize_url(
             device_id, redirect_uri=self.redirect_uri
         )

@@ -269,6 +269,9 @@ async def test_cloud_oauth_success_stores_miot_tokens(hass: HomeAssistant) -> No
     with patch(
         "custom_components.xiaomi_vac.config_flow._async_exchange_linked_oauth",
         side_effect=_slow_exchange,
+    ), patch(
+        "custom_components.xiaomi_vac.config_flow.oauth_callback_base",
+        return_value="http://homeassistant.local:8123",
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"enable_miot_oauth": True}
@@ -290,6 +293,40 @@ async def test_cloud_oauth_success_stores_miot_tokens(hass: HomeAssistant) -> No
     assert result["data"][CONF_OAUTH_REGION] == "sg"
     assert result["data"][CONF_OAUTH_DEVICE_ID] == "ha.webhook"
     assert result["data"][CONF_OAUTH_REDIRECT_URI].endswith("/api/webhook/abc")
+
+
+async def test_cloud_oauth_paste_redirect_url_stores_miot_tokens(
+    hass: HomeAssistant,
+) -> None:
+    """Off homeassistant.local, the flow asks for the pasted redirect URL."""
+    result = await _credentials_to_devices(
+        hass, [_make_device("dreame.vacuum.p2008")], stop_at_oauth=True
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"enable_miot_oauth": True}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "miot_oauth_code"
+    assert not result["errors"]
+
+    captured = {}
+
+    async def _exchange(hass_, code, data, device_id):
+        captured["code"] = code
+        return {CONF_OAUTH_ACCESS_TOKEN: "access", CONF_OAUTH_DEVICE_ID: device_id}
+
+    with patch(
+        "custom_components.xiaomi_vac.config_flow._async_exchange_manual_oauth",
+        side_effect=_exchange,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"code": " http://homeassistant.local:8123/?code=ALSG_abc&state=xyz "},
+        )
+
+    assert captured["code"] == "ALSG_abc"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OAUTH_ACCESS_TOKEN] == "access"
 
 
 def test_generated_english_translation_contains_oauth_config_step() -> None:
