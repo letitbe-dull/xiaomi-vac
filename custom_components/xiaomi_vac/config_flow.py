@@ -50,7 +50,7 @@ from .const import (
     DOMAIN,
 )
 from .device import IjaiVacuumDevice
-from .oauth_flow import OAuthCodeLink, oauth_callback_base
+from .oauth_flow import OAuthCodeLink, browser_on_oauth_redirect
 from .spec.registry import is_supported
 
 _LOGGER = logging.getLogger(__name__)
@@ -136,7 +136,6 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
         self._title = ""
         self._oauth_link: OAuthCodeLink | None = None
-        self._oauth_base: str | None = None
         self._oauth_task: asyncio.Task[dict[str, Any]] | None = None
         self._oauth_error: str | None = None
 
@@ -364,14 +363,21 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         """Offer optional MIoT OAuth for future MQTT live-map support."""
         if user_input is not None:
             if user_input["enable_miot_oauth"]:
-                # Xiaomi only redirects to homeassistant.local:8123; paste elsewhere.
-                self._oauth_base = oauth_callback_base()
-                if self._oauth_base:
-                    return await self.async_step_miot_oauth_auth()
-                return await self.async_step_miot_oauth_code()
+                return await self.async_step_miot_oauth_method()
             return self._create_entry()
         return self.async_show_form(
             step_id="miot_oauth", data_schema=OAUTH_CHOICE_SCHEMA
+        )
+
+    async def async_step_miot_oauth_method(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Link automatically on homeassistant.local:8123; otherwise ask."""
+        if browser_on_oauth_redirect():
+            return await self.async_step_miot_oauth_auth()
+        return self.async_show_menu(
+            step_id="miot_oauth_method",
+            menu_options=["miot_oauth_auth", "miot_oauth_code"],
         )
 
     async def async_step_miot_oauth_auth(
@@ -382,7 +388,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data.setdefault(CONF_OAUTH_DEVICE_ID, generate_oauth_device_id())
         )
         if self._oauth_task is None:
-            self._oauth_link = OAuthCodeLink(self.hass, device_id, self._oauth_base)
+            self._oauth_link = OAuthCodeLink(self.hass, device_id)
             self._oauth_link.register()
             self._oauth_task = self.hass.async_create_task(
                 _async_exchange_linked_oauth(
@@ -483,7 +489,6 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         self._oauth_device_id: str | None = None
         self._oauth_link: OAuthCodeLink | None = None
-        self._oauth_base: str | None = None
         self._oauth_task: asyncio.Task[dict[str, Any]] | None = None
         self._oauth_error: str | None = None
 
@@ -493,10 +498,18 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
         # OAuth needs a cloud session (server/user); local-only entries can't.
         if not self.config_entry.data.get(CONF_SERVER):
             return self.async_abort(reason="oauth_local_only")
-        self._oauth_base = oauth_callback_base()
-        if self._oauth_base:
+        return await self.async_step_miot_oauth_method()
+
+    async def async_step_miot_oauth_method(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Link automatically on homeassistant.local:8123; otherwise ask."""
+        if browser_on_oauth_redirect():
             return await self.async_step_miot_oauth_auth()
-        return await self.async_step_miot_oauth_code()
+        return self.async_show_menu(
+            step_id="miot_oauth_method",
+            menu_options=["miot_oauth_auth", "miot_oauth_code"],
+        )
 
     async def async_step_miot_oauth_auth(
         self, user_input: dict[str, Any] | None = None
@@ -509,7 +522,7 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
         device_id = self._oauth_device_id
 
         if self._oauth_task is None:
-            self._oauth_link = OAuthCodeLink(self.hass, device_id, self._oauth_base)
+            self._oauth_link = OAuthCodeLink(self.hass, device_id)
             self._oauth_link.register()
             self._oauth_task = self.hass.async_create_task(
                 _async_exchange_linked_oauth(

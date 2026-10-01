@@ -53,6 +53,14 @@
           "enable_miot_oauth": "Enable OAuth for real-time map updates"
         }
       },
+      "miot_oauth_method": {
+        "title": "Link Xiaomi OAuth",
+        "description": "After you approve access, Xiaomi sends your browser to homeassistant.local:8123. Pick how to finish.",
+        "menu_options": {
+          "miot_oauth_auth": "Link automatically (this device can open homeassistant.local:8123)",
+          "miot_oauth_code": "Paste the code"
+        }
+      },
       "miot_oauth_auth": {
         "title": "Link Xiaomi OAuth",
         "description": "Open the Xiaomi OAuth link. Home Assistant will continue automatically after Xiaomi redirects back.",
@@ -99,6 +107,14 @@
   },
   "options": {
     "step": {
+      "miot_oauth_method": {
+        "title": "Link Xiaomi OAuth",
+        "description": "After you approve access, Xiaomi sends your browser to homeassistant.local:8123. Pick how to finish.",
+        "menu_options": {
+          "miot_oauth_auth": "Link automatically (this device can open homeassistant.local:8123)",
+          "miot_oauth_code": "Paste the code"
+        }
+      },
       "miot_oauth_auth": {
         "title": "Link Xiaomi OAuth",
         "description": "Open the Xiaomi OAuth link. Home Assistant will continue automatically after Xiaomi redirects back.",

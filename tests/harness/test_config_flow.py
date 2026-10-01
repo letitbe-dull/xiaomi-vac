@@ -23,6 +23,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_OAUTH_REDIRECT_URI,
     CONF_PASS_TOKEN,
     CONF_PASSWORD,
+    CONF_SERVER,
     CONF_SERVICE_TOKEN,
     CONF_SSECURITY,
     CONF_TOKEN,
@@ -292,8 +293,8 @@ async def test_cloud_oauth_success_stores_miot_tokens(hass: HomeAssistant) -> No
         "custom_components.xiaomi_vac.config_flow._async_exchange_linked_oauth",
         side_effect=_slow_exchange,
     ), patch(
-        "custom_components.xiaomi_vac.config_flow.oauth_callback_base",
-        return_value="http://homeassistant.local:8123",
+        "custom_components.xiaomi_vac.config_flow.browser_on_oauth_redirect",
+        return_value=True,
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"enable_miot_oauth": True}
@@ -320,12 +321,23 @@ async def test_cloud_oauth_success_stores_miot_tokens(hass: HomeAssistant) -> No
 async def test_cloud_oauth_paste_redirect_url_stores_miot_tokens(
     hass: HomeAssistant,
 ) -> None:
-    """Off homeassistant.local, the flow asks for the pasted redirect URL."""
+    """Off homeassistant.local, the menu's paste option takes the redirect URL."""
     result = await _credentials_to_devices(
         hass, [_make_device("dreame.vacuum.p2008")], stop_at_oauth=True
     )
+    with patch(
+        "custom_components.xiaomi_vac.config_flow.browser_on_oauth_redirect",
+        return_value=False,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"enable_miot_oauth": True}
+        )
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "miot_oauth_method"
+    assert set(result["menu_options"]) == {"miot_oauth_auth", "miot_oauth_code"}
+
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"enable_miot_oauth": True}
+        result["flow_id"], {"next_step_id": "miot_oauth_code"}
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "miot_oauth_code"
@@ -349,6 +361,71 @@ async def test_cloud_oauth_paste_redirect_url_stores_miot_tokens(
     assert captured["code"] == "ALSG_abc"
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_OAUTH_ACCESS_TOKEN] == "access"
+
+
+async def test_cloud_oauth_menu_automatic_shows_progress(hass: HomeAssistant) -> None:
+    """Off homeassistant.local, the menu's automatic option still links via webhook."""
+    result = await _credentials_to_devices(
+        hass, [_make_device("dreame.vacuum.p2008")], stop_at_oauth=True
+    )
+    with patch(
+        "custom_components.xiaomi_vac.config_flow.browser_on_oauth_redirect",
+        return_value=False,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"enable_miot_oauth": True}
+        )
+    assert result["type"] is FlowResultType.MENU
+
+    async def _pending(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    with patch(
+        "custom_components.xiaomi_vac.config_flow._async_exchange_linked_oauth",
+        side_effect=_pending,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "miot_oauth_auth"}
+        )
+        assert result["type"] is FlowResultType.SHOW_PROGRESS
+        assert "%2Fapi%2Fwebhook%2F" in result["description_placeholders"]["authorize_url"]
+        hass.config_entries.flow.async_abort(result["flow_id"])
+
+
+async def test_options_oauth_menu_paste_stores_miot_tokens(hass: HomeAssistant) -> None:
+    """The options flow takes the same menu route off homeassistant.local."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id="AA:BB:CC:DD:EE:FF",
+        data={CONF_USERNAME: "user@example.com", CONF_SERVER: "de"},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.xiaomi_vac.config_flow.browser_on_oauth_redirect",
+        return_value=False,
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "miot_oauth_method"
+    assert set(result["menu_options"]) == {"miot_oauth_auth", "miot_oauth_code"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "miot_oauth_code"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "miot_oauth_code"
+
+    with patch(
+        "custom_components.xiaomi_vac.config_flow._async_exchange_manual_oauth",
+        return_value={CONF_OAUTH_ACCESS_TOKEN: "access"},
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {"code": "http://homeassistant.local:8123/?code=ALDE_abc&state=xyz"},
+        )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_OAUTH_ACCESS_TOKEN] == "access"
 
 
 def test_generated_english_translation_contains_oauth_config_step() -> None:
