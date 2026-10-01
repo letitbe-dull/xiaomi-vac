@@ -61,6 +61,27 @@ def test_pause_uses_real_pause_action_when_present(monkeypatch):
     ]
 
 
+def test_base_station_controls_use_profile_actions(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+
+    device.set_auto_mop_dry(True)
+    device.set_drying_time("3_hours")
+    device.start_drying()
+    device.stop_drying()
+    device.start_mop_wash()
+    device.empty_dust_bin()
+
+    assert _last_calls() == [
+        ("set", 2, 34, True),
+        ("set", 2, 31, 2),
+        ("action", 2, 20, []),
+        ("action", 2, 32, []),
+        ("action", 2, 19, []),
+        ("action", 2, 18, []),
+    ]
+
+
 def test_set_fan_speed_uses_value_table(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v17")
@@ -108,6 +129,107 @@ def test_clean_segments_uses_v3_room_clean_action(monkeypatch):
     assert _last_calls() == [("action", 7, 3, ["10,12", 0, 1])]
 
 
+def test_ov31gl_room_clean_uses_named_input(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+
+    device.clean_segments([32])
+
+    assert _last_calls() == [
+        (
+            "send",
+            "action",
+            {
+                "did": "call-2-16",
+                "siid": 2,
+                "aiid": 16,
+                "in": [{"piid": 15, "value": "32"}],
+            },
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    "model", ["ijai.vacuum.v17", "ijai.vacuum.v18", "ijai.vacuum.v19"]
+)
+def test_clean_zone_sets_piid_keyed_zone_then_starts(monkeypatch, model):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", model)
+
+    device.clean_zone(-1.5, 2.25, -0.5, 3.0)
+
+    assert _last_calls() == [
+        ("action", 9, 8, [{"piid": 2, "value": "[-1500,2250,-500,3000,1]"}]),
+        ("action", 9, 3, []),
+    ]
+
+
+def test_clean_zone_rejects_unverified_point_zone_profile(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+
+    assert device.zone_clean_action() is None
+    with pytest.raises(ValueError):
+        device.clean_zone(0.0, 0.0, 1.0, 1.0)
+
+
+_X20_MODELS = [
+    "xiaomi.vacuum.c107",
+    "xiaomi.vacuum.d101",
+    "xiaomi.vacuum.d102ev",
+    "xiaomi.vacuum.d102gl",
+    "xiaomi.vacuum.d109gl",
+]
+
+
+@pytest.mark.parametrize("model", _X20_MODELS)
+def test_x20_clean_zone_sends_one_zone_sweep_action(monkeypatch, model):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", model)
+
+    device.clean_zone(0.82, 0.88, 2.66, 2.925)
+
+    assert _last_calls() == [
+        (
+            "action",
+            2,
+            37,
+            ['[{"blocks_region":[820,2925,820,880,2660,880,2660,2925],"blocks_attr":0}]'],
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    ("zone", "region"),
+    [
+        ((2.66, 2.925, 0.82, 0.88), "[820,2925,820,880,2660,880,2660,2925]"),
+        ((2.66, 0.88, 0.82, 2.925), "[820,2925,820,880,2660,880,2660,2925]"),
+        ((-1.5, 2.25, -0.5, 3.0), "[-1500,3000,-1500,2250,-500,2250,-500,3000]"),
+        ((-0.5, 3.0, -1.5, 2.25), "[-1500,3000,-1500,2250,-500,2250,-500,3000]"),
+    ],
+)
+def test_x20_clean_zone_normalises_corners_to_min_max(monkeypatch, zone, region):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.d102gl")
+
+    device.clean_zone(*zone)
+
+    assert _last_calls() == [
+        ("action", 2, 37, [f'[{{"blocks_region":{region},"blocks_attr":0}}]'])
+    ]
+
+
+@pytest.mark.parametrize("model", ["xiaomi.vacuum.ov21gl", "dreame.vacuum.p2008"])
+def test_clean_zone_rejects_models_without_a_zone_capability(monkeypatch, model):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", model)
+
+    assert device.zone_clean_action() is None
+    with pytest.raises(ValueError):
+        device.clean_zone(0.0, 0.0, 1.0, 1.0)
+    assert _last_calls() == []
+
+
 def test_request_map_upload_prefers_upload_by_mapid_ii(monkeypatch):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
@@ -128,6 +250,22 @@ def test_request_map_upload_falls_back_to_upload_by_mapid(monkeypatch):
         ("action", 10, 14, [7]),
         ("action", 10, 2, [7]),
     ]
+
+
+def test_map_upload_actions_lists_upload_by_mapid_ii_then_upload_by_mapid(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+
+    assert [(a.siid, a.aiid) for a in device.map_upload_actions()] == [(10, 14), (10, 2)]
+    assert _last_calls() == []
+
+
+def test_map_upload_actions_rejects_a_model_without_map_upload(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "dreame.vacuum.p2008")
+
+    with pytest.raises(ValueError):
+        device.map_upload_actions()
 
 
 def test_map_list_parses_map_list_output(monkeypatch):
@@ -224,6 +362,51 @@ def test_status_sends_unbatched_read_on_v17(monkeypatch):
 
     assert device.profile.max_properties is None
     assert FakeMiotDevice.instances[-1].batch_max_properties == [None]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (0, "idle"),
+        (1, "drying"),
+        (2, "washing_mops"),
+        (3, "dust_collection"),
+        (99, "unknown"),
+    ],
+)
+def test_base_station_status_maps_working_mode(monkeypatch, mode, expected):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+    FakeMiotDevice.property_values = {
+        (2, 2): 14,
+        (2, 18): f'{{"mode": {mode}}}',
+    }
+
+    assert device.status().base_station_status == expected
+
+
+def test_base_station_status_reads_tanks_and_drying(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.ov31gl")
+    FakeMiotDevice.property_values = {
+        (2, 2): 14,
+        (2, 31): 2,
+        (2, 34): True,
+        (2, 88): 40,
+        (2, 90): 75,
+        (2, 97): 1,
+        (2, 98): 0,
+    }
+
+    status = device.status()
+
+    assert status.drying_time == 2
+    assert status.auto_mop_dry is True
+    assert status.drying_progress == 40
+    assert status.dry_left_time == 75
+    assert status.sewage_tank_status == 1
+    assert status.water_tank_status == 0
+    assert FakeMiotDevice.instances[-1].batch_max_properties == [5]
 
 
 def test_unsupported_property_and_action_raise_value_error(monkeypatch):

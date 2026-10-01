@@ -56,6 +56,43 @@ def _shape_pairs() -> list[tuple[str, int]]:
     return pairs
 
 
+def _zone_clean_models() -> set[str]:
+    src = _CARD.read_text(encoding="utf-8")
+    match = re.search(r"const ZONE_CLEAN_MODELS = new Set\(\[(.*?)\]\);", src, re.S)
+
+    assert match
+    return set(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+def test_zone_clean_models_match_verified_profile_family() -> None:
+    assert _zone_clean_models() == {
+        "ijai.vacuum.v17",
+        "ijai.vacuum.v18",
+        "ijai.vacuum.v19",
+        "xiaomi.vacuum.c107",
+        "xiaomi.vacuum.d101",
+        "xiaomi.vacuum.d102ev",
+        "xiaomi.vacuum.d102gl",
+        "xiaomi.vacuum.d109gl",
+    }
+
+
+def test_zone_sweep_profiles_are_exactly_the_x20_family_and_all_in_the_card() -> None:
+    zone_sweep_models = {
+        model for model, profile in MODEL_PROFILES.items() if profile.zone_sweep is not None
+    }
+
+    assert zone_sweep_models == {
+        "xiaomi.vacuum.c107",
+        "xiaomi.vacuum.d101",
+        "xiaomi.vacuum.d102ev",
+        "xiaomi.vacuum.d102gl",
+        "xiaomi.vacuum.d109gl",
+    }
+    assert zone_sweep_models <= _zone_clean_models()
+    assert "xiaomi.vacuum.b108gl" not in _zone_clean_models()
+
+
 def test_shape_keys_are_short_form() -> None:
     """A key containing '.vacuum.' can never match modelShort() output."""
     long_form = sorted(key for key, _shape in _shape_pairs() if ".vacuum." in key)

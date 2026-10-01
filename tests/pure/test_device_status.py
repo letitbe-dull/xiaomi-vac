@@ -103,3 +103,26 @@ def test_device_refuses_non_onboardable_models(monkeypatch, model: str):
 
     with pytest.raises(ValueError):
         device_mod.IjaiVacuumDevice("host", "token", model)
+
+
+@pytest.mark.parametrize(
+    "serial",
+    [
+        "12345678901234567",  # all-numeric, 17 digits (ijai.vacuum.v3, #60)
+        "334702602205A001998",  # uppercase alphanumeric, 19 chars (#4)
+    ],
+)
+def test_get_wifi_sn_accepts_serial(monkeypatch, serial):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+    FakeMiotDevice.property_values = {(1, 5): serial}
+
+    assert device.get_wifi_sn() == serial
+
+
+def test_get_wifi_sn_rejects_lowercase(monkeypatch):
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "ijai.vacuum.v3")
+    FakeMiotDevice.property_values = {(1, 5): "334702602205a001998"}
+
+    assert device.get_wifi_sn() is None

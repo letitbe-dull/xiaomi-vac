@@ -33,6 +33,12 @@ from .coordinator import XiaomiVacuumCoordinator
 from .device import IjaiVacuumDevice
 from .map import MapFetcher, MapResult, SessionExpired
 from .map_cache import MapCache
+from .map_diagnostics import (
+    MapCycleRecord,
+    UploadRequest,
+    describe_map_capability,
+    resolve_active_id,
+)
 from .map_parsers import parser_key, required_map_key_inputs
 from .spec.types import MapCapability
 
@@ -109,9 +115,13 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._mqtt_refresh_needs_upload = False
         self._mqtt_upload_waiters: set[asyncio.Future[None]] = set()
         self._last_upload_request_at: dict[int, float] = {}
+        # The upload request sent since the last cycle began; the next cycle's record takes it.
+        self._pending_upload_request: UploadRequest | None = None
         self._last_live_at: float | None = None
         self._refresh_map_lock = asyncio.Lock()
         self._pending_entry_updates: dict[str, str] = {}
+        # What the most recent cycle did; replaced at the start of every cycle.
+        self.last_cycle: MapCycleRecord | None = None
 
     @property
     def device(self) -> IjaiVacuumDevice:
@@ -151,7 +161,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         elif msg.kind == "event" and msg.siid == _SIID_MAP and msg.eiid == _EIID_MAP_UPLOAD:
             _LOGGER.debug("MQTT map upload event — scheduling map refresh")
             self._notify_mqtt_upload_waiters()
-            self._schedule_mqtt_refresh(request_upload=True)
+            self._schedule_mqtt_refresh()
 
     def _new_mqtt_upload_waiter(self) -> asyncio.Future[None]:
         waiter: asyncio.Future[None] = self.hass.loop.create_future()
@@ -279,14 +289,38 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             _LOGGER.debug("Skipping throttled map upload request for map_id=%s", target)
             return False
         self._last_upload_request_at[target] = now
+        if self._cloud is not None:
+            try:
+                if await self.hass.async_add_executor_job(
+                    self._cloud_request_map_upload, target
+                ):
+                    self._pending_upload_request = UploadRequest("cloud", True)
+                    return True
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Cloud map upload request failed for map_id=%s: %s", target, err)
         try:
             await self.hass.async_add_executor_job(
                 self._device.request_map_upload, target
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Map upload request failed for map_id=%s: %s", target, err)
+            self._pending_upload_request = UploadRequest("local", False)
             return False
+        self._pending_upload_request = UploadRequest("local", True)
         return True
+
+    def _cloud_request_map_upload(self, map_id: int) -> bool:
+        """Blocking: send the profile's upload actions through the cloud; True on the first accepted reply."""
+        from .vacuum import _cloud_action_ok  # vacuum imports the package, which imports this module
+
+        d = self.entry.data
+        for action in self._device.map_upload_actions():
+            response = self._cloud.cloud_action(
+                d[CONF_SERVER], d[CONF_DEVICE_ID], action.siid, action.aiid, [map_id]
+            )
+            if _cloud_action_ok(response):
+                return True
+        return False
 
     def _build(self) -> MapFetcher:
         """Blocking: restore the saved cloud session and construct a fetcher.
@@ -377,6 +411,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         coordinator's refresh/reauth handling wants.
         """
         results: list[MapResult | None] = []
+        attempts = []
         any_resolved = False
         for slot in _SLOTS:
             try:
@@ -384,13 +419,15 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 any_resolved = True
             except SessionExpired:
                 results.append(None)
+            attempts.append(self._fetcher.last_attempt)
+        self.last_cycle.slots = attempts
         if not any_resolved:
             raise SessionExpired()
         return results
 
     def _resolve_active_id(
         self, active_meta: dict | None, decoded: list[MapResult], maps_meta: list[dict],
-    ) -> int | None:
+    ) -> tuple[int | None, str | None]:
         """Which map this cycle's data belongs to, in order of trust:
 
         1. A live blob's own embedded id (ground truth from the cloud blob
@@ -400,20 +437,10 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
            capability at all — an empty `maps_meta` from a transient read
            failure on a multi-map device must NOT be mistaken for that.
         """
-        for r in decoded:
-            if r.map_id is not None:
-                return r.map_id
-        if active_meta and active_meta.get("id") is not None:
-            try:
-                return int(active_meta["id"])
-            except (TypeError, ValueError):
-                pass
-        # Use the MQTT-signaled id when map-list read failed this cycle.
-        if self._mqtt_active_id is not None:
-            return self._mqtt_active_id
-        if not self._has_map_list and not maps_meta:
-            return _SINGLE_MAP_ID
-        return None
+        return resolve_active_id(
+            decoded, active_meta, self._mqtt_active_id, self._has_map_list,
+            maps_meta, single_map_id=_SINGLE_MAP_ID,
+        )
 
     def _serve(
         self, cache: MapCache, active_id: int | None, maps_meta: list[dict],
@@ -451,6 +478,12 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
 
     async def _async_update_data(self) -> MapResult:
         self._tune_interval()
+        self.last_cycle = MapCycleRecord(
+            parser_key=parser_key(self._device.profile),
+            map_capability=describe_map_capability(self._device.profile.map),
+            upload_request=self._pending_upload_request,
+        )
+        self._pending_upload_request = None
         try:
             if self._fetcher is None:
                 self._fetcher = await self.hass.async_add_executor_job(self._build)
@@ -494,7 +527,10 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
 
             decoded = [r for r in slot_results if r is not None]
             active_meta = next((m for m in maps_meta if m.get("cur")), None)
-            active_id = self._resolve_active_id(active_meta, decoded, maps_meta)
+            active_id, self.last_cycle.resolved_by = self._resolve_active_id(
+                active_meta, decoded, maps_meta,
+            )
+            self.last_cycle.resolved_map_id = active_id
             _LOGGER.debug(
                 "Map cycle: slot keys=%s active_id=%s maps_listed=%d",
                 ["A" if r is not None else "B" for r in slot_results],
@@ -525,6 +561,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                     await cache.async_prune(keep_ids)
 
             result = self._serve(cache, active_id, maps_meta)
+            self.last_cycle.set_served(decoded=bool(decoded), have_result=result is not None)
             if result is None:
                 # Nothing live AND nothing cached for this map id yet. This is
                 # the normal cold-start state: the vacuum's current upload is a

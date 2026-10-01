@@ -163,19 +163,37 @@ def _make_device(model: str, did: str = "d1") -> dict:
     }
 
 
-def _cloud_patches(login_state: str = "ok", devices: list | None = None):
-    """Context-manager stack: stub login, device list, and wifi_sn fetch."""
+_NO_TRANSPORT = object()
+
+
+def _cloud_patches(
+    login_state: str = "ok",
+    devices: list | None = None,
+    transport: object = _NO_TRANSPORT,
+):
+    """Context-manager stack: stub login, device list, and wifi_sn fetch.
+
+    With ``transport`` set, list_vacuums runs for real and every regional
+    request returns ``transport`` (None = server did not answer).
+    """
     if devices is None:
         devices = []
+    if transport is _NO_TRANSPORT:
+        discovery = patch(
+            "custom_components.xiaomi_vac.config_flow.XiaomiCloud.list_vacuums",
+            return_value=devices,
+        )
+    else:
+        discovery = patch(
+            "custom_components.xiaomi_vac.config_flow.XiaomiCloud._call",
+            return_value=transport,
+        )
     return [
         patch(
             "custom_components.xiaomi_vac.config_flow.XiaomiCloud.begin_login",
             return_value=login_state,
         ),
-        patch(
-            "custom_components.xiaomi_vac.config_flow.XiaomiCloud.list_vacuums",
-            return_value=devices,
-        ),
+        discovery,
         patch(
             "custom_components.xiaomi_vac.config_flow.IjaiVacuumDevice.get_wifi_sn",
             return_value=None,
@@ -184,7 +202,11 @@ def _cloud_patches(login_state: str = "ok", devices: list | None = None):
 
 
 async def _credentials_to_devices(
-    hass: HomeAssistant, devices: list, *, stop_at_oauth: bool = False
+    hass: HomeAssistant,
+    devices: list,
+    *,
+    stop_at_oauth: bool = False,
+    transport: object = _NO_TRANSPORT,
 ) -> dict:
     """Open the credentials form and submit it; return the next flow result."""
     result = await hass.config_entries.flow.async_init(
@@ -196,7 +218,7 @@ async def _credentials_to_devices(
     assert result["step_id"] == "credentials"
 
     with ExitStack() as stack:
-        for p in _cloud_patches(devices=devices):
+        for p in _cloud_patches(devices=devices, transport=transport):
             stack.enter_context(p)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -432,6 +454,86 @@ async def test_cloud_no_vacuums_aborts(hass: HomeAssistant) -> None:
     result = await _credentials_to_devices(hass, [])
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_devices"
+
+
+def _answer(devices: list) -> dict:
+    return {"code": 0, "result": {"list": devices}}
+
+
+async def test_cloud_no_server_answered_aborts_no_server_response(
+    hass: HomeAssistant,
+) -> None:
+    """Every regional call returning nothing aborts with no_server_response."""
+    result = await _credentials_to_devices(hass, [], transport=None)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_server_response"
+
+
+async def test_cloud_servers_answered_empty_aborts_no_devices(
+    hass: HomeAssistant,
+) -> None:
+    """Servers answering with zero devices abort with no_devices."""
+    result = await _credentials_to_devices(hass, [], transport=_answer([]))
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_devices"
+
+
+async def test_cloud_servers_answered_only_non_vacuums_aborts_no_devices(
+    hass: HomeAssistant,
+) -> None:
+    """Servers answering with only non-vacuum devices abort with no_devices."""
+    result = await _credentials_to_devices(
+        hass, [], transport=_answer([_make_device("yeelink.light.x")])
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_devices"
+
+
+async def test_cloud_servers_answered_unsupported_vacuum_aborts_unsupported_model(
+    hass: HomeAssistant,
+) -> None:
+    """Servers answering with a vacuum the registry rejects abort with unsupported_model."""
+    result = await _credentials_to_devices(
+        hass, [], transport=_answer([_make_device("roidmi.vacuum.r1b")])
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "unsupported_model"
+
+
+async def test_cloud_several_unsupported_vacuums_abort_unsupported_model(
+    hass: HomeAssistant,
+) -> None:
+    """Several unsupported brands together still abort with unsupported_model, not no_devices."""
+    result = await _credentials_to_devices(
+        hass,
+        [],
+        transport=_answer(
+            [
+                _make_device("roidmi.vacuum.r1b", did="d1"),
+                _make_device("unknown.vacuum.x99", did="d2"),
+            ]
+        ),
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "unsupported_model"
+
+
+async def test_cloud_single_supported_via_real_discovery_skips_picker(
+    hass: HomeAssistant,
+) -> None:
+    """One supported device among unsupported ones is set up without the picker."""
+    result = await _credentials_to_devices(
+        hass,
+        [],
+        transport=_answer(
+            [
+                _make_device("dreame.vacuum.p2008", did="d1"),
+                _make_device("roidmi.vacuum.r1b", did="d2"),
+            ]
+        ),
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
 
 
 async def test_cloud_mixed_account_shows_only_supported(hass: HomeAssistant) -> None:

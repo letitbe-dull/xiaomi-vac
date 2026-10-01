@@ -52,6 +52,7 @@ def _encrypt_like_the_real_app(payload: dict, *, model: str, device_id: str) -> 
 @pytest.mark.parametrize("model", [
     "xiaomi.vacuum.ov42gl",   # 21 chars, the model that motivated this fix
     "xiaomi.vacuum.ov21gl",   # 21 chars, an already-"working" (never actually tested) profile
+    "xiaomi.vacuum.ov31gl",   # same JSON-map family as ov21gl; ensures alias remains valid
     "1234567890123456",       # exactly 16 chars: slice(-16) is a no-op
 ])
 def test_decrypt_round_trip(model):

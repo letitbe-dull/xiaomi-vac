@@ -28,12 +28,13 @@ async def async_setup_entry(
 # 03-07-2026 via miot-spec.org). ijai/xiaomi/viomi cores use 0-10
 # (ijai.v17 hardware-verified); dreame's audio service volume is 0-100
 # (all 6 distinct dreame cores checked: p2008/p2009/p2114a/p2149o/p2150a/
-# r2215). xiaomi.ov21gl/ov71gl are the JSON-map xiaomi profiles (E1/E8)
-# and diverge from the xiaomi brand default at 0-100 — checked first.
-# xiaomi.c107 is hardware-confirmed at 0-100 (issue #18).
+# r2215). xiaomi.ov21gl/ov31gl/ov71gl are the JSON-map xiaomi profiles
+# (E1/E3/E8) and diverge from the xiaomi brand default at 0-100 — checked
+# first. xiaomi.c107 is hardware-confirmed at 0-100 (issue #18).
 _VOLUME_MAX_BY_PROFILE_ID = {
     "xiaomi.c107": 100,
     "xiaomi.ov21gl": 100,
+    "xiaomi.ov31gl": 100,
     "xiaomi.ov71gl": 100,
 }
 _VOLUME_MAX_BY_BRAND = {"dreame": 100}

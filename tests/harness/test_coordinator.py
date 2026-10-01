@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -28,6 +28,7 @@ from custom_components.xiaomi_vac.device import DeviceCommunicationError
 from custom_components.xiaomi_vac.map import MapResult, SessionExpired
 from custom_components.xiaomi_vac.cloud.mqtt import MqttMessage
 from custom_components.xiaomi_vac.map_coordinator import XiaomiMapCoordinator
+from custom_components.xiaomi_vac.spec.types import Action
 
 
 def _fake_result(map_id: int = 1, content_hash: str = "hash-a") -> MapResult:
@@ -734,6 +735,239 @@ async def test_map_upload_request_uses_active_map_and_throttles(
     assert first is True
     assert second is False
     coord._device.request_map_upload.assert_called_once_with(7)
+
+
+def _cloud_upload_coord(hass: HomeAssistant, cloud: MagicMock | None) -> XiaomiMapCoordinator:
+    """A coordinator on map 7 whose device declares ijai's 10/14 then 10/2 upload actions."""
+    coord = _map_coord(hass)
+    coord._map_list_meta = [{"id": 7, "cur": True, "name": "Upstairs"}]
+    coord._cloud = cloud
+    coord._device.map_upload_actions.return_value = [
+        Action(siid=10, aiid=14), Action(siid=10, aiid=2),
+    ]
+    return coord
+
+
+async def _run_upload_request(hass: HomeAssistant, coord: XiaomiMapCoordinator) -> bool:
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    with patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)):
+        return await coord.async_request_map_upload()
+
+
+async def test_map_upload_request_goes_through_the_cloud_first(hass: HomeAssistant) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": 0}
+    coord = _cloud_upload_coord(hass, cloud)
+
+    assert await _run_upload_request(hass, coord) is True
+
+    cloud.cloud_action.assert_called_once_with("cn", "did123", 10, 14, [7])
+    coord._device.request_map_upload.assert_not_called()
+
+
+async def test_map_upload_request_tries_10_2_when_the_cloud_rejects_10_14(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.side_effect = [{"code": -1}, {"code": 0}]
+    coord = _cloud_upload_coord(hass, cloud)
+
+    assert await _run_upload_request(hass, coord) is True
+
+    assert cloud.cloud_action.call_args_list == [
+        call("cn", "did123", 10, 14, [7]),
+        call("cn", "did123", 10, 2, [7]),
+    ]
+    coord._device.request_map_upload.assert_not_called()
+
+
+async def test_map_upload_request_falls_back_to_local_when_the_cloud_rejects_both(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": -1}
+    coord = _cloud_upload_coord(hass, cloud)
+
+    assert await _run_upload_request(hass, coord) is True
+
+    assert cloud.cloud_action.call_count == 2
+    coord._device.request_map_upload.assert_called_once_with(7)
+
+
+async def test_map_upload_request_falls_back_to_local_when_the_cloud_raises(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.side_effect = RuntimeError("network down")
+    coord = _cloud_upload_coord(hass, cloud)
+
+    assert await _run_upload_request(hass, coord) is True
+
+    coord._device.request_map_upload.assert_called_once_with(7)
+
+
+async def test_map_upload_request_goes_local_when_there_is_no_cloud_session(
+    hass: HomeAssistant,
+) -> None:
+    coord = _cloud_upload_coord(hass, None)
+
+    assert await _run_upload_request(hass, coord) is True
+
+    coord._device.request_map_upload.assert_called_once_with(7)
+
+
+async def test_map_upload_request_reports_failure_when_cloud_and_local_both_fail(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": -1}
+    coord = _cloud_upload_coord(hass, cloud)
+    coord._device.request_map_upload.side_effect = RuntimeError("-9999")
+
+    assert await _run_upload_request(hass, coord) is False
+
+
+async def test_mqtt_upload_event_refreshes_without_requesting_an_upload(
+    hass: HomeAssistant,
+) -> None:
+    """event_occured/10/6 is the answer to an upload, so it must not ask for another."""
+    cloud = MagicMock()
+    coord = _cloud_upload_coord(hass, cloud)
+    coord.async_refresh = AsyncMock()
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    msg = MqttMessage(kind="event", topic="x", siid=10, eiid=6)
+    with (
+        patch("custom_components.xiaomi_vac.map_coordinator._DEBOUNCE_SECONDS", 0),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        await coord.async_on_mqtt_message(msg)
+        await asyncio.sleep(0.05)
+
+    cloud.cloud_action.assert_not_called()
+    coord._device.request_map_upload.assert_not_called()
+    coord.async_refresh.assert_awaited_once()
+
+
+async def test_mqtt_curmap_then_upload_event_requests_one_upload(hass: HomeAssistant) -> None:
+    """A curMapId push and the upload event it provokes, in one burst, ask once."""
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": 0}
+    coord = _cloud_upload_coord(hass, cloud)
+    coord.async_refresh = AsyncMock()
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    with (
+        patch("custom_components.xiaomi_vac.map_coordinator._DEBOUNCE_SECONDS", 0),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        await coord.async_on_mqtt_message(
+            MqttMessage(kind="property", topic="x", siid=10, piid=2, value=7)
+        )
+        await coord.async_on_mqtt_message(MqttMessage(kind="event", topic="x", siid=10, eiid=6))
+        await asyncio.sleep(0.05)
+
+    cloud.cloud_action.assert_called_once_with("cn", "did123", 10, 14, [7])
+    coord.async_refresh.assert_awaited_once()
+
+
+async def _run_cycle(hass: HomeAssistant, coord: XiaomiMapCoordinator) -> dict:
+    fetcher = MagicMock()
+    fetcher.fetch.side_effect = [_fake_result(map_id=7), None]
+    coord._fetcher = fetcher
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    with (
+        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        await coord._async_update_data()
+    return coord.last_cycle.as_dict()
+
+
+async def test_cycle_record_shows_an_upload_request_sent_through_the_cloud(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": 0}
+    coord = _cloud_upload_coord(hass, cloud)
+    await _run_upload_request(hass, coord)
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["upload_request_sent"] is True
+    assert record["upload_request_route"] == "cloud"
+    assert record["upload_request_ok"] is True
+
+
+async def test_cycle_record_shows_a_cloud_rejection_that_fell_back_to_local(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": -1}
+    coord = _cloud_upload_coord(hass, cloud)
+    await _run_upload_request(hass, coord)
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["upload_request_sent"] is True
+    assert record["upload_request_route"] == "local"
+    assert record["upload_request_ok"] is True
+
+
+async def test_cycle_record_shows_a_failed_upload_request(hass: HomeAssistant) -> None:
+    coord = _cloud_upload_coord(hass, None)
+    coord._device.request_map_upload.side_effect = RuntimeError("-9999")
+    await _run_upload_request(hass, coord)
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["upload_request_sent"] is True
+    assert record["upload_request_route"] == "local"
+    assert record["upload_request_ok"] is False
+
+
+async def test_cycle_record_shows_no_upload_request_on_a_plain_poll(hass: HomeAssistant) -> None:
+    coord = _cloud_upload_coord(hass, MagicMock())
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["upload_request_sent"] is False
+    assert record["upload_request_route"] is None
+    assert record["upload_request_ok"] is None
+
+
+async def test_cycle_record_does_not_carry_an_upload_request_into_the_next_cycle(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": 0}
+    coord = _cloud_upload_coord(hass, cloud)
+    await _run_upload_request(hass, coord)
+    await _run_cycle(hass, coord)
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["upload_request_sent"] is False
+
+
+async def test_cycle_record_ignores_a_throttled_upload_request(hass: HomeAssistant) -> None:
+    coord = _cloud_upload_coord(hass, None)
+    await _run_upload_request(hass, coord)
+    await _run_cycle(hass, coord)
+    assert await _run_upload_request(hass, coord) is False  # inside the 30 s throttle
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["upload_request_sent"] is False
 
 
 async def test_mqtt_curmap_event_uploads_selected_map_and_refreshes(

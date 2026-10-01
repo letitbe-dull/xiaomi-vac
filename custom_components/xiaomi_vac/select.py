@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
@@ -13,7 +14,7 @@ from . import XiaomiConfigEntry
 from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
 from .map_coordinator import XiaomiMapCoordinator
-from .spec.types import MapCapability
+from .spec.types import BaseStationCapability, MapCapability
 from .vacuum import _cloud_set_current_map, _has_cloud_session
 
 # Serialise commands to the device (one MIoT write at a time).
@@ -42,6 +43,14 @@ async def async_setup_entry(
         for cfg in SELECTS
         if getattr(core, cfg[1])
     ]
+
+    base = coordinator.device.profile.base_station
+    if (
+        isinstance(base, BaseStationCapability)
+        and base.drying_time is not None
+        and base.drying_times
+    ):
+        entities.append(DryingTimeSelect(coordinator, entry))
 
     map_coordinator = entry.runtime_data.map
     cap = coordinator.device.profile.map
@@ -79,6 +88,36 @@ class XiaomiVacuumSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntit
     async def async_select_option(self, option: str) -> None:
         setter = getattr(self.coordinator.device, self._setter)
         await self.hass.async_add_executor_job(setter, option)
+        await self.coordinator.async_request_refresh()
+
+
+class DryingTimeSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntity):
+    _attr_has_entity_name = True
+    _attr_translation_key = "drying_time"
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator)
+        base_capability = cast(
+            BaseStationCapability, coordinator.device.profile.base_station
+        )
+        self._options_map = base_capability.drying_times
+        self._attr_options = list(self._options_map)
+        base = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{base}_drying_time"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
+
+    @property
+    def current_option(self) -> str | None:
+        raw = self.coordinator.data.drying_time
+        return next(
+            (option for option, value in self._options_map.items() if value == raw),
+            None,
+        )
+
+    async def async_select_option(self, option: str) -> None:
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_drying_time, option
+        )
         await self.coordinator.async_request_refresh()
 
 

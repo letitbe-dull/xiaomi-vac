@@ -9,6 +9,7 @@ from dataclasses import replace
 
 from ..types import (
     Action,
+    BaseStationCapability,
     CleanHistoryCapability,
     ConsumablesCapability,
     CoreCapability,
@@ -22,6 +23,7 @@ from ..types import (
     ScheduleCapability,
     SettingsCapability,
     VoiceCapability,
+    ZoneSweepCapability,
 )
 
 
@@ -908,6 +910,39 @@ XIAOMI_OV21GL = ModelProfile(
     ),
 )
 
+XIAOMI_CORE_OV31GL = replace(
+    XIAOMI_CORE_OV21GL,
+    sweep_type=None,
+    sweep_types={},
+)
+
+XIAOMI_OV31GL = replace(
+    XIAOMI_OV21GL,
+    profile_id="xiaomi.ov31gl",
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov31gl:1",),
+    core=XIAOMI_CORE_OV31GL,
+    max_properties=5,
+    room_clean=RoomCleanCapability(
+        room_ids=Prop(2, 15),
+        start=Action(2, 16, in_piid=15, named_inputs=True),
+    ),
+    consumables=None,
+    base_station=BaseStationCapability(
+        working_status=Prop(2, 18),
+        drying_time=Prop(2, 31),
+        drying_times={"2_hours": 1, "3_hours": 2, "4_hours": 3},
+        auto_mop_dry=Prop(2, 34),
+        drying_progress=Prop(2, 88),
+        dry_left_time=Prop(2, 90),
+        sewage_tank_status=Prop(2, 97),
+        water_tank_status=Prop(2, 98),
+        start_drying=Action(2, 20),
+        stop_drying=Action(2, 32),
+        start_mop_wash=Action(2, 19),
+        empty_dust_bin=Action(2, 18),
+    ),
+)
+
 # xiaomi.vacuum.ov71gl — identical core spec layout to ov21gl, but consumables
 # are unverified on this alias — explicitly cleared so it doesn't silently
 # inherit ov21gl's hardware-confirmed siid/piid table via replace().
@@ -924,6 +959,41 @@ XIAOMI_OV43GB = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov43gb',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov43gb:2",),
+    consumables=None,
+)
+
+# xiaomi.vacuum.ov51gl (Xiaomi Robot Vacuum H40) — every wired siid/piid/aiid
+# and value table matches ov21gl in the public spec; consumables unverified
+# (see ov71gl note above).
+XIAOMI_OV51GL = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.ov51gl',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov51gl:1",),
+    consumables=None,
+)
+
+# xiaomi.vacuum.ov21cn (Mijia 5 Pro) — every wired siid/piid/aiid and value table
+# matches ov21gl in the public spec; consumables unverified (see ov71gl note above).
+XIAOMI_OV21CN = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.ov21cn',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov21cn:2",),
+    consumables=None,
+)
+
+# xiaomi.vacuum.pv21cn (Mijia Robot Vacuum 6 Pro) — same wired siid/piid/aiid
+# as ov21gl, but siid 2 piid 4 (sweep-mop-type) has no "Mop" (2) value.
+# Consumables unverified (see ov71gl note above).
+XIAOMI_CORE_PV21CN = replace(
+    XIAOMI_CORE_OV21GL,
+    modes={'sweep': 1, 'sweep_mop': 3, 'sweep_before_mopping': 4},
+)
+
+XIAOMI_PV21CN = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.pv21cn',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-pv21cn:1",),
+    core=XIAOMI_CORE_PV21CN,
     consumables=None,
 )
 
@@ -979,6 +1049,7 @@ XIAOMI_C107 = replace(
     profile_id='xiaomi.c107',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-c107:2",),
     core=XIAOMI_CORE_C107,
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=None,
 )
 

@@ -25,7 +25,11 @@ _WIFI_SN_MAX_LEN = 24
 
 
 def _is_wifi_sn(value: str) -> bool:
-    return _WIFI_SN_MIN_LEN <= len(value) <= _WIFI_SN_MAX_LEN and value.isupper()
+    return (
+        _WIFI_SN_MIN_LEN <= len(value) <= _WIFI_SN_MAX_LEN
+        and value.isalnum()
+        and value == value.upper()
+    )
 
 
 @dataclass
@@ -50,6 +54,14 @@ class VacuumStatus:
     detergent_life: int | None
     clean_area: int | None
     clean_time: int | None
+    base_station_mode: int | None = None
+    base_station_status: str | None = None
+    drying_time: int | None = None
+    drying_progress: int | None = None
+    dry_left_time: int | None = None
+    sewage_tank_status: int | None = None
+    water_tank_status: int | None = None
+    auto_mop_dry: bool | None = None
 
 
 class IjaiVacuumDevice:
@@ -114,12 +126,35 @@ class IjaiVacuumDevice:
     def _action(self, action, params=None) -> dict:
         if action is None:
             raise ValueError(f"{self.model} does not support this action")
-        return self._dev.call_action_by(action.siid, action.aiid, params or [])
+        call_params = params or []
+        if action.named_inputs:
+            input_piids = action.in_piids or (
+                (action.in_piid,) if action.in_piid is not None else ()
+            )
+            if len(input_piids) != len(call_params):
+                raise ValueError(
+                    f"Action {action.siid}/{action.aiid} expects "
+                    f"{len(input_piids)} named inputs, got {len(call_params)}"
+                )
+            return self._dev.send(
+                "action",
+                {
+                    "did": f"call-{action.siid}-{action.aiid}",
+                    "siid": action.siid,
+                    "aiid": action.aiid,
+                    "in": [
+                        {"piid": piid, "value": value}
+                        for piid, value in zip(input_piids, call_params)
+                    ],
+                },
+            )
+        return self._dev.call_action_by(action.siid, action.aiid, call_params)
 
     # --- telemetry -------------------------------------------------------
     def status(self) -> VacuumStatus:
         c = self.core
         cons = self.profile.consumables
+        base = self.profile.base_station
         life_props = consumable_life_props(cons)
         door_state = (
             getattr(cons, "door_state", None)
@@ -132,6 +167,13 @@ class IjaiVacuumDevice:
             c.status, c.battery, c.fault, c.fan_speed, c.water_level,
             c.mode, c.sweep_type, c.repeat, c.alarm, c.volume,
             *life_props.values(), door_state,
+            base.working_status if base is not None else None,
+            base.drying_progress if base is not None else None,
+            base.dry_left_time if base is not None else None,
+            base.drying_time if base is not None else None,
+            base.sewage_tank_status if base is not None else None,
+            base.water_tank_status if base is not None else None,
+            base.auto_mop_dry if base is not None else None,
         ) if p is not None]
         vals = self._batch_get(poll)
         _raw = vals.get(c.status)
@@ -163,6 +205,14 @@ class IjaiVacuumDevice:
             detergent_life=_as_int(vals.get(life_props.get("detergent_life"))),
             clean_area=None,
             clean_time=None,
+            base_station_mode=_base_station_mode(vals.get(base.working_status)) if base else None,
+            base_station_status=_base_station_status(vals.get(base.working_status)) if base else None,
+            drying_time=_as_int(vals.get(base.drying_time)) if base else None,
+            drying_progress=_as_int(vals.get(base.drying_progress)) if base else None,
+            dry_left_time=_as_int(vals.get(base.dry_left_time)) if base else None,
+            sewage_tank_status=_as_int(vals.get(base.sewage_tank_status)) if base else None,
+            water_tank_status=_as_int(vals.get(base.water_tank_status)) if base else None,
+            auto_mop_dry=_as_bool(vals.get(base.auto_mop_dry)) if base else None,
         )
 
     # --- control ---------------------------------------------------------
@@ -206,6 +256,32 @@ class IjaiVacuumDevice:
 
     def set_volume(self, value: int) -> None:
         self._set(self.core.volume, int(value))
+
+    def set_auto_mop_dry(self, on: bool) -> None:
+        base = self.profile.base_station
+        self._set(base.auto_mop_dry if base else None, on)
+
+    def set_drying_time(self, option: str) -> None:
+        base = self.profile.base_station
+        if base is None or base.drying_time is None:
+            raise ValueError(f"{self.model} does not support drying time")
+        self._set(base.drying_time, base.drying_times[option])
+
+    def start_drying(self) -> None:
+        base = self.profile.base_station
+        self._action(base.start_drying if base else None)
+
+    def stop_drying(self) -> None:
+        base = self.profile.base_station
+        self._action(base.stop_drying if base else None)
+
+    def start_mop_wash(self) -> None:
+        base = self.profile.base_station
+        self._action(base.start_mop_wash if base else None)
+
+    def empty_dust_bin(self) -> None:
+        base = self.profile.base_station
+        self._action(base.empty_dust_bin if base else None)
 
     def clean_segments(self, room_ids: list[int | str]) -> None:
         cap = self.profile.room_clean
@@ -253,6 +329,58 @@ class IjaiVacuumDevice:
         }
         return cap.set_room_clean, [values[piid] for piid in cap.set_room_clean.in_piids]
 
+    def _point_zone(self):
+        if self.profile.profile_id != "ijai.v17":
+            return None
+        cap = self.profile.map
+        return cap.point_zone if isinstance(cap, MapCapability) else None
+
+    def zone_clean_action(self):
+        """Return the verified Action that carries the zone."""
+        point_zone = self._point_zone()
+        if point_zone is not None:
+            return point_zone.set_zone_point
+        sweep = self.profile.zone_sweep
+        return sweep.start if sweep is not None else None
+
+    def zone_clean_start_action(self):
+        """Return the verified start-zone-clean Action."""
+        point_zone = self._point_zone()
+        return point_zone.start_zone_clean if point_zone is not None else None
+
+    def zone_clean_params(
+        self, x0: float, y0: float, x1: float, y1: float
+    ) -> list[str] | None:
+        """Build zone-clean parameters in device coordinates."""
+        if self.zone_clean_action() is None:
+            return None
+        mm = [round(value * 1000) for value in (x0, y0, x1, y1)]
+        if self.profile.zone_sweep is not None:
+            left, right = sorted((mm[0], mm[2]))
+            bottom, top = sorted((mm[1], mm[3]))
+            region = [left, top, left, bottom, right, bottom, right, top]
+            zones = [{"blocks_region": region, "blocks_attr": 0}]
+            return [json.dumps(zones, separators=(",", ":"))]
+        return [f"[{mm[0]},{mm[1]},{mm[2]},{mm[3]},1]"]
+
+    def clean_zone(self, x0: float, y0: float, x1: float, y1: float) -> None:
+        """Start a verified zone clean."""
+        action = self.zone_clean_action()
+        start = self.zone_clean_start_action()
+        params = self.zone_clean_params(x0, y0, x1, y1)
+        if self.profile.zone_sweep is not None:
+            self._action(action, params)
+            return
+        if (
+            action is None
+            or action.in_piid is None
+            or start is None
+            or params is None
+        ):
+            raise ValueError(f"{self.model} has no verified zone-clean capability")
+        self._action(action, [{"piid": action.in_piid, "value": params[0]}])
+        self._action(start)
+
     # --- maps ------------------------------------------------------------
     def map_list(self) -> list[dict]:
         """Return [{'name', 'id', 'cur'}...] via get-map-list action.
@@ -287,8 +415,8 @@ class IjaiVacuumDevice:
                 return payload
         return []
 
-    def request_map_upload(self, map_id: int) -> dict:
-        """Trigger a fresh upload for a map-list map; returns raw out."""
+    def map_upload_actions(self) -> list:
+        """Return the profile's map-upload Actions in the order they are tried."""
         cap = self.profile.map
         if not isinstance(cap, MapCapability):
             raise ValueError(f"{self.model} has no map-upload capability")
@@ -301,6 +429,11 @@ class IjaiVacuumDevice:
             actions.append(cap.upload_by_mapid_ii)
         if not actions:
             raise ValueError(f"{self.model} has no map-upload capability")
+        return actions
+
+    def request_map_upload(self, map_id: int) -> dict:
+        """Trigger a fresh upload for a map-list map; returns raw out."""
+        actions = self.map_upload_actions()
         last_error: Exception | None = None
         for action in actions:
             try:
@@ -365,3 +498,26 @@ def _as_int(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _as_bool(value) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _base_station_mode(value) -> int | None:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+    return _as_int(value.get("mode")) if isinstance(value, dict) else _as_int(value)
+
+
+def _base_station_status(value) -> str | None:
+    mode = _base_station_mode(value)
+    return {
+        0: "idle",
+        1: "drying",
+        2: "washing_mops",
+        3: "dust_collection",
+    }.get(mode, "unknown" if mode is not None else None)

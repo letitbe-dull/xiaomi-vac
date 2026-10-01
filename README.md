@@ -158,14 +158,28 @@ action:
       segments: [12]
 ```
 
+### `xiaomi_vac.clean_zone`
+
+Cleans a rectangular area (zone). Coordinates are `[x0, y0, x1, y1]` in the
+map's **metre** space — the same space the map camera/vector endpoint and the
+bundled card use (draw a rectangle on the card, or take the numbers from the
+map attributes).
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `entity_id` | The vacuum entity. | `vacuum.xiaomi_robot_vacuum_s10` |
+| `zone` | Rectangle as `[x0, y0, x1, y1]` in metres. | `[-1.5, 2.2, -0.4, 3.1]` |
+
+Zone cleaning is available for `ijai.vacuum.v17`, `ijai.vacuum.v18`, and `ijai.vacuum.v19`, which share the same command set, and for `xiaomi.vacuum.c107`, `d101`, `d102ev`, `d102gl`, and `d109gl`, which share another. It was tested on an ijai v19 and a `xiaomi.vacuum.d102gl`. The other models are expected to behave the same but are unconfirmed, so please open an issue if yours doesn't. The bundled card shows a draw tool for those models on the map page unless `allow_zone_cleaning: false`: tap it, drag a rectangle, then tap **Clean this area**.
+
 ## Supported models
 
-These are the [76 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
+These are the [80 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
 
 | Brand | Models |
 |-------|--------|
 | **ijai** | v1, v2, v3, v10, v13, v14, v15, v16, v17, v18, v19 |
-| **Xiaomi** | b106bk/eu, c101/eu, c103, c104, c107, d101, d102ev/gl, d106gl, d109gl, ov21gl, ov42gl, ov43gb, ov71gl |
+| **Xiaomi** | b106bk/eu, c101/eu, c103, c104, c107, d101, d102ev/gl, d106gl, d109gl, ov21cn/gl, ov31gl, ov42gl, ov43gb, ov51gl, ov71gl, pv21cn |
 | **Viomi** | v12, v13, v15, v17, v18, v19, v22, v23, v24, v35, v38, v40, v45 |
 | **Dreame** | p2008, p2009, p2027/28/28a/29/36, p2114a/o, p2140/a/p, p2148o, p2149o, p2150a/b/o, p2157, p2187, p2259, r2104, r2205, r2209, r2210, r2211o, r2215, r2216o, r2228/o/z, r2232a, r2233, r2235, r2246, r2247, r2254 |
 

@@ -306,7 +306,13 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             self._devices = [d for d in all_vacuums if is_supported(d["model"])]
             if not self._devices:
-                reason = "no_devices" if not all_vacuums else "unsupported_model"
+                record = self._cloud.discovery_record
+                if all_vacuums:
+                    reason = "unsupported_model"
+                elif record and not any(r["answered"] for r in record):
+                    reason = "no_server_response"
+                else:
+                    reason = "no_devices"
                 return self.async_abort(reason=reason)
         if len(self._devices) == 1:
             self._selected = self._devices[0]
