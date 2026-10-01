@@ -68,7 +68,7 @@
       },
       "miot_oauth_code": {
         "title": "Paste Xiaomi OAuth code",
-        "description": "Open this link and approve access. Xiaomi then sends you to homeassistant.local:8123, which usually won't load from here. Copy the full address from the address bar and paste it here.\n\n{authorize_url}",
+        "description": "Open this link and approve access. Xiaomi then sends you to homeassistant.local:8123. It's fine if that page doesn't load. Copy the full address from the address bar and paste it here.\n\n{authorize_url}",
         "data": {
           "code": "OAuth code"
         }
@@ -122,7 +122,7 @@
       },
       "miot_oauth_code": {
         "title": "Paste Xiaomi OAuth code",
-        "description": "Open this link and approve access. Xiaomi then sends you to homeassistant.local:8123, which usually won't load from here. Copy the full address from the address bar and paste it here.\n\n{authorize_url}",
+        "description": "Open this link and approve access. Xiaomi then sends you to homeassistant.local:8123. It's fine if that page doesn't load. Copy the full address from the address bar and paste it here.\n\n{authorize_url}",
         "data": {
           "code": "OAuth code"
         }
@@ -150,7 +150,7 @@
         "step": {
           "link": {
             "title": "Link Xiaomi OAuth",
-            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link and approve access. Xiaomi then sends you to homeassistant.local:8123, which usually won't load from here. Copy the full address from the address bar and paste it here.\n\n{authorize_url}",
+            "description": "Your vacuum works, but the map is on a slow refresh. Link Xiaomi OAuth to get the real-time (MQTT) live map. Open this link and approve access. Xiaomi then sends you to homeassistant.local:8123. It's fine if that page doesn't load. Copy the full address from the address bar and paste it here.\n\n{authorize_url}",
             "data": {
               "code": "OAuth code"
             }
