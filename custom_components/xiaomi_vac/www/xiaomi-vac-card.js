@@ -461,6 +461,7 @@ class XiaomiVacCard extends HTMLElement {
       const st = this._st(this._config.vacuum);
       const cleaning = st && st.state === "cleaning";
       this._setPending(cleaning ? "paused" : "cleaning");
+      if (!cleaning && this._sel.size) return this._cleanSelected();
       this._svc("vacuum", cleaning ? "pause" : "start", { entity_id: this._config.vacuum });
     };
     q(".act-dock").onclick = () => {
