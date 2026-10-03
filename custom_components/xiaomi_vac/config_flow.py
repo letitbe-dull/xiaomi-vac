@@ -22,7 +22,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 
 from .captcha_view import IMG_URL, ensure_registered, remove_image, set_image
-from .cloud.connector import XiaomiCloud
+from .cloud.connector import CloudUnreachable, XiaomiCloud
 from .cloud.oauth import (
     OAUTH_REDIRECT_URI,
     XiaomiOAuthError,
@@ -224,6 +224,55 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_SSECURITY: cloud.ssecurity,
                 CONF_SERVICE_TOKEN: cloud.service_token,
                 CONF_PASS_TOKEN: cloud.pass_token or "",
+            },
+        )
+
+    # --- reconfigure: refresh host, token and server from the cloud -----
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Re-run discovery for a cloud entry and update its host, token and server."""
+        entry = self._get_reconfigure_entry()
+        data = entry.data
+        if not data.get(CONF_SERVER):
+            return self.async_abort(reason="reconfigure_local_only")
+        if user_input is None:
+            return self.async_show_form(step_id="reconfigure")
+
+        cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+        cloud.restore_session(
+            data[CONF_USER_ID],
+            data[CONF_SSECURITY],
+            data[CONF_SERVICE_TOKEN],
+            data.get(CONF_PASS_TOKEN),
+        )
+        vacuums = await self.hass.async_add_executor_job(
+            cloud.list_vacuums, data[CONF_SERVER]
+        )
+        if not any(r["answered"] for r in cloud.discovery_record):
+            try:
+                renewed = await self.hass.async_add_executor_job(cloud.refresh)
+            except CloudUnreachable:
+                return self.async_abort(reason="no_server_response")
+            if not renewed:
+                return self.async_abort(reason="reconfigure_reauth_required")
+            vacuums = await self.hass.async_add_executor_job(
+                cloud.list_vacuums, data[CONF_SERVER]
+            )
+            if not any(r["answered"] for r in cloud.discovery_record):
+                return self.async_abort(reason="no_server_response")
+
+        found = next(
+            (v for v in vacuums if str(v["did"]) == str(data[CONF_DEVICE_ID])), None
+        )
+        if found is None:
+            return self.async_abort(reason="reconfigure_device_not_found")
+        return self.async_update_reload_and_abort(
+            entry,
+            data_updates={
+                CONF_HOST: found["localip"],
+                CONF_TOKEN: found["token"],
+                CONF_SERVER: found["server"],
             },
         )
 

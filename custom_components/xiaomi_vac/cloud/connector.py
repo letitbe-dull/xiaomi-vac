@@ -127,11 +127,13 @@ class XiaomiCloud:
         return "ok" if self.service_token else "fail"
 
     # --- device discovery ----------------------------------------------
-    def list_vacuums(self) -> list[dict]:
+    def list_vacuums(self, prefer_server: str | None = None) -> list[dict]:
         """List all vacuum devices across servers with localip + token.
 
         Returns every device whose model string contains ``.vacuum.``; brand
         filtering (supported vs. unsupported) is left to the caller.
+
+        @param prefer_server: region that wins a tie between equally online duplicate records
         """
         found: dict[str, dict] = {}  # keyed by did to dedupe across servers
         sightings: dict[str, list[tuple[str, bool]]] = {}  # did -> (region, isOnline)
@@ -155,8 +157,11 @@ class XiaomiCloud:
                 _LOGGER.debug("Discovery region=%s vacuum model=%s", srv, model)
                 online = d.get("isOnline") is True
                 sightings.setdefault(did, []).append((srv, online))
-                if did in found and (kept_online[did] or not online):
-                    continue
+                if did in found:
+                    replaces = not kept_online[did] and online
+                    ties_on_preferred = srv == prefer_server and online == kept_online[did]
+                    if not (replaces or ties_on_preferred):
+                        continue
                 kept_online[did] = online
                 found[did] = {
                     "name": d.get("name"), "did": did, "model": model,
@@ -435,8 +440,8 @@ class XiaomiCloud:
         except requests.exceptions.RequestException as ex:
             self.last_call_unreachable = True
             # A transient network/DNS/timeout failure on ONE regional server
-            # must not abort multi-region discovery (find_device/list_vacuums
-            # already treat a falsy result as "skip this server"). Report it as
+            # must not abort multi-region discovery (list_vacuums
+            # already treats a falsy result as "skip this server"). Report it as
             # no response instead of propagating (#42).
             _LOGGER.debug("Cloud request to %s failed: %s", url, ex)
             return None
@@ -447,18 +452,6 @@ class XiaomiCloud:
     def _signed_nonce(self, nonce: str) -> str:
         h = hashlib.sha256(base64.b64decode(self.ssecurity) + base64.b64decode(nonce))
         return base64.b64encode(h.digest()).decode()
-
-    def find_device(self, token: str, server: str | None = None):
-        """Return (server, did, model, name) for the device with this token."""
-        for srv in ([server] if server else SERVERS):
-            resp = self._call(self._api_url(srv) + "/home/device_list",
-                              {"data": '{"getVirtualModel":false,"getHuamiDevices":0}'})
-            if not resp:
-                continue
-            for d in resp["result"]["list"]:
-                if str(d.get("token", "")).casefold() == str(token).casefold():
-                    return srv, d["did"], d.get("model"), d.get("name")
-        return None, None, None, None
 
     def cloud_action(self, server: str, did: str, siid: int, aiid: int, in_params: list):
         """Call a MIoT action via the cloud (avoids local -9999 ack timeouts)."""

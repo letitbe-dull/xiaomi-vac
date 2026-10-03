@@ -77,6 +77,10 @@
         "title": "Xiaomi OAuth linked",
         "description": "The real-time map auth is ready."
       },
+      "reconfigure": {
+        "title": "Refresh from Xiaomi cloud",
+        "description": "Look this vacuum up again in your Xiaomi account and update its IP address, token and region. Use it if the vacuum stopped responding after an IP change or a re-pair in Mi Home. Nothing else changes."
+      },
       "reauth_confirm": {
         "title": "Sign in to Xiaomi again",
         "description": "Your Xiaomi cloud map session ran out and couldn't renew on its own. Sign in again to bring the map back.",
@@ -99,6 +103,10 @@
     "abort": {
       "already_configured": "This vacuum is already set up.",
       "reauth_successful": "You're back in. The live map's restored.",
+      "reconfigure_successful": "Done. The vacuum's IP address, token and region now match your Xiaomi account.",
+      "reconfigure_device_not_found": "This vacuum isn't in your Xiaomi account, so nothing was changed.",
+      "reconfigure_reauth_required": "Your Xiaomi sign-in has expired and couldn't renew on its own. Reauthenticate this integration, then try again. Nothing was changed.",
+      "reconfigure_local_only": "This vacuum was added with an IP address and token only, so there's no Xiaomi account to refresh from. Nothing was changed.",
       "login_failed": "Xiaomi cloud sign-in failed ({reason}). Check your email and password, then try again.",
       "no_server_response": "Couldn't reach any Xiaomi server. Check your internet connection, then try again in a few minutes.",
       "no_devices": "No supported vacuums on this account.",

@@ -14,8 +14,10 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xiaomi_vac import async_migrate_entry
+from custom_components.xiaomi_vac.cloud.connector import CloudUnreachable
 from custom_components.xiaomi_vac.captcha_view import ImageView
 from custom_components.xiaomi_vac.const import (
+    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_MODEL,
     CONF_OAUTH_ACCESS_TOKEN,
@@ -32,6 +34,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_TOKEN,
     CONF_USER_ID,
     CONF_USERNAME,
+    CONF_WIFI_SN,
     DOMAIN,
 )
 
@@ -949,3 +952,220 @@ async def test_local_step_duplicate_unique_id_aborts(hass: HomeAssistant) -> Non
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+# ---------------------------------------------------------------------------
+# Reconfigure: refresh host, token and server from the cloud
+# ---------------------------------------------------------------------------
+
+_CLOUD_DEVICE_LIST = "custom_components.xiaomi_vac.config_flow.XiaomiCloud._call"
+_CLOUD_REFRESH = "custom_components.xiaomi_vac.config_flow.XiaomiCloud.refresh"
+
+_STALE = {CONF_HOST: "10.0.0.121", CONF_TOKEN: "a" * 32, CONF_SERVER: "de"}
+_CURRENT = {CONF_HOST: "10.0.0.92", CONF_TOKEN: "b" * 32, CONF_SERVER: "ru"}
+
+
+def _cloud_entry(hass: HomeAssistant, server: str = "de") -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id="AA:BB:CC:DD:EE:01",
+        options={"keep": "me"},
+        data={
+            CONF_USERNAME: "user@example.com",
+            CONF_MODEL: "ijai.vacuum.v3",
+            CONF_DEVICE_ID: "1001",
+            CONF_HOST: _STALE[CONF_HOST],
+            CONF_TOKEN: _STALE[CONF_TOKEN],
+            CONF_SERVER: server,
+            CONF_USER_ID: "uid",
+            CONF_SSECURITY: "sec",
+            CONF_SERVICE_TOKEN: "svc",
+            CONF_PASS_TOKEN: "pass",
+            CONF_WIFI_SN: "SN1",
+            CONF_OAUTH_ACCESS_TOKEN: "oauth-access",
+            CONF_OAUTH_REGION: "ru",
+        },
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+def _region_record(region: str, did: str = "1001", online: bool = True) -> dict:
+    values = _STALE if region == "de" else _CURRENT
+    return {
+        "name": "vac", "did": did, "model": "ijai.vacuum.v3",
+        "mac": "AA:BB:CC:DD:EE:01", "localip": values[CONF_HOST],
+        "token": values[CONF_TOKEN], "isOnline": online,
+    }
+
+
+def _by_region(regions: dict[str, list[dict]], session: dict | None = None):
+    """Fake `_call`: each region answers its own device list; `session` gates answers."""
+
+    def fake(self, url: str, params: dict):
+        if session is not None and not session["valid"]:
+            return None
+        for region, devices in regions.items():
+            if url == self._api_url(region) + "/home/device_list":
+                return _answer(devices)
+        return None
+
+    return fake
+
+
+async def _run_reconfigure(hass: HomeAssistant, entry: MockConfigEntry) -> dict:
+    """Open Reconfigure, confirm the form, return the final flow result."""
+    result = await entry.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    return result
+
+
+async def test_reconfigure_found_updates_host_token_and_server(
+    hass: HomeAssistant,
+) -> None:
+    """A did found with a current record gets that record's host, token and server."""
+    entry = _cloud_entry(hass)
+    before = dict(entry.data)
+
+    with patch(
+        _CLOUD_DEVICE_LIST,
+        autospec=True,
+        side_effect=_by_region(
+            {"de": [_region_record("de", online=False)], "ru": [_region_record("ru")]}
+        ),
+    ):
+        result = await _run_reconfigure(hass, entry)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data == {**before, **_CURRENT}
+    assert entry.unique_id == "AA:BB:CC:DD:EE:01"
+    assert entry.options == {"keep": "me"}
+
+
+async def test_reconfigure_tie_keeps_stored_server(hass: HomeAssistant) -> None:
+    """When no region is online, an entry stays on its stored server."""
+    entry = _cloud_entry(hass, server="ru")
+
+    with patch(
+        _CLOUD_DEVICE_LIST,
+        autospec=True,
+        side_effect=_by_region(
+            {
+                "de": [_region_record("de", online=False)],
+                "ru": [_region_record("ru", online=False)],
+            }
+        ),
+    ):
+        result = await _run_reconfigure(hass, entry)
+
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_SERVER] == "ru"
+    assert entry.data[CONF_HOST] == _CURRENT[CONF_HOST]
+    assert entry.data[CONF_TOKEN] == _CURRENT[CONF_TOKEN]
+
+
+async def test_reconfigure_did_not_found_aborts_and_leaves_entry(
+    hass: HomeAssistant,
+) -> None:
+    """Discovery that does not return the entry's did aborts without changes."""
+    entry = _cloud_entry(hass)
+    before = dict(entry.data)
+
+    with patch(
+        _CLOUD_DEVICE_LIST,
+        autospec=True,
+        side_effect=_by_region({"ru": [_region_record("ru", did="9999")]}),
+    ):
+        result = await _run_reconfigure(hass, entry)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_device_not_found"
+    assert entry.data == before
+
+
+async def test_reconfigure_expired_session_refreshes_then_updates(
+    hass: HomeAssistant,
+) -> None:
+    """A dead session is renewed from the pass token, then the entry is refreshed."""
+    entry = _cloud_entry(hass)
+    session = {"valid": False}
+
+    def _renew(self) -> bool:
+        session["valid"] = True
+        return True
+
+    with (
+        patch(
+            _CLOUD_DEVICE_LIST,
+            autospec=True,
+            side_effect=_by_region({"ru": [_region_record("ru")]}, session=session),
+        ),
+        patch(_CLOUD_REFRESH, autospec=True, side_effect=_renew),
+    ):
+        result = await _run_reconfigure(hass, entry)
+
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_SERVER] == "ru"
+    assert entry.data[CONF_TOKEN] == _CURRENT[CONF_TOKEN]
+    assert entry.data[CONF_SERVICE_TOKEN] == "svc"
+
+
+async def test_reconfigure_expired_session_refresh_fails_asks_for_reauth(
+    hass: HomeAssistant,
+) -> None:
+    """A dead session that cannot be renewed aborts and leaves the entry alone."""
+    entry = _cloud_entry(hass)
+    before = dict(entry.data)
+
+    with (
+        patch(_CLOUD_DEVICE_LIST, autospec=True, side_effect=_by_region({})),
+        patch(_CLOUD_REFRESH, return_value=False),
+    ):
+        result = await _run_reconfigure(hass, entry)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_reauth_required"
+    assert entry.data == before
+
+
+async def test_reconfigure_cloud_unreachable_aborts_and_leaves_entry(
+    hass: HomeAssistant,
+) -> None:
+    """A renewal that cannot reach Xiaomi aborts as no_server_response."""
+    entry = _cloud_entry(hass)
+    before = dict(entry.data)
+
+    with (
+        patch(_CLOUD_DEVICE_LIST, autospec=True, side_effect=_by_region({})),
+        patch(_CLOUD_REFRESH, side_effect=CloudUnreachable("down")),
+    ):
+        result = await _run_reconfigure(hass, entry)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_server_response"
+    assert entry.data == before
+
+
+async def test_reconfigure_local_only_entry_aborts_and_leaves_entry(
+    hass: HomeAssistant,
+) -> None:
+    """A local-only entry has no cloud session, so Reconfigure aborts untouched."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id="AA:BB:CC:DD:EE:02",
+        data={CONF_HOST: "1.2.3.4", CONF_TOKEN: TOKEN, CONF_MODEL: "dreame.vacuum.p2008"},
+    )
+    entry.add_to_hass(hass)
+    before = dict(entry.data)
+
+    result = await entry.start_reconfigure_flow(hass)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_local_only"
+    assert entry.data == before

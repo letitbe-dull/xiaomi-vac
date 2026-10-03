@@ -80,7 +80,7 @@ def test_map_url_returns_none_when_call_itself_returns_none():
 def test_call_returns_none_on_request_exception():
     """A timeout/DNS/connection error on one regional server must be swallowed
     (-> None) instead of propagating and aborting multi-region discovery —
-    find_device()/list_vacuums() already treat a falsy result as "skip this
+    list_vacuums() already treats a falsy result as "skip this
     server" (issue #42)."""
     cloud = _cloud()
     cloud.ssecurity = base64.b64encode(b"0123456789abcdef").decode()
