@@ -16,7 +16,7 @@ from vacuum_map_parser_base.config.size import Sizes
 from vacuum_map_parser_ijai.map_data_parser import IjaiMapDataParser
 
 from . import map_vector
-from .cloud.connector import XiaomiCloud
+from .cloud.connector import CloudUnreachable, XiaomiCloud
 from .map_diagnostics import SlotAttempt
 from .map_parsers import (
     dreame_decrypt_cloud_blob,
@@ -211,7 +211,11 @@ class MapFetcher:
             _LOGGER.debug("dreame enckey poll: %s",
                           "found" if self._enckey else "not found (unencrypted or unavailable)")
         attempt = self.last_attempt = SlotAttempt(slot=slot)
-        url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
+        try:
+            url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
+        except CloudUnreachable:
+            attempt.outcome = "unreachable"
+            raise
         attempt.url_obtained = bool(url)
         if not url:
             # No URL usually means the cloud session expired; let the

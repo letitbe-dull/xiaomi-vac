@@ -35,6 +35,10 @@ class CaptchaRequired(Exception):
     """Raised when the caller did not supply a captcha callback."""
 
 
+class CloudUnreachable(Exception):
+    """Raised when a Xiaomi server couldn't be reached (timeout, DNS, connection)."""
+
+
 class XiaomiCloud:
     def __init__(self, username: str, password: str = ""):
         # password is only needed for the interactive login (begin_login). Session
@@ -53,6 +57,7 @@ class XiaomiCloud:
         self.captcha_image: bytes | None = None
         self.login_error: str = ""  # Xiaomi's desc from the last failed login
         self.login_code: int | None = None  # Xiaomi's code from the last failed login
+        self.last_call_unreachable = False  # last _call() hit a network error
         self._fields: dict = {}
         self._2fa_ctx: str | None = None
         self._lp_url: str | None = None
@@ -201,6 +206,8 @@ class XiaomiCloud:
             self.pass_token = j.get("passToken", self.pass_token)
             r2 = self._s.get(j["location"], headers=h, timeout=10)
             token = r2.cookies.get("serviceToken")
+        except requests.exceptions.RequestException as ex:
+            raise CloudUnreachable(str(ex)) from ex
         except Exception:  # noqa: BLE001
             return False
         if token:
@@ -421,9 +428,11 @@ class XiaomiCloud:
             params[k] = _enc_rc4(sn, v)
         params.update({"signature": _enc_sig(url, sn, params),
                        "ssecurity": self.ssecurity, "_nonce": nonce})
+        self.last_call_unreachable = False
         try:
             r = self._s.post(url, headers=h, cookies=ck, params=params, timeout=10)
         except requests.exceptions.RequestException as ex:
+            self.last_call_unreachable = True
             # A transient network/DNS/timeout failure on ONE regional server
             # must not abort multi-region discovery (find_device/list_vacuums
             # already treat a falsy result as "skip this server"). Report it as
@@ -477,6 +486,7 @@ class XiaomiCloud:
         resp = self._try_map_url(server, obj, endpoint)
         if resp is not None:
             return resp
+        first_unreachable = self.last_call_unreachable
 
         alt = ("get_interim_file_url" if endpoint == "get_interim_file_url_pro"
                else "get_interim_file_url_pro")
@@ -484,6 +494,8 @@ class XiaomiCloud:
         if alt_resp is not None:
             _LOGGER.debug("map_url: %s failed, succeeded with %s", endpoint, alt)
             return alt_resp
+        if first_unreachable and self.last_call_unreachable:
+            raise CloudUnreachable(f"{server} map URL request timed out or failed to connect")
         return None
 
     def _try_map_url(self, server: str, obj_name: str, endpoint: str) -> str | None:

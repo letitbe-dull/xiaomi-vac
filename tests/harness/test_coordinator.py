@@ -23,6 +23,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_USERNAME,
     CONF_WIFI_SN,
 )
+from custom_components.xiaomi_vac.cloud.connector import CloudUnreachable
 from custom_components.xiaomi_vac.coordinator import XiaomiVacuumCoordinator
 from custom_components.xiaomi_vac.device import DeviceCommunicationError
 from custom_components.xiaomi_vac.map import MapResult, SessionExpired
@@ -296,6 +297,53 @@ async def test_map_coordinator_session_expiry_refresh_fails_raises_auth_failed(
         patch.object(coord, "_refresh_and_persist", new=AsyncMock(return_value=False)),
         patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
         pytest.raises(ConfigEntryAuthFailed),
+    ):
+        await coord._async_update_data()
+
+
+async def test_map_coordinator_unreachable_cloud_raises_update_failed_not_reauth(
+    hass: HomeAssistant,
+) -> None:
+    """A map URL timeout is a network problem, not an expired session."""
+    coord = _map_coord(hass)
+
+    fetcher = MagicMock()
+    fetcher.fetch.side_effect = CloudUnreachable("tw timed out")
+    coord._fetcher = fetcher
+
+    async def _exec(fn, *a):
+        return fn(*a)
+
+    mock_refresh = AsyncMock(return_value=True)
+    with (
+        patch.object(coord, "_refresh_and_persist", new=mock_refresh),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+        pytest.raises(UpdateFailed),
+    ):
+        await coord._async_update_data()
+    mock_refresh.assert_not_awaited()
+
+
+async def test_map_coordinator_unreachable_during_refresh_raises_update_failed_not_reauth(
+    hass: HomeAssistant,
+) -> None:
+    """A passToken renewal that can't reach Xiaomi must not force a reauth."""
+    coord = _map_coord(hass)
+
+    fetcher = MagicMock()
+    fetcher.fetch.side_effect = SessionExpired("dead")
+    coord._fetcher = fetcher
+
+    async def _exec(fn, *a):
+        return fn(*a)
+
+    with (
+        patch.object(
+            coord, "_refresh_and_persist",
+            new=AsyncMock(side_effect=CloudUnreachable("account.xiaomi.com timed out")),
+        ),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+        pytest.raises(UpdateFailed),
     ):
         await coord._async_update_data()
 

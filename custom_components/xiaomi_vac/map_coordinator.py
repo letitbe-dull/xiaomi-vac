@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .cloud.connector import XiaomiCloud
+from .cloud.connector import CloudUnreachable, XiaomiCloud
 from .cloud.mqtt import MqttMessage
 from .const import (
     CONF_DEVICE_ID,
@@ -419,6 +419,9 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 any_resolved = True
             except SessionExpired:
                 results.append(None)
+            except CloudUnreachable:
+                self.last_cycle.slots = [*attempts, self._fetcher.last_attempt]
+                raise
             attempts.append(self._fetcher.last_attempt)
         self.last_cycle.slots = attempts
         if not any_resolved:
@@ -590,6 +593,8 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             return result
         except (UpdateFailed, ConfigEntryAuthFailed):
             raise
+        except CloudUnreachable as err:
+            raise UpdateFailed(f"Couldn't reach the Xiaomi cloud: {err}") from None
         except SessionExpired:
             raise ConfigEntryAuthFailed("Xiaomi cloud map session expired") from None
         except Exception as err:  # noqa: BLE001

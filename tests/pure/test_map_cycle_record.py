@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
+from xvac.cloud.connector import CloudUnreachable
 from xvac.map import MapFetcher, SessionExpired
 from xvac.map_diagnostics import MapCycleRecord, SlotAttempt, describe_map_capability, resolve_active_id
 
@@ -69,6 +70,19 @@ def test_fetch_records_no_url_and_still_raises_session_expired():
     assert attempt.url_obtained is False
     assert attempt.blob_bytes is None
     assert attempt.outcome == "no_url"
+
+
+def test_fetch_records_unreachable_and_reraises():
+    cloud = FakeCloud()
+
+    def _timeout(*a):
+        raise CloudUnreachable("tw timed out")
+    cloud.map_url = _timeout
+    f = _fetcher(cloud)
+    with pytest.raises(CloudUnreachable):
+        f.fetch("0")
+    assert f.last_attempt.url_obtained is False
+    assert f.last_attempt.outcome == "unreachable"
 
 
 def test_fetch_records_empty_download_as_none_return():
@@ -185,6 +199,11 @@ def test_cycle_where_cloud_refused_every_url_reads_as_session_expired():
     assert out["session_expired"] is True
     assert out["url_obtained"] is False
     assert out["rendered"] is False
+
+
+def test_cycle_where_cloud_was_unreachable_is_not_session_expired():
+    rec = _record(slots=_slots((False, None, "unreachable")))
+    assert rec.as_dict()["session_expired"] is False
 
 
 def test_cycle_with_url_but_empty_blob_is_not_session_expired():

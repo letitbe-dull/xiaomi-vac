@@ -107,7 +107,9 @@ class MapCycleRecord:
             "parser_key": self.parser_key,
             "map_capability": self.map_capability,
             "url_obtained": any(s.url_obtained for s in self.slots),
-            "session_expired": bool(self.slots) and not any(s.url_obtained for s in self.slots),
+            "session_expired": bool(self.slots) and not any(
+                s.url_obtained or s.outcome == "unreachable" for s in self.slots
+            ),
             "rendered": any(s.outcome == "rendered" for s in self.slots),
             "slots": [s.as_dict() for s in self.slots],
             "resolved_map_id": self.resolved_map_id,

@@ -13,7 +13,9 @@ from unittest.mock import patch
 
 import requests
 
-from cloud.connector import XiaomiCloud
+import pytest
+
+from cloud.connector import CloudUnreachable, XiaomiCloud
 
 
 def _cloud() -> XiaomiCloud:
@@ -86,3 +88,47 @@ def test_call_returns_none_on_request_exception():
     with patch.object(cloud._s, "post", side_effect=requests.exceptions.Timeout("boom")):
         result = cloud._call("https://de.api.io.mi.com/app/home/device_list", {"data": "{}"})
     assert result is None
+    assert cloud.last_call_unreachable is True
+
+
+def _calls(cloud, outcomes):
+    """Fake `_call` that sets last_call_unreachable like the real one."""
+    it = iter(outcomes)
+
+    def _fake(url, params):
+        resp = next(it)
+        cloud.last_call_unreachable = resp == "timeout"
+        return None if resp == "timeout" else resp
+    return _fake
+
+
+def test_map_url_raises_unreachable_when_both_endpoints_time_out():
+    cloud = _cloud()
+    with patch.object(cloud, "_call", side_effect=_calls(cloud, ["timeout", "timeout"])):
+        with pytest.raises(CloudUnreachable):
+            cloud.map_url("tw", "123", "0")
+
+
+def test_map_url_returns_none_when_only_one_endpoint_times_out():
+    cloud = _cloud()
+    refused = {"code": -6, "message": "invalid config for fds", "result": None}
+    with patch.object(cloud, "_call", side_effect=_calls(cloud, ["timeout", refused])):
+        assert cloud.map_url("tw", "123", "0") is None
+    with patch.object(cloud, "_call", side_effect=_calls(cloud, [refused, "timeout"])):
+        assert cloud.map_url("tw", "123", "0") is None
+
+
+def test_refresh_raises_unreachable_on_network_error():
+    cloud = _cloud()
+    cloud.pass_token = "pass"
+    with patch.object(cloud._s, "get", side_effect=requests.exceptions.ReadTimeout("slow")):
+        with pytest.raises(CloudUnreachable):
+            cloud.refresh()
+
+
+def test_refresh_returns_false_when_xiaomi_rejects_the_pass_token():
+    cloud = _cloud()
+    cloud.pass_token = "dead"
+    rejected = type("R", (), {"text": '&&&START&&&{"code":70016}'})()
+    with patch.object(cloud._s, "get", return_value=rejected):
+        assert cloud.refresh() is False
