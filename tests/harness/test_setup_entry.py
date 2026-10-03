@@ -168,6 +168,7 @@ async def test_setup_entry_map_failure_does_not_block_control(hass: HomeAssistan
 
     # The map failure is swallowed by async_refresh; control setup must succeed.
     assert result is True
+    await entry.runtime_data.control.async_shutdown()
 
 
 async def test_setup_entry_without_oauth_has_no_mqtt_client(hass: HomeAssistant) -> None:
