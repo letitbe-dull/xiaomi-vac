@@ -3,7 +3,9 @@ import asyncio
 import json
 from contextlib import ExitStack
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from homeassistant.config_entries import SOURCE_USER
@@ -12,6 +14,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xiaomi_vac import async_migrate_entry
+from custom_components.xiaomi_vac.captcha_view import ImageView
 from custom_components.xiaomi_vac.const import (
     CONF_HOST,
     CONF_MODEL,
@@ -769,6 +772,64 @@ async def test_cloud_captcha_submit_continues_to_entry(hass: HomeAssistant) -> N
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
+
+
+async def _flow_at_captcha(hass: HomeAssistant, png: bytes) -> dict:
+    """Drive a fresh flow to the captcha step with the cloud serving `png`."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "credentials"}
+    )
+
+    def _begin_login(cloud) -> str:
+        cloud.captcha_image = png
+        return "captcha"
+
+    with (
+        patch(
+            "custom_components.xiaomi_vac.config_flow.XiaomiCloud.begin_login",
+            autospec=True,
+            side_effect=_begin_login,
+        ),
+        patch("custom_components.xiaomi_vac.config_flow.ensure_registered"),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_USERNAME: "user@example.com", CONF_PASSWORD: "secret"},
+        )
+    assert result["step_id"] == "captcha"
+    return result
+
+
+async def _served_image(hass: HomeAssistant, result: dict):
+    """Fetch the captcha image the way the dialog does, from the URL in the form."""
+    url = result["description_placeholders"]["captcha_url"]
+    query = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+    request = SimpleNamespace(app={"hass": hass}, query=query)
+    return await ImageView().get(request)
+
+
+async def test_concurrent_flows_each_serve_their_own_captcha(
+    hass: HomeAssistant,
+) -> None:
+    """Two flows at the captcha step must not see each other's image."""
+    first = await _flow_at_captcha(hass, b"png-of-flow-one")
+    second = await _flow_at_captcha(hass, b"png-of-flow-two")
+
+    assert (await _served_image(hass, first)).body == b"png-of-flow-one"
+    assert (await _served_image(hass, second)).body == b"png-of-flow-two"
+
+
+async def test_captcha_image_is_gone_once_flow_ends(hass: HomeAssistant) -> None:
+    """Aborting a flow at the captcha step must stop serving its image."""
+    result = await _flow_at_captcha(hass, b"png-of-flow-one")
+    assert (await _served_image(hass, result)).status == 200
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+
+    assert (await _served_image(hass, result)).status == 404
 
 
 async def test_cloud_twofa_step_shown_when_required(hass: HomeAssistant) -> None:

@@ -37,3 +37,7 @@ def ensure_registered(hass) -> None:
 
 def set_image(hass, name: str, png: bytes) -> None:
     hass.data.setdefault(DOMAIN, {})[f"_img_{name}"] = png
+
+
+def remove_image(hass, name: str) -> None:
+    hass.data.get(DOMAIN, {}).pop(f"_img_{name}", None)

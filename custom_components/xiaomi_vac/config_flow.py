@@ -18,9 +18,10 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
+from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 
-from .captcha_view import IMG_URL, ensure_registered, set_image
+from .captcha_view import IMG_URL, ensure_registered, remove_image, set_image
 from .cloud.connector import XiaomiCloud
 from .cloud.oauth import (
     OAUTH_REDIRECT_URI,
@@ -247,13 +248,21 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             return await self._branch(state)
         ensure_registered(self.hass)
-        set_image(self.hass, "captcha", self._cloud.captcha_image)
+        set_image(self.hass, self._captcha_key, self._cloud.captcha_image)
         self._cap_n += 1
         return self.async_show_form(
             step_id="captcha",
             data_schema=CODE_SCHEMA,
-            description_placeholders={"captcha_url": f"{IMG_URL}?n=captcha&t={self._cap_n}"},
+            description_placeholders={"captcha_url": f"{IMG_URL}?n={self._captcha_key}&t={self._cap_n}"},
         )
+
+    @property
+    def _captcha_key(self) -> str:
+        return f"captcha_{self.flow_id}"
+
+    @callback
+    def async_remove(self) -> None:
+        remove_image(self.hass, self._captcha_key)
 
     async def async_step_twofa(
         self, user_input: dict[str, Any] | None = None
