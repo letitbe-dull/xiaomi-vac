@@ -368,8 +368,10 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 self._pending_entry_updates[CONF_MAC] = live_mac
 
         _LOGGER.debug(
-            "Map key inputs: brand=%s wifi_sn=%r mac=%s user_id=%s device_id=%s model=%s",
-            brand, wifi_sn, mac, d[CONF_USER_ID], d[CONF_DEVICE_ID], d[CONF_MODEL],
+            "Map key inputs: brand=%s wifi_sn=%s mac=%s user_id=%s device_id=%s model=%s",
+            brand,
+            *("set" if v else "missing" for v in (wifi_sn, mac, d[CONF_USER_ID], d[CONF_DEVICE_ID])),
+            d[CONF_MODEL],
         )
         if "wifi_sn" in required and not wifi_sn:
             raise UpdateFailed(

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -229,6 +230,32 @@ async def test_map_coordinator_never_overwrites_stored_keys_with_blank_live_read
     assert fetcher.call_args.kwargs["wifi_sn"] == "B" * 18
     assert fetcher.call_args.kwargs["mac"] == "11:22:33:44:55:66"
     update.assert_not_called()
+
+
+async def test_map_coordinator_build_logs_map_key_inputs_without_identifiers(
+    hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The map-key debug line says which inputs are present and prints none of their values."""
+    entry = _map_entry("ijai.vacuum.v17")
+    device = MagicMock()
+    device.profile = SimpleNamespace(brand="ijai", profile_id="ijai.v17", map=None)
+    device.get_wifi_sn.return_value = "SNSECRET0123456789"
+    device.get_mac.return_value = "AA:BB:CC:DD:EE:FF"
+    control = MagicMock()
+    control.data = None
+    coord = XiaomiMapCoordinator(hass, entry, device, control)
+
+    with (
+        caplog.at_level(logging.DEBUG, logger="custom_components.xiaomi_vac.map_coordinator"),
+        patch("custom_components.xiaomi_vac.map_coordinator.XiaomiCloud"),
+        patch("custom_components.xiaomi_vac.map_coordinator.MapFetcher"),
+    ):
+        coord._build()
+
+    assert "wifi_sn=set mac=set user_id=set device_id=set" in caplog.text
+    for secret in ("SNSECRET0123456789", "AA:BB:CC:DD:EE:FF", "12345", "did123"):
+        assert secret not in caplog.text
 
 
 # ---------------------------------------------------------------------------

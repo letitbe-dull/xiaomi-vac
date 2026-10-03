@@ -107,8 +107,8 @@ class MiotMqttClient:
         self._client = client
         self._started = True
         _LOGGER.debug(
-            "MQTT client started for did=%s on %s (verify=%s)",
-            self._did, self._host, self._tls_verify,
+            "MQTT client started on %s (verify=%s)",
+            self._host, self._tls_verify,
         )
 
     async def async_stop(self) -> None:
@@ -122,7 +122,7 @@ class MiotMqttClient:
         if client is None:
             return
         await self._hass.async_add_executor_job(self._shutdown_sync, client)
-        _LOGGER.debug("MQTT client stopped for did=%s", self._did)
+        _LOGGER.debug("MQTT client stopped")
 
     # --- paho callbacks (network thread) ---------------------------------
 
@@ -130,7 +130,7 @@ class MiotMqttClient:
         self, client: mqtt.Client, _u: Any, _flags: Any, rc: Any, _props: Any = None,
     ) -> None:
         if rc == 0:
-            _LOGGER.debug("MQTT connected as %s", self._client_id)
+            _LOGGER.debug("MQTT connected")
             # The broker ACL rejects a single `device/{did}/#`, so subscribe
             # the three legs explicitly.
             for leg in ("up", "down", "state"):

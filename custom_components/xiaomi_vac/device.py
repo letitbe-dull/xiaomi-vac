@@ -473,7 +473,7 @@ class IjaiVacuumDevice:
                 continue
             if isinstance(val, str) and _is_wifi_sn(val):
                 return val
-            _LOGGER.debug("wifi_sn: siid 1/piid %s value %r did not match expected shape", piid, val)
+            _LOGGER.debug("wifi_sn: siid 1/piid %s value did not match expected shape", piid)
         try:
             raw = self._dev.get_property_by(7, 45)[0].get("value", "")
         except Exception as err:  # noqa: BLE001
@@ -489,7 +489,7 @@ class IjaiVacuumDevice:
             p = part.replace('"', "").split(";")[0].strip()
             if _is_wifi_sn(p) and p.isalnum():
                 return p
-        _LOGGER.debug("wifi_sn: siid 7/piid 45 value %r had no matching serial part", raw)
+        _LOGGER.debug("wifi_sn: siid 7/piid 45 value had no matching serial part")
         return None
 
 
