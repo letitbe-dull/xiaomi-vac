@@ -1018,6 +1018,37 @@ async def test_cycle_record_ignores_a_throttled_upload_request(hass: HomeAssista
     assert record["upload_request_sent"] is False
 
 
+async def test_map_interval_drops_to_30s_when_a_clean_starts_without_a_map_poll(
+    hass: HomeAssistant,
+) -> None:
+    coord = _map_coord(hass)
+    assert coord.update_interval.total_seconds() == 300
+    on_control_update = coord._control.async_add_listener.call_args.args[0]
+
+    coord._control.data = SimpleNamespace(activity="cleaning")
+    on_control_update()
+
+    assert coord.update_interval.total_seconds() == 30
+    await coord.async_shutdown()
+
+
+async def test_map_poll_while_cleaning_asks_for_an_upload_once_per_throttle_window(
+    hass: HomeAssistant,
+) -> None:
+    cloud = MagicMock()
+    cloud.cloud_action.return_value = {"code": 0}
+    coord = _cloud_upload_coord(hass, cloud)
+    coord._control.data = SimpleNamespace(activity="cleaning")
+
+    first = await _run_cycle(hass, coord)
+    second = await _run_cycle(hass, coord)
+
+    assert first["upload_request_sent"] is True
+    assert first["upload_request_route"] == "cloud"
+    assert second["upload_request_sent"] is False
+    cloud.cloud_action.assert_called_once_with("cn", "did123", 10, 14, [7])
+
+
 async def test_mqtt_curmap_event_uploads_selected_map_and_refreshes(
     hass: HomeAssistant,
 ) -> None:

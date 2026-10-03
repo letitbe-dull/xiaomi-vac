@@ -122,6 +122,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._pending_entry_updates: dict[str, str] = {}
         # What the most recent cycle did; replaced at the start of every cycle.
         self.last_cycle: MapCycleRecord | None = None
+        entry.async_on_unload(control.async_add_listener(self._on_control_update))
 
     @property
     def device(self) -> IjaiVacuumDevice:
@@ -137,14 +138,24 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         map decrypts, so the Active Map select isn't gated on decrypt success."""
         return self._map_list_meta
 
+    def _is_active(self) -> bool:
+        data = self._control.data
+        return bool(data and data.activity in _ACTIVE)
+
     def _tune_interval(self) -> None:
         """Poll fast while the vacuum is moving, slowly when docked/idle."""
-        data = self._control.data
-        active = bool(data and data.activity in _ACTIVE)
+        active = self._is_active()
         secs = MAP_SCAN_INTERVAL if active else MAP_IDLE_INTERVAL
         new = timedelta(seconds=secs)
         if self.update_interval != new:
             self.update_interval = new
+
+    def _on_control_update(self) -> None:
+        """Apply a changed poll interval now rather than after the pending poll."""
+        before = self.update_interval
+        self._tune_interval()
+        if self.update_interval != before:
+            self._schedule_refresh()
 
     async def async_on_mqtt_message(self, msg: MqttMessage) -> None:
         """Handle an MQTT message routed from the integration setup.
@@ -481,6 +492,8 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
 
     async def _async_update_data(self) -> MapResult:
         self._tune_interval()
+        if self._is_active():
+            await self.async_request_map_upload()
         self.last_cycle = MapCycleRecord(
             parser_key=parser_key(self._device.profile),
             map_capability=describe_map_capability(self._device.profile.map),
