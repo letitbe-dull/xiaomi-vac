@@ -524,6 +524,7 @@ async def test_cloud_unknown_model_rejected(hass: HomeAssistant) -> None:
     result = await _credentials_to_devices(hass, [_make_device("unknown.vacuum.x99")])
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "unsupported_model"
+    assert result["description_placeholders"] == {"model": "unknown.vacuum.x99"}
 
 
 async def test_cloud_no_vacuums_aborts(hass: HomeAssistant) -> None:
@@ -593,6 +594,9 @@ async def test_cloud_several_unsupported_vacuums_abort_unsupported_model(
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "unsupported_model"
+    assert result["description_placeholders"] == {
+        "model": "roidmi.vacuum.r1b, unknown.vacuum.x99"
+    }
 
 
 async def test_cloud_single_supported_via_real_discovery_skips_picker(

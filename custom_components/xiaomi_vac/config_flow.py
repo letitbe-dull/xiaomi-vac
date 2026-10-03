@@ -307,8 +307,13 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._devices:
                 record = self._cloud.discovery_record
                 if all_vacuums:
-                    reason = "unsupported_model"
-                elif record and not any(r["answered"] for r in record):
+                    return self.async_abort(
+                        reason="unsupported_model",
+                        description_placeholders={
+                            "model": ", ".join(sorted({d["model"] for d in all_vacuums}))
+                        },
+                    )
+                if record and not any(r["answered"] for r in record):
                     reason = "no_server_response"
                 else:
                     reason = "no_devices"
@@ -331,7 +336,9 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         d = self._selected
         cloud = self._cloud
         if not is_supported(d["model"]):
-            return self.async_abort(reason="unsupported_model")
+            return self.async_abort(
+                reason="unsupported_model", description_placeholders={"model": d["model"]}
+            )
 
         wifi_sn = await self.hass.async_add_executor_job(
             self._get_wifi_sn, d["localip"], d["token"], d["model"], cloud.user_id

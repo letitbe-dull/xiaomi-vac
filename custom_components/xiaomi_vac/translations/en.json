@@ -102,7 +102,7 @@
       "login_failed": "Xiaomi cloud sign-in failed ({reason}). Check your email and password, then try again.",
       "no_server_response": "Couldn't reach any Xiaomi server. Check your internet connection, then try again in a few minutes.",
       "no_devices": "No supported vacuums on this account.",
-      "unsupported_model": "This model isn't supported yet (ijai / Xiaomi-branded ijai vacuums only)."
+      "unsupported_model": "Found {model}, which isn't supported yet. Open a model request on the integration's GitHub page and include that model name."
     }
   },
   "options": {

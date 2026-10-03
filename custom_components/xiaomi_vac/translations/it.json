@@ -64,7 +64,7 @@
       "reauth_successful": "Lei è di nuovo connesso. La mappa dal vivo è stata ripristinata.",
       "login_failed": "Xiaomi ha rifiutato ({reason}). Verifichi il Suo indirizzo e-mail e la Sua password, quindi riprovi.",
       "no_devices": "Nessun aspirapolvere supportato su questo account.",
-      "unsupported_model": "Questo modello non è ancora supportato (solo aspirapolveri ijai/Xiaomi)."
+      "unsupported_model": "Questo modello non è ancora supportato ({model})."
     }
   },
   "entity": {

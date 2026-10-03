@@ -94,3 +94,13 @@ def test_record_holds_only_counts_and_region():
     with patch.object(cloud, "_call", return_value=_answer([dev])):
         cloud.list_vacuums()
     assert set(cloud.discovery_record[0]) == {"region", "answered", "devices", "vacuums"}
+
+
+def test_discovery_logs_vacuum_model_without_identifiers(caplog):
+    cloud = _cloud()
+    dev = _device("1", "ijai.vacuum.v17x") | {"token": "SECRETTOKEN", "mac": "AA:BB", "localip": "10.0.0.5"}
+    with caplog.at_level("DEBUG"), patch.object(cloud, "_call", return_value=_answer([dev])):
+        cloud.list_vacuums()
+    assert "Discovery region=cn vacuum model=ijai.vacuum.v17x" in caplog.text
+    for secret in ("SECRETTOKEN", "AA:BB", "10.0.0.5"):
+        assert secret not in caplog.text

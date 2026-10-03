@@ -64,7 +64,7 @@
       "reauth_successful": "Sie sind zurück angemeldet. Die Live-Karte wurde wiederhergestellt.",
       "login_failed": "Xiaomi lehnt das ab ({reason}). Überprüfen Sie Ihre E-Mail und Ihr Passwort und versuchen Sie es erneut.",
       "no_devices": "Keine unterstützten Staubsauger auf diesem Konto.",
-      "unsupported_model": "Dieses Modell wird noch nicht unterstützt (nur ijai/Xiaomi-Marken-ijai-Staubsauger)."
+      "unsupported_model": "Dieses Modell wird noch nicht unterstützt ({model})."
     }
   },
   "entity": {

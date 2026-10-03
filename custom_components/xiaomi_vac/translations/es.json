@@ -64,7 +64,7 @@
       "reauth_successful": "Ha iniciado sesión de nuevo. El mapa en directo ha sido restaurado.",
       "login_failed": "Xiaomi rechazó eso ({reason}). Verifique su correo electrónico y contraseña, luego intente de nuevo.",
       "no_devices": "No hay aspiradoras compatibles en esta cuenta.",
-      "unsupported_model": "Este modelo aún no es compatible (solo aspiradoras ijai/marca Xiaomi)."
+      "unsupported_model": "Este modelo aún no es compatible ({model})."
     }
   },
   "entity": {

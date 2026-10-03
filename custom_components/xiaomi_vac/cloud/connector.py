@@ -152,6 +152,7 @@ class XiaomiCloud:
                 if ".vacuum." not in model:
                     continue
                 vacuums += 1
+                _LOGGER.debug("Discovery region=%s vacuum model=%s", srv, model)
                 online = d.get("isOnline") is True
                 sightings.setdefault(did, []).append((srv, online))
                 if did in found and (kept_online[did] or not online):
