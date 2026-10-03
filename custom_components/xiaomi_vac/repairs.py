@@ -14,6 +14,7 @@ from .cloud.oauth import (
     XiaomiOAuthError,
     build_authorize_url,
     exchange_code,
+    extract_oauth_code,
     generate_oauth_device_id,
     oauth_entry_updates,
     resolve_region_from_code,
@@ -63,7 +64,7 @@ class MiotOAuthRepairFlow(RepairsFlow):
         device_id = self._device_id
 
         if user_input is not None:
-            code = user_input["code"].strip()
+            code = extract_oauth_code(user_input["code"])
             region = resolve_region_from_code(code, data.get(CONF_SERVER))
             if region is None:
                 errors["base"] = "oauth_region_failed"

@@ -27,6 +27,7 @@ from .cloud.oauth import (
     XiaomiOAuthError,
     build_authorize_url,
     exchange_code,
+    extract_oauth_code,
     generate_oauth_device_id,
     oauth_entry_updates,
     resolve_region_from_code,
@@ -49,7 +50,7 @@ from .const import (
     DOMAIN,
 )
 from .device import IjaiVacuumDevice
-from .oauth_flow import OAuthCodeLink
+from .oauth_flow import OAuthCodeLink, browser_on_oauth_redirect
 from .spec.registry import is_supported
 
 _LOGGER = logging.getLogger(__name__)
@@ -273,16 +274,25 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             if self.source == SOURCE_REAUTH:
                 return self._finish_reauth()
             return await self.async_step_devices()
-        # 登录验证失败 = Xiaomi blocked the sign-in pending account verification,
-        # not bad credentials. Point the user at Xiaomi's own sign-in first.
+        # 70016 (desc 登录验证失败) is Xiaomi's wrong-credentials reply: let them retype.
+        if getattr(self._cloud, "login_code", None) == 70016:
+            return self._show_credentials_form({"base": "invalid_auth"})
         reason_text = getattr(self._cloud, "login_error", "")
         if not isinstance(reason_text, str):
             reason_text = ""
-        if "登录验证失败" in reason_text:
-            return self.async_abort(reason="login_verification_required")
         return self.async_abort(
             reason="login_failed",
             description_placeholders={"reason": reason_text or "unknown"},
+        )
+
+    def _show_credentials_form(self, errors: dict[str, str]) -> ConfigFlowResult:
+        step_id = "reauth_confirm" if self.source == SOURCE_REAUTH else "credentials"
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=self.add_suggested_values_to_schema(
+                CRED_SCHEMA, {CONF_USERNAME: self._data.get(CONF_USERNAME, "")}
+            ),
+            errors=errors,
         )
 
     # --- device discovery + pick ----------------------------------------
@@ -353,10 +363,21 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
         """Offer optional MIoT OAuth for future MQTT live-map support."""
         if user_input is not None:
             if user_input["enable_miot_oauth"]:
-                return await self.async_step_miot_oauth_auth()
+                return await self.async_step_miot_oauth_method()
             return self._create_entry()
         return self.async_show_form(
             step_id="miot_oauth", data_schema=OAUTH_CHOICE_SCHEMA
+        )
+
+    async def async_step_miot_oauth_method(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Link automatically on homeassistant.local:8123; otherwise ask."""
+        if browser_on_oauth_redirect():
+            return await self.async_step_miot_oauth_auth()
+        return self.async_show_menu(
+            step_id="miot_oauth_method",
+            menu_options=["miot_oauth_auth", "miot_oauth_code"],
         )
 
     async def async_step_miot_oauth_auth(
@@ -420,7 +441,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data.setdefault(CONF_OAUTH_DEVICE_ID, generate_oauth_device_id())
         )
         if user_input is not None:
-            code = user_input["code"].strip()
+            code = extract_oauth_code(user_input["code"])
             try:
                 self._data.update(
                     await _async_exchange_manual_oauth(
@@ -477,7 +498,18 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
         # OAuth needs a cloud session (server/user); local-only entries can't.
         if not self.config_entry.data.get(CONF_SERVER):
             return self.async_abort(reason="oauth_local_only")
-        return await self.async_step_miot_oauth_auth()
+        return await self.async_step_miot_oauth_method()
+
+    async def async_step_miot_oauth_method(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Link automatically on homeassistant.local:8123; otherwise ask."""
+        if browser_on_oauth_redirect():
+            return await self.async_step_miot_oauth_auth()
+        return self.async_show_menu(
+            step_id="miot_oauth_method",
+            menu_options=["miot_oauth_auth", "miot_oauth_code"],
+        )
 
     async def async_step_miot_oauth_auth(
         self, user_input: dict[str, Any] | None = None
@@ -551,7 +583,7 @@ class XiaomiVacuumOptionsFlow(OptionsFlow):
             )
         device_id = self._oauth_device_id
         if user_input is not None:
-            code = user_input["code"].strip()
+            code = extract_oauth_code(user_input["code"])
             try:
                 data.update(
                     await _async_exchange_manual_oauth(

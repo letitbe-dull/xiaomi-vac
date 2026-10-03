@@ -14,11 +14,20 @@ from homeassistant.components.webhook import (
     async_unregister as webhook_async_unregister,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.http import current_request
+from yarl import URL
 
 from .cloud.oauth import OAUTH_REDIRECT_URI, build_authorize_url, oauth_state
 from .const import DOMAIN
 
 _OAUTH_LINKS = "oauth_links"
+_OAUTH_ORIGIN = URL(OAUTH_REDIRECT_URI)
+
+
+def browser_on_oauth_redirect() -> bool:
+    """Return True if the browser is on Xiaomi's registered redirect origin."""
+    request = current_request.get()
+    return request is not None and request.url.origin() == _OAUTH_ORIGIN
 
 
 @dataclass(frozen=True)
