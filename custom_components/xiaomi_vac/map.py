@@ -243,7 +243,7 @@ class MapFetcher:
                 _LOGGER.debug("dreame decrypt failed; will re-poll enckey next fetch: %s", ex)
                 self._enckey = None
                 self._enckey_polled = False
-            _LOGGER.debug("Could not decrypt map at slot %s: %s", slot, ex)
+            _LOGGER.debug("Could not decrypt map at slot %s (starts %r): %s", slot, raw[:16], ex)
             attempt.outcome = "undecryptable"
             return None
         carpets = parse_carpets(unpacked) if self._brand == "xiaomi" else []

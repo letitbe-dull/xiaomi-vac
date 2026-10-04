@@ -109,6 +109,20 @@ def test_fetch_records_undecryptable_blob():
     assert attempt.outcome == "undecryptable"
 
 
+def test_fetch_logs_only_first_16_bytes_of_undecryptable_blob(caplog):
+    f = _fetcher(FakeCloud(blob=b'{"version":2,"d' + b"X" + b"TAILMARKER"))
+
+    def _boom(raw, **kw):
+        raise ValueError("Expecting value")
+
+    _with_parser(f, unpack=_boom, parse=lambda u: None)
+    with caplog.at_level("DEBUG"):
+        assert f.fetch() is None
+    assert "Could not decrypt map at slot 0" in caplog.text
+    assert "b'{\"version\":2,\"dX'" in caplog.text
+    assert "TAILMARKER" not in caplog.text
+
+
 def test_fetch_records_blob_that_does_not_parse():
     f = _fetcher(FakeCloud(blob=b"x" * 40))
 
