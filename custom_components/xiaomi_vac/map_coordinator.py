@@ -38,6 +38,7 @@ from .map_diagnostics import (
     MapCycleRecord,
     UploadRequest,
     describe_map_capability,
+    describe_map_key_owner,
     resolve_active_id,
 )
 from .map_parsers import parser_key, required_map_key_inputs
@@ -497,9 +498,15 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._tune_interval()
         if self._is_active():
             await self.async_request_map_upload()
+        cycle_parser = parser_key(self._device.profile)
+        owner_source, owner_matches = describe_map_key_owner(
+            cycle_parser, self.entry.data.get(CONF_OWNER_UID), self.entry.data[CONF_USER_ID]
+        )
         self.last_cycle = MapCycleRecord(
-            parser_key=parser_key(self._device.profile),
+            parser_key=cycle_parser,
             map_capability=describe_map_capability(self._device.profile.map),
+            map_key_owner_source=owner_source,
+            map_key_owner_matches_user_id=owner_matches,
             upload_request=self._pending_upload_request,
         )
         self._pending_upload_request = None

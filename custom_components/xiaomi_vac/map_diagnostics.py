@@ -82,12 +82,32 @@ def resolve_active_id(
     return None, None
 
 
+def describe_map_key_owner(
+    parser: str, owner_uid: str | None, user_id: str
+) -> tuple[str | None, bool | None]:
+    """Name the id that feeds the map key and whether the two candidate ids match.
+
+    @param parser: the profile's parser key.
+    @param owner_uid: the entry's stored device-owner uid, if any.
+    @param user_id: the signed-in account's uid.
+    @returns: (source, matches): source "owner_uid", "user_id" or None (non-ijai);
+        matches is None when there is no stored owner_uid.
+    """
+    if parser != "ijai":
+        return None, None
+    if not owner_uid:
+        return "user_id", None
+    return "owner_uid", str(owner_uid) == str(user_id)
+
+
 @dataclass
 class MapCycleRecord:
     """What the most recent map coordinator cycle did. Most-recent-wins."""
 
     parser_key: str
     map_capability: dict | None
+    map_key_owner_source: str | None = None
+    map_key_owner_matches_user_id: bool | None = None
     slots: list[SlotAttempt] = field(default_factory=list)
     resolved_map_id: int | None = None
     resolved_by: str | None = None
@@ -106,6 +126,8 @@ class MapCycleRecord:
         return {
             "parser_key": self.parser_key,
             "map_capability": self.map_capability,
+            "map_key_owner_source": self.map_key_owner_source,
+            "map_key_owner_matches_user_id": self.map_key_owner_matches_user_id,
             "url_obtained": any(s.url_obtained for s in self.slots),
             "session_expired": bool(self.slots) and not any(
                 s.url_obtained or s.outcome == "unreachable" for s in self.slots

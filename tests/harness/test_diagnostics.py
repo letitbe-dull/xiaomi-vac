@@ -124,6 +124,8 @@ async def test_diagnostics_download_returns_last_map_cycle(
     assert cycle["map_capability"]["service"] == 10
     assert {k: v for k, v in cycle.items() if k != "map_capability"} == {
         "parser_key": "ijai",
+        "map_key_owner_source": "user_id",
+        "map_key_owner_matches_user_id": None,
         "url_obtained": True,
         "session_expired": False,
         "rendered": False,

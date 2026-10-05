@@ -235,6 +235,37 @@ async def test_map_coordinator_map_key_owner_is_device_owner_else_logged_in_user
     assert fetcher.call_args.kwargs["user_id"] == expected_owner_id
 
 
+@pytest.mark.parametrize(
+    ("brand", "stored_owner_uid", "expected_source", "expected_matches"),
+    [
+        ("ijai", "7777777777", "owner_uid", False),
+        ("ijai", "12345", "owner_uid", True),
+        ("ijai", None, "user_id", None),
+        ("ijai", "", "user_id", None),
+        ("dreame", "7777777777", None, None),
+    ],
+)
+async def test_cycle_record_names_the_map_key_owner_source_without_ids(
+    hass: HomeAssistant,
+    brand: str,
+    stored_owner_uid: str | None,
+    expected_source: str | None,
+    expected_matches: bool | None,
+) -> None:
+    """The record says which id fed the ijai map key and whether the two ids match, never the ids."""
+    coord = _map_coord(hass, f"{brand}.vacuum.x1")
+    coord._device.profile = SimpleNamespace(brand=brand, profile_id=f"{brand}.x1", map=None)
+    if stored_owner_uid is not None:
+        coord.entry.data[CONF_OWNER_UID] = stored_owner_uid
+
+    record = await _run_cycle(hass, coord)
+
+    assert record["map_key_owner_source"] == expected_source
+    assert record["map_key_owner_matches_user_id"] is expected_matches
+    assert "7777777777" not in str(record)
+    assert "12345" not in str(record)
+
+
 async def test_map_coordinator_never_overwrites_stored_keys_with_blank_live_reads(
     hass: HomeAssistant,
 ) -> None:
