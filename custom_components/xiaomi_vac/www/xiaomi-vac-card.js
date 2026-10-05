@@ -102,6 +102,12 @@ const ZONE_CLEAN_MODELS = new Set([
   "xiaomi.vacuum.d102ev",
   "xiaomi.vacuum.d102gl",
   "xiaomi.vacuum.d109gl",
+  "xiaomi.vacuum.ov21gl",
+  "xiaomi.vacuum.ov21cn",
+  "xiaomi.vacuum.ov43gb",
+  "xiaomi.vacuum.ov51gl",
+  "xiaomi.vacuum.ov71gl",
+  "xiaomi.vacuum.pv21cn",
 ]);
 // Union across all models — `key` is the translation_key sensor.py assigns,
 // kept in sync with its XiaomiSensorDescription catalogue by hand.

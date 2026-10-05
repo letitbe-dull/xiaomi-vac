@@ -36,13 +36,7 @@ _DEVIATIONS: dict[tuple[str, str | None], tuple[tuple[str, ...], str]] = {
     ("xiaomi.d102gl", "core"): (("status_map",), "keeps ov21gl's codes 22-24 its spec doesn't declare (d6f017f)"),
     ("xiaomi.d109gl", "core"): (("status_map",), "keeps ov21gl's codes 22-24 its spec doesn't declare (d6f017f)"),
     ("xiaomi.ov21gl", "consumables"): ((), "hardware-confirmed by an ov21gl owner, mop pad not detergent (5e5076a)"),
-    ("xiaomi.ov21gl", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
-    ("xiaomi.ov21cn", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
-    ("xiaomi.ov43gb", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
-    ("xiaomi.ov51gl", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
-    ("xiaomi.ov71gl", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
     ("xiaomi.pv21cn", "core"): (("status_map",), "status 25 SelfChecking and 26 Summoning mapped by hand, not in the generator's table"),
-    ("xiaomi.pv21cn", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
     ("xiaomi.ov31gl", None): ((), "no spec in library"),
     ("xiaomi.ov42gl", None): ((), "no spec in library"),
 }

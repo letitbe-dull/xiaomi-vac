@@ -901,6 +901,7 @@ XIAOMI_OV21GL = ModelProfile(
         room_ids=Prop(2, 15),
         start=Action(2, 16, in_piid=15),
     ),
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=DreameConsumablesCapability(
         main_brush_life=Prop(12, 1), main_brush_left_time=Prop(12, 2),
         side_brush_life=Prop(13, 1), side_brush_left_time=Prop(13, 2),
@@ -922,6 +923,7 @@ XIAOMI_OV31GL = replace(
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov31gl:1",),
     core=XIAOMI_CORE_OV31GL,
     max_properties=5,
+    zone_sweep=None,
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 15),
         start=Action(2, 16, in_piid=15, named_inputs=True),
@@ -950,6 +952,7 @@ XIAOMI_OV71GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov71gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov71gl:1",),
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=None,
 )
 
@@ -959,6 +962,7 @@ XIAOMI_OV43GB = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov43gb',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov43gb:2",),
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=None,
 )
 
@@ -969,6 +973,7 @@ XIAOMI_OV51GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov51gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov51gl:1",),
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=None,
 )
 
@@ -978,6 +983,7 @@ XIAOMI_OV21CN = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov21cn',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov21cn:2",),
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=None,
 )
 
@@ -996,6 +1002,7 @@ XIAOMI_PV21CN = replace(
     profile_id='xiaomi.pv21cn',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-pv21cn:1",),
     core=XIAOMI_CORE_PV21CN,
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
     consumables=None,
 )
 
@@ -1011,6 +1018,7 @@ XIAOMI_OV42GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov42gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov42gl:2",),
+    zone_sweep=None,
     # Consumables (2026-08-01): read straight off the live device's own cached
     # MIoT spec (.storage/xiaomi_home/miot_specs/...xiaomi-ov42gl:1_en.dict),
     # hardware-confirmed for THIS model — not extended to ov71gl/ov43gb (only

@@ -179,6 +179,7 @@ _X20_MODELS = [
     "xiaomi.vacuum.d102ev",
     "xiaomi.vacuum.d102gl",
     "xiaomi.vacuum.d109gl",
+    "xiaomi.vacuum.ov21gl",
 ]
 
 
@@ -219,7 +220,7 @@ def test_x20_clean_zone_normalises_corners_to_min_max(monkeypatch, zone, region)
     ]
 
 
-@pytest.mark.parametrize("model", ["xiaomi.vacuum.ov21gl", "dreame.vacuum.p2008"])
+@pytest.mark.parametrize("model", ["xiaomi.vacuum.ov31gl", "dreame.vacuum.p2008"])
 def test_clean_zone_rejects_models_without_a_zone_capability(monkeypatch, model):
     device_mod = load_device_module(monkeypatch)
     device = device_mod.IjaiVacuumDevice("host", "token", model)

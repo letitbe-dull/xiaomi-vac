@@ -170,7 +170,7 @@ map attributes).
 | `entity_id` | The vacuum entity. | `vacuum.xiaomi_robot_vacuum_s10` |
 | `zone` | Rectangle as `[x0, y0, x1, y1]` in metres. | `[-1.5, 2.2, -0.4, 3.1]` |
 
-Zone cleaning is available for `ijai.vacuum.v17`, `ijai.vacuum.v18`, and `ijai.vacuum.v19`, which share the same command set, and for `xiaomi.vacuum.c107`, `d101`, `d102ev`, `d102gl`, and `d109gl`, which share another. It was tested on an ijai v19 and a `xiaomi.vacuum.d102gl`. The other models are expected to behave the same but are unconfirmed, so please open an issue if yours doesn't. The bundled card shows a draw tool for those models on the map page unless `allow_zone_cleaning: false`: tap it, drag a rectangle, then tap **Clean this area**.
+Zone cleaning is available for `ijai.vacuum.v17`, `ijai.vacuum.v18`, and `ijai.vacuum.v19`, which share the same command set, and for `xiaomi.vacuum.c107`, `d101`, `d102ev`, `d102gl`, `d109gl`, `ov21cn`, `ov21gl`, `ov43gb`, `ov51gl`, `ov71gl`, and `pv21cn`, which share another. It was tested on an ijai v19 and a `xiaomi.vacuum.d102gl`, and an `ov21gl` owner confirmed the same command cleans a drawn zone on theirs. The other models are expected to behave the same but are unconfirmed, so please open an issue if yours doesn't. The bundled card shows a draw tool for those models on the map page unless `allow_zone_cleaning: false`: tap it, drag a rectangle, then tap **Clean this area**.
 
 ## Supported models
 
