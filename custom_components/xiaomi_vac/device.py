@@ -25,9 +25,11 @@ _WIFI_SN_MAX_LEN = 24
 
 
 def _is_wifi_sn(value: str) -> bool:
+    head, slash, tail = value.partition("/")
+    shape_ok = (head.isdigit() and tail.isalnum()) if slash else value.isalnum()
     return (
         _WIFI_SN_MIN_LEN <= len(value) <= _WIFI_SN_MAX_LEN
-        and value.isalnum()
+        and shape_ok
         and value == value.upper()
     )
 
@@ -487,7 +489,7 @@ class IjaiVacuumDevice:
         for part in str(raw).strip("[]").split(","):
             # The serial sits before an optional ";<uid>" suffix on siid 7/piid 45.
             p = part.replace('"', "").split(";")[0].strip()
-            if _is_wifi_sn(p) and p.isalnum():
+            if _is_wifi_sn(p):
                 return p
         _LOGGER.debug("wifi_sn: siid 7/piid 45 value had no matching serial part")
         return None

@@ -110,6 +110,7 @@ def test_device_refuses_non_onboardable_models(monkeypatch, model: str):
     [
         "12345678901234567",  # all-numeric, 17 digits (ijai.vacuum.v3, #60)
         "334702602205A001998",  # uppercase alphanumeric, 19 chars (#4)
+        "12345/ABCDE12345FGHIJ",  # digits, slash, 15 uppercase alphanumerics (#51)
     ],
 )
 def test_get_wifi_sn_accepts_serial(monkeypatch, serial):
