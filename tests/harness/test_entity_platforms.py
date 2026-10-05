@@ -741,7 +741,7 @@ async def test_clean_zone_rejects_model_without_zone_capability_on_real_profile(
     hass: HomeAssistant,
 ) -> None:
     vac, coord, local = _vacuum_on_real_device(
-        hass, "xiaomi.vacuum.ov21gl", dict(_CLOUD_SESSION)
+        hass, "xiaomi.vacuum.ov31gl", dict(_CLOUD_SESSION)
     )
 
     with (
