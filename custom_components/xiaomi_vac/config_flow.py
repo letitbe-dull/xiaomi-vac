@@ -39,6 +39,7 @@ from .const import (
     CONF_MAC,
     CONF_MODEL,
     CONF_OAUTH_DEVICE_ID,
+    CONF_OWNER_UID,
     CONF_PASS_TOKEN,
     CONF_PASSWORD,
     CONF_SERVER,
@@ -273,6 +274,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_HOST: found["localip"],
                 CONF_TOKEN: found["token"],
                 CONF_SERVER: found["server"],
+                CONF_OWNER_UID: found["owner_uid"],
             },
         )
 
@@ -412,6 +414,7 @@ class XiaomiVacuumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_MAC: d["mac"],
                 CONF_SERVER: d["server"],
                 CONF_USER_ID: str(cloud.user_id),
+                CONF_OWNER_UID: d["owner_uid"],
                 CONF_DEVICE_ID: str(d["did"]),
                 CONF_SSECURITY: cloud.ssecurity,
                 CONF_SERVICE_TOKEN: cloud.service_token,

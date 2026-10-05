@@ -35,6 +35,14 @@ def test_all_regions_answer_with_vacuums():
                for r in cloud.discovery_record)
 
 
+def test_list_vacuums_returns_each_devices_owner_uid():
+    cloud = _cloud()
+    resp = _answer([_device("1") | {"uid": 1111111111}, _device("2") | {"uid": "2222222222"}])
+    with patch.object(cloud, "_call", return_value=resp):
+        found = cloud.list_vacuums()
+    assert [(d["did"], d["owner_uid"]) for d in found] == [("1", "1111111111"), ("2", "2222222222")]
+
+
 def test_all_regions_answer_with_zero_devices():
     cloud = _cloud()
     with patch.object(cloud, "_call", return_value=_answer([])):

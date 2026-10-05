@@ -15,6 +15,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_DEVICE_ID,
     CONF_MAC,
     CONF_MODEL,
+    CONF_OWNER_UID,
     CONF_PASS_TOKEN,
     CONF_PASSWORD,
     CONF_SERVER,
@@ -202,6 +203,36 @@ async def test_map_coordinator_persists_live_wifi_sn_and_mac(
     updated = update.call_args.kwargs["data"]
     assert updated[CONF_WIFI_SN] == "A" * 18
     assert updated[CONF_MAC] == "AA:BB:CC:DD:EE:FF"
+
+
+@pytest.mark.parametrize(
+    ("stored_owner_uid", "expected_owner_id"),
+    [("7777777777", "7777777777"), (None, "12345"), ("", "12345")],
+)
+async def test_map_coordinator_map_key_owner_is_device_owner_else_logged_in_user(
+    hass: HomeAssistant,
+    stored_owner_uid: str | None,
+    expected_owner_id: str,
+) -> None:
+    """The fetcher gets the stored device owner uid, or the logged-in user_id without one."""
+    entry = _map_entry("ijai.vacuum.v17")
+    if stored_owner_uid is not None:
+        entry.data[CONF_OWNER_UID] = stored_owner_uid
+    device = MagicMock()
+    device.profile = SimpleNamespace(brand="ijai", profile_id="ijai.v17", map=None)
+    device.get_wifi_sn.return_value = "A" * 18
+    device.get_mac.return_value = "AA:BB:CC:DD:EE:FF"
+    control = MagicMock()
+    control.data = None
+    coord = XiaomiMapCoordinator(hass, entry, device, control)
+
+    with (
+        patch("custom_components.xiaomi_vac.map_coordinator.XiaomiCloud"),
+        patch("custom_components.xiaomi_vac.map_coordinator.MapFetcher") as fetcher,
+    ):
+        coord._build()
+
+    assert fetcher.call_args.kwargs["user_id"] == expected_owner_id
 
 
 async def test_map_coordinator_never_overwrites_stored_keys_with_blank_live_reads(

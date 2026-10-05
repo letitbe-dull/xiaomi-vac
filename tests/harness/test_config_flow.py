@@ -26,6 +26,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_OAUTH_REFRESH_TOKEN,
     CONF_OAUTH_REGION,
     CONF_OAUTH_REDIRECT_URI,
+    CONF_OWNER_UID,
     CONF_PASS_TOKEN,
     CONF_PASSWORD,
     CONF_SERVER,
@@ -39,6 +40,7 @@ from custom_components.xiaomi_vac.const import (
 )
 
 TOKEN = "0" * 32
+OWNER_UID = "7777777777"
 TRANSLATIONS_EN = (
     Path(__file__).resolve().parents[2]
     / "custom_components"
@@ -166,7 +168,7 @@ def _make_device(model: str, did: str = "d1") -> dict:
     return {
         "name": model, "did": did, "model": model,
         "mac": f"AA:BB:CC:DD:EE:{suffix}", "localip": "1.2.3.4",
-        "token": TOKEN, "server": "cn",
+        "token": TOKEN, "server": "cn", "uid": OWNER_UID, "owner_uid": OWNER_UID,
     }
 
 
@@ -621,6 +623,7 @@ async def test_cloud_single_supported_via_real_discovery_skips_picker(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
+    assert result["data"][CONF_OWNER_UID] == OWNER_UID
 
 
 async def test_cloud_mixed_account_shows_only_supported(hass: HomeAssistant) -> None:
@@ -962,7 +965,9 @@ _CLOUD_DEVICE_LIST = "custom_components.xiaomi_vac.config_flow.XiaomiCloud._call
 _CLOUD_REFRESH = "custom_components.xiaomi_vac.config_flow.XiaomiCloud.refresh"
 
 _STALE = {CONF_HOST: "10.0.0.121", CONF_TOKEN: "a" * 32, CONF_SERVER: "de"}
-_CURRENT = {CONF_HOST: "10.0.0.92", CONF_TOKEN: "b" * 32, CONF_SERVER: "ru"}
+_CURRENT = {
+    CONF_HOST: "10.0.0.92", CONF_TOKEN: "b" * 32, CONF_SERVER: "ru", CONF_OWNER_UID: OWNER_UID,
+}
 
 
 def _cloud_entry(hass: HomeAssistant, server: str = "de") -> MockConfigEntry:
@@ -996,7 +1001,7 @@ def _region_record(region: str, did: str = "1001", online: bool = True) -> dict:
     return {
         "name": "vac", "did": did, "model": "ijai.vacuum.v3",
         "mac": "AA:BB:CC:DD:EE:01", "localip": values[CONF_HOST],
-        "token": values[CONF_TOKEN], "isOnline": online,
+        "token": values[CONF_TOKEN], "isOnline": online, "uid": OWNER_UID,
     }
 
 

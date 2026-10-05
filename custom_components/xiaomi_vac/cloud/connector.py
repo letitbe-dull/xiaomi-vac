@@ -167,6 +167,7 @@ class XiaomiCloud:
                     "name": d.get("name"), "did": did, "model": model,
                     "mac": d.get("mac", ""), "localip": d.get("localip", ""),
                     "token": d.get("token", ""), "server": srv,
+                    "owner_uid": str(d.get("uid") or ""),
                 }
             self.discovery_record.append(
                 {"region": srv, "answered": True, "devices": len(devices), "vacuums": vacuums})

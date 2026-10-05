@@ -43,7 +43,7 @@ def test_online_region_wins_over_earlier_offline_region_whole_record():
     found = _list({"de": [_record("de", False)], "ru": [_record("ru", True)]})
     assert found == [{
         "name": "vac-ru", "did": "1", "model": "ijai.vacuum.v3", "mac": "mac-ru",
-        "localip": "ip-ru", "token": "token-ru", "server": "ru",
+        "localip": "ip-ru", "token": "token-ru", "server": "ru", "owner_uid": "",
     }]
 
 
@@ -88,7 +88,7 @@ def test_single_region_offline_device_is_bound_as_before():
     found = _list({"ru": [_record("ru", False)]})
     assert found == [{
         "name": "vac-ru", "did": "1", "model": "ijai.vacuum.v3", "mac": "mac-ru",
-        "localip": "ip-ru", "token": "token-ru", "server": "ru",
+        "localip": "ip-ru", "token": "token-ru", "server": "ru", "owner_uid": "",
     }]
 
 

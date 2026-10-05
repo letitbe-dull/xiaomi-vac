@@ -18,6 +18,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_MAC,
     CONF_MODEL,
+    CONF_OWNER_UID,
     CONF_PASS_TOKEN,
     CONF_SERVER,
     CONF_SERVICE_TOKEN,
@@ -387,7 +388,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         return MapFetcher(
             cloud,
             server=d[CONF_SERVER],
-            user_id=d[CONF_USER_ID],
+            user_id=d.get(CONF_OWNER_UID) or d[CONF_USER_ID],
             device_id=d[CONF_DEVICE_ID],
             model=d[CONF_MODEL],
             mac=mac,
