@@ -144,16 +144,23 @@ class XiaomiCloud:
                               {"data": '{"getVirtualModel":false,"getHuamiDevices":0}'})
             if not resp:
                 self.discovery_record.append(
-                    {"region": srv, "answered": False, "devices": 0, "vacuums": 0})
+                    {"region": srv, "answered": False, "devices": 0, "vacuums": 0,
+                     "homes_answered": False, "owned_homes": 0, "shared_homes": 0,
+                     "home_only_vacuums": 0})
                 continue
             devices = resp.get("result", {}).get("list", [])
-            vacuums = 0
-            for d in devices:
+            flat = [(d, d.get("uid")) for d in devices if ".vacuum." in d.get("model", "")]
+            flat_dids = {d.get("did") for d, _ in flat}
+            homes = self._list_homes(srv)
+            owned, shared = homes or ([], [])
+            home_only: dict[str, tuple[dict, object]] = {}
+            for home in owned + shared:
+                for d in self._list_home_devices(srv, home):
+                    if ".vacuum." in d.get("model", "") and d.get("did") not in flat_dids:
+                        home_only.setdefault(d.get("did"), (d, home.get("uid")))
+            for d, owner_uid in flat + list(home_only.values()):
                 model = d.get("model", "")
                 did = d.get("did")
-                if ".vacuum." not in model:
-                    continue
-                vacuums += 1
                 _LOGGER.debug("Discovery region=%s vacuum model=%s", srv, model)
                 online = d.get("isOnline") is True
                 sightings.setdefault(did, []).append((srv, online))
@@ -165,16 +172,21 @@ class XiaomiCloud:
                 kept_online[did] = online
                 found[did] = {
                     "name": d.get("name"), "did": did, "model": model,
-                    "mac": d.get("mac", ""), "localip": d.get("localip", ""),
+                    "mac": d.get("mac", ""), "localip": d.get("localip") or d.get("local_ip", ""),
                     "token": d.get("token", ""), "server": srv,
-                    "owner_uid": str(d.get("uid") or ""),
+                    "owner_uid": str(owner_uid or ""),
                 }
             self.discovery_record.append(
-                {"region": srv, "answered": True, "devices": len(devices), "vacuums": vacuums})
+                {"region": srv, "answered": True, "devices": len(devices), "vacuums": len(flat),
+                 "homes_answered": homes is not None, "owned_homes": len(owned),
+                 "shared_homes": len(shared), "home_only_vacuums": len(home_only)})
         for rec in self.discovery_record:
             _LOGGER.debug(
-                "Discovery region=%s answered=%s devices=%d vacuums=%d",
+                "Discovery region=%s answered=%s devices=%d vacuums=%d homes_answered=%s "
+                "owned_homes=%d shared_homes=%d home_only_vacuums=%d",
                 rec["region"], rec["answered"], rec["devices"], rec["vacuums"],
+                rec["homes_answered"], rec["owned_homes"], rec["shared_homes"],
+                rec["home_only_vacuums"],
             )
         for did, seen in sightings.items():
             if len(seen) > 1:
@@ -183,6 +195,34 @@ class XiaomiCloud:
                     ",".join(f"{r}(isOnline={o})" for r, o in seen), found[did]["server"],
                 )
         return list(found.values())
+
+    def _list_homes(self, srv: str) -> tuple[list[dict], list[dict]] | None:
+        """List the account's owned and shared homes in one region.
+
+        @param srv: region code
+        @returns (owned homes, shared homes), or None if the region didn't answer
+        """
+        resp = self._call(self._api_url(srv) + "/v2/homeroom/gethome", {"data": json.dumps(
+            {"fg": True, "fetch_share": True, "fetch_share_dev": True,
+             "limit": 300, "app_ver": 7})})
+        if not resp:
+            return None
+        result = resp.get("result") or {}
+        return result.get("homelist") or [], result.get("share_home_list") or []
+
+    def _list_home_devices(self, srv: str, home: dict) -> list[dict]:
+        """List one home's devices, asking as the home's owner.
+
+        @param srv: region code
+        @param home: home entry from gethome
+        @returns the home's device records, empty if the call failed
+        """
+        if not home.get("id") or not home.get("uid"):
+            return []
+        resp = self._call(self._api_url(srv) + "/v2/home/home_device_list", {"data": json.dumps(
+            {"home_id": int(home["id"]), "home_owner": int(home["uid"]), "limit": 200,
+             "get_split_device": True, "support_smart_home": True})})
+        return ((resp or {}).get("result") or {}).get("device_info") or []
 
     def restore_session(self, user_id, ssecurity, service_token, pass_token=None) -> None:
         """Reuse a session captured at config-flow time (no re-login)."""

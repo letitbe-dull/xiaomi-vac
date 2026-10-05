@@ -183,7 +183,7 @@ def _cloud_patches(
     """Context-manager stack: stub login, device list, and wifi_sn fetch.
 
     With ``transport`` set, list_vacuums runs for real and every regional
-    request returns ``transport`` (None = server did not answer).
+    request returns ``transport``, or its result if callable (None = server did not answer).
     """
     if devices is None:
         devices = []
@@ -196,6 +196,7 @@ def _cloud_patches(
         discovery = patch(
             "custom_components.xiaomi_vac.config_flow.XiaomiCloud._call",
             return_value=transport,
+            side_effect=transport if callable(transport) else None,
         )
     return [
         patch(
@@ -624,6 +625,30 @@ async def test_cloud_single_supported_via_real_discovery_skips_picker(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
     assert result["data"][CONF_OWNER_UID] == OWNER_UID
+
+
+HOME_OWNER_UID = "5555555555"
+
+
+def _shared_home_only(url: str, params: dict) -> dict:
+    """Fake `_call`: flat lists are empty; one shared home holds a supported vacuum."""
+    if url.endswith("/v2/homeroom/gethome"):
+        return {"code": 0, "result": {
+            "homelist": [], "share_home_list": [{"id": 77, "uid": int(HOME_OWNER_UID)}],
+        }}
+    if url.endswith("/v2/home/home_device_list"):
+        return {"code": 0, "result": {"device_info": [_make_device("dreame.vacuum.p2008")]}}
+    return _answer([])
+
+
+async def test_cloud_vacuum_only_in_shared_home_creates_entry_with_home_owner_uid(
+    hass: HomeAssistant,
+) -> None:
+    """A vacuum found only through a shared home is set up with the home owner's uid."""
+    result = await _credentials_to_devices(hass, [], transport=_shared_home_only)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_MODEL] == "dreame.vacuum.p2008"
+    assert result["data"][CONF_OWNER_UID] == HOME_OWNER_UID
 
 
 async def test_cloud_mixed_account_shows_only_supported(hass: HomeAssistant) -> None:
