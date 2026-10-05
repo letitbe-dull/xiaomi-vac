@@ -120,11 +120,13 @@ XIAOMI_CORE_D103CN = replace(
     status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked', 7: 'cleaning', 8: 'docked', 9: 'docked', 10: 'returning', 11: 'cleaning', 12: 'cleaning', 13: 'docked', 14: 'idle', 19: 'idle', 21: 'paused', 22: 'docked', 23: 'cleaning', 30: 'docked'},
 )
 
-# b108gl — mode/sweep on siid 2 (different slots than the b/c-engine).
+# b108gl — sweep-mop-type 2/3, suction-level 2/8, mop-water-output-level 2/9.
 XIAOMI_CORE_B108GL = CoreCapability(
     status=Prop(2, 1),
     fault=Prop(2, 2),
-    mode=Prop(2, 16),
+    mode=Prop(2, 3),
+    fan_speed=Prop(2, 8),
+    water_level=Prop(2, 9),
     battery=Prop(3, 1),
     sweep_type=Prop(2, 4),
     alarm=Prop(4, 1),
@@ -132,8 +134,10 @@ XIAOMI_CORE_B108GL = CoreCapability(
     start=Action(2, 1),
     stop=Action(2, 2),
     charge=Action(3, 1),
-    status_map={1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    modes={'silent': 1, 'basic': 2, 'strong': 3},
+    status_map={1: 'idle', 2: 'docked', 3: 'docked', 4: 'cleaning', 5: 'paused', 6: 'returning', 7: 'cleaning', 8: 'docked', 9: 'cleaning', 10: 'idle'},
+    fan_speeds={'silent': 1, 'basic': 2, 'strong': 3, 'full_speed': 4},
+    water_levels={'off': 0, 'level1': 1, 'level2': 2, 'level3': 3},
+    modes={'sweep': 1, 'mop': 2, 'sweep_mop': 3, 'sweep_before_mopping': 4},
     sweep_types={'global': 1, 'maping': 5, 'gocharging': 6, 'remotecontrol': 7, 'selectroom': 8, 'customclean': 9, 'area': 4},
 )
 
@@ -298,6 +302,10 @@ XIAOMI_B108GL = ModelProfile(
     brand='xiaomi',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-b108gl:1",),
     core=XIAOMI_CORE_B108GL,
+    room_clean=RoomCleanCapability(
+        room_ids=Prop(2, 13),
+        start=Action(2, 13, in_piid=13),
+    ),
     voice=VoiceCapability(
         service=14,
         download_voice=Action(14, 1, in_piids=(1, 5, 6)),

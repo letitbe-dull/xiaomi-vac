@@ -30,7 +30,6 @@ _DEVIATIONS: dict[tuple[str, str | None], tuple[tuple[str, ...], str]] = {
     ),
     ("dreame.p2149o", "core"): (("fan_speeds",), "camelCase spec labels (ModeQuiet) split by hand (0344c89)"),
     ("dreame.r2211o", "core"): (("fan_speeds",), "camelCase spec labels (ModeQuiet) split by hand (0344c89)"),
-    ("xiaomi.b108gl", "room_clean"): ((), "spec room clean (2/13) never wired into the profile; untested"),
     ("xiaomi.c107", "core"): (("status_map",), "keeps ov21gl's codes 22-24 its spec doesn't declare (d6f017f)"),
     ("xiaomi.d102ev", "core"): (("status_map",), "keeps ov21gl's codes 22-24 its spec doesn't declare (d6f017f)"),
     ("xiaomi.d102gl", "core"): (("status_map",), "keeps ov21gl's codes 22-24 its spec doesn't declare (d6f017f)"),
