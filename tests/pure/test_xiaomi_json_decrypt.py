@@ -82,6 +82,12 @@ def test_decrypt_rejects_wrong_version():
         decrypt_xiaomi_json_map(envelope, "xiaomi.vacuum.ov42gl", "1234567890")
 
 
+def test_decrypt_reads_base64_zlib_blob_without_envelope():
+    text = json.dumps({"map_id": 7, "height": 2, "width": 3})
+    blob = base64.b64encode(zlib.compress(text.encode("utf-8")))
+    assert decrypt_xiaomi_json_map(blob, "xiaomi.vacuum.c107", "1234567890") == text
+
+
 def test_decrypt_rejects_non_json_input():
     with pytest.raises(json.JSONDecodeError):
         decrypt_xiaomi_json_map(b"not json at all", "xiaomi.vacuum.ov42gl", "1234567890")

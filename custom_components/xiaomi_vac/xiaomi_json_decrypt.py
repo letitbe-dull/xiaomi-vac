@@ -38,7 +38,14 @@ def decrypt_xiaomi_json_map(raw: bytes, model: str, device_id: str) -> str:
     this shape or fails to decrypt — callers should treat any exception here
     as "undecryptable blob", same as an upstream decrypt failure.
     """
-    envelope = json.loads(raw)
+    try:
+        envelope = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            return zlib.decompress(base64.b64decode(raw, validate=True)).decode("utf-8")
+        except (ValueError, zlib.error):
+            pass
+        raise
     if envelope.get("version") != 2:
         raise ValueError(f"unsupported xiaomi map blob version: {envelope.get('version')!r}")
 
