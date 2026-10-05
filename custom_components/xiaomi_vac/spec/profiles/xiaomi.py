@@ -98,17 +98,26 @@ XIAOMI_CORE_B112 = CoreCapability(
     sweep_types={'global': 0, 'edge': 2, 'point': 4, 'remote': 5},
 )
 
-# c102cn/c102gl/d103cn — lean core (no fan/water/sweep value tables in spec).
+# c102cn/c102gl — fan speed is siid 2 `mode`, water level is vacuum-extend mop-mode.
 XIAOMI_CORE_C102CN = CoreCapability(
     status=Prop(2, 1),
     fault=Prop(2, 2),
-    mode=Prop(2, 3),
+    fan_speed=Prop(2, 3),
+    water_level=Prop(4, 5),
     battery=Prop(3, 1),
     start=Action(2, 1),
     stop=Action(2, 2),
     charge=Action(3, 1),
-    status_map={1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    locate=Action(7, 1),
+    status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked', 7: 'cleaning', 8: 'docked', 9: 'docked', 10: 'returning', 11: 'cleaning', 12: 'cleaning', 13: 'docked', 14: 'idle', 19: 'idle', 21: 'paused', 22: 'docked', 23: 'cleaning'},
+    fan_speeds={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    water_levels={'low': 1, 'medium': 2, 'high': 3},
+)
+
+# d103cn — c102cn's core plus status 30 SelfStationClean.
+XIAOMI_CORE_D103CN = replace(
+    XIAOMI_CORE_C102CN,
+    status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked', 7: 'cleaning', 8: 'docked', 9: 'docked', 10: 'returning', 11: 'cleaning', 12: 'cleaning', 13: 'docked', 14: 'idle', 19: 'idle', 21: 'paused', 22: 'docked', 23: 'cleaning', 30: 'docked'},
 )
 
 # b108gl — mode/sweep on siid 2 (different slots than the b/c-engine).
@@ -132,15 +141,20 @@ XIAOMI_CORE_B108GL = CoreCapability(
 XIAOMI_CORE_D110CH = CoreCapability(
     status=Prop(2, 1),
     fault=Prop(2, 2),
-    mode=Prop(2, 3),
+    mode=Prop(2, 6),
+    fan_speed=Prop(2, 3),
+    water_level=Prop(2, 8),
     battery=Prop(3, 1),
     alarm=Prop(22, 1),
     volume=Prop(22, 2),
     start=Action(2, 1),
     stop=Action(2, 2),
     charge=Action(3, 1),
-    status_map={1: 'idle', 2: 'paused', 3: 'returning', 4: 'docked', 5: 'cleaning', 6: 'cleaning', 7: 'cleaning', 8: 'idle'},
-    modes={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    locate=Action(23, 1),
+    status_map={1: 'cleaning', 2: 'idle', 3: 'paused', 4: 'error', 5: 'returning', 6: 'docked', 7: 'cleaning', 8: 'docked', 9: 'docked', 10: 'returning', 11: 'cleaning', 12: 'cleaning', 13: 'docked', 14: 'idle', 19: 'idle', 21: 'paused', 22: 'docked', 23: 'cleaning', 30: 'docked'},
+    fan_speeds={'silent': 0, 'basic': 1, 'strong': 2, 'full_speed': 3},
+    water_levels={'level1': 1, 'level2': 2, 'level3': 3},
+    modes={'sweep': 1, 'mop': 2, 'sweep_mop': 3, 'sweep_before_mopping': 4},
 )
 
 
@@ -670,7 +684,7 @@ XIAOMI_C101EU = ModelProfile(
     ),
 )
 
-# xiaomi.vacuum.c102cn, xiaomi.vacuum.c102gl, xiaomi.vacuum.d103cn, xiaomi.vacuum.d110ch
+# xiaomi.vacuum.c102cn, xiaomi.vacuum.c102gl
 XIAOMI_C102CN = ModelProfile(
     profile_id='xiaomi.c102cn',
     brand='xiaomi',
@@ -680,6 +694,14 @@ XIAOMI_C102CN = ModelProfile(
         room_ids=Prop(2, 4),
         start=Action(2, 3, in_piid=4),
     ),
+)
+
+# xiaomi.vacuum.d103cn — C102CN's layout with status 30 SelfStationClean.
+XIAOMI_D103CN = replace(
+    XIAOMI_C102CN,
+    profile_id='xiaomi.d103cn',
+    core=XIAOMI_CORE_D103CN,
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-d103cn:1",),
 )
 
 # xiaomi.vacuum.c104

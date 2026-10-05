@@ -4,7 +4,7 @@ This list is generated from the integration code, using models where
 `custom_components/xiaomi_vac/spec/registry.py:is_supported(model)` returns
 `True`.
 
-Total supported models: 80
+Total supported models: 84
 
 ## Dreame
 
@@ -81,14 +81,18 @@ Total supported models: 80
 - `xiaomi.vacuum.b106eu`
 - `xiaomi.vacuum.c101`
 - `xiaomi.vacuum.c101eu`
+- `xiaomi.vacuum.c102cn`
+- `xiaomi.vacuum.c102gl`
 - `xiaomi.vacuum.c103`
 - `xiaomi.vacuum.c104`
 - `xiaomi.vacuum.c107`
 - `xiaomi.vacuum.d101`
 - `xiaomi.vacuum.d102ev`
 - `xiaomi.vacuum.d102gl`
+- `xiaomi.vacuum.d103cn`
 - `xiaomi.vacuum.d106gl`
 - `xiaomi.vacuum.d109gl`
+- `xiaomi.vacuum.d110ch`
 - `xiaomi.vacuum.ov21cn` (Mijia Robot Vacuum 5 Pro; the map may not render)
 - `xiaomi.vacuum.ov21gl`
 - `xiaomi.vacuum.ov31gl`
