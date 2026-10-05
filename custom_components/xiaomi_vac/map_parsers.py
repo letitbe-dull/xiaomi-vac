@@ -145,11 +145,30 @@ def overlay_units_per_metre(brand: str) -> float:
     return 1000.0 if brand == "xiaomi" else 1.0
 
 
+_IJAI_EXTRA_HEX_KEY_MODELS = frozenset({"b106bk"})
+
+
+def _patch_ijai_hex_key_models() -> None:
+    """Make vacuum_map_parser_ijai derive the hex-style AES key for the b106bk."""
+    from vacuum_map_parser_ijai import aes_decryptor
+
+    original = aes_decryptor.is_EncryptKeyTypeHex_model
+    if getattr(original, "_xiaomi_vac_patched", False):
+        return
+
+    def patched(model: str) -> bool:
+        return model.split(".")[-1].lower() in _IJAI_EXTRA_HEX_KEY_MODELS or original(model)
+
+    patched._xiaomi_vac_patched = True
+    aes_decryptor.is_EncryptKeyTypeHex_model = patched
+
+
 def make_parser(brand: str, model: str, palette, sizes, drawables, image_config, texts):
     """Construct the parser for ``brand`` (lazy import). Raises ValueError for an
     unknown brand, ImportError if the brand's dep isn't installed."""
     if brand == "ijai":
         from vacuum_map_parser_ijai.map_data_parser import IjaiMapDataParser
+        _patch_ijai_hex_key_models()
         return IjaiMapDataParser(palette, sizes, drawables, image_config, texts)
     if brand == "xiaomi":
         from vacuum_map_parser_xiaomi.map_data_parser import XiaomiMapDataParser

@@ -528,6 +528,31 @@ def test_dreame_decrypt_cloud_blob_roundtrip():
     assert result == plaintext
 
 
+def test_ijai_b106bk_blob_unpacks_with_hex_key_style():
+    from Crypto.Cipher import AES
+    from Crypto.Hash import MD5
+    from Crypto.Util.Padding import pad
+    from vacuum_map_parser_base.config.color import ColorsPalette
+    from vacuum_map_parser_base.config.image_config import ImageConfig
+    from vacuum_map_parser_base.config.size import Sizes
+    from vacuum_map_parser_ijai.aes_decryptor import aes_encrypt
+
+    model = "xiaomi.vacuum.b106bk"
+    ids = dict(wifi_sn="SN123", owner_id="1000", device_id="2000",
+               model=model, device_mac="AA:BB:CC:DD:EE:FF")
+    seed = aes_encrypt("+".join([ids["wifi_sn"], ids["owner_id"], ids["device_id"]]),
+                       "aabbccddeeff" + "06bk")
+    hex_key = bytes.fromhex(MD5.new(seed.encode("utf-8")).hexdigest())
+    plaintext = b"synthetic b106bk map data " * 4
+    blob = AES.new(hex_key, AES.MODE_ECB).encrypt(
+        pad(zlib.compress(plaintext).hex().encode("utf-8"), 16))
+
+    parser = map_parsers.make_parser(
+        "ijai", model, ColorsPalette(), Sizes(), [], ImageConfig(), [])
+
+    assert parser.unpack_map(blob, **map_parsers.unpack_kwargs("ijai", **ids)) == plaintext
+
+
 def test_unpack_kwargs_per_brand():
     kw = dict(wifi_sn="SN", owner_id="OID", device_id="DID",
               model="m", device_mac="mac", enckey=None)
