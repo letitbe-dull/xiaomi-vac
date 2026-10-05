@@ -982,10 +982,12 @@ XIAOMI_OV21CN = replace(
 )
 
 # xiaomi.vacuum.pv21cn (Mijia Robot Vacuum 6 Pro) — same wired siid/piid/aiid
-# as ov21gl, but siid 2 piid 4 (sweep-mop-type) has no "Mop" (2) value.
+# as ov21gl, but siid 2 piid 4 (sweep-mop-type) has no "Mop" (2) value, and
+# siid 2 piid 2 (status) adds 25 SelfChecking and 26 Summoning.
 # Consumables unverified (see ov71gl note above).
 XIAOMI_CORE_PV21CN = replace(
     XIAOMI_CORE_OV21GL,
+    status_map={**XIAOMI_CORE_OV21GL.status_map, 25: 'idle', 26: 'cleaning'},
     modes={'sweep': 1, 'sweep_mop': 3, 'sweep_before_mopping': 4},
 )
 

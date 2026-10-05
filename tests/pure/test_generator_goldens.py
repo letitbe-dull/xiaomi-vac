@@ -41,6 +41,7 @@ _DEVIATIONS: dict[tuple[str, str | None], tuple[tuple[str, ...], str]] = {
     ("xiaomi.ov43gb", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
     ("xiaomi.ov51gl", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
     ("xiaomi.ov71gl", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
+    ("xiaomi.pv21cn", "core"): (("status_map",), "status 25 SelfChecking and 26 Summoning mapped by hand, not in the generator's table"),
     ("xiaomi.pv21cn", "zone_sweep"): ((), "zone clean added for the X20 family only (293d6d6)"),
     ("xiaomi.ov31gl", None): ((), "no spec in library"),
     ("xiaomi.ov42gl", None): ((), "no spec in library"),
