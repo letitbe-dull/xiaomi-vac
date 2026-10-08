@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import logging
+import urllib.parse
 import zlib
 from dataclasses import dataclass, field
 
@@ -195,7 +197,208 @@ class MapFetcher:
         if self._brand == "xiaomi":
             from .xiaomi_json_decrypt import decrypt_xiaomi_json_map
             return decrypt_xiaomi_json_map(raw, self._model, self._device_id)
+        if self._brand == "viomi" and raw.startswith(b"\x1f\x8b"):
+            # Some viomi profiles (confirmed on v22) upload a gzip-wrapped blob
+            # instead of the raw zlib stream ViomiMapDataParser.unpack_map()
+            # expects — it calls zlib.decompress(raw) with default wbits, which
+            # only understands a zlib header (0x78..), not gzip's (0x1f 0x8b),
+            # and fails with "incorrect header check". Unwrap it ourselves.
+            import gzip
+            return gzip.decompress(raw)
         return self._parser.unpack_map(raw, **self._unpack_kw)
+
+    def _parse_viomi_json_trailer(self, unpacked: bytes):
+        """viomi.vacuum.v22 (confirmed; likely siblings) doesn't use the
+        binary feature-flag sections ViomiMapDataParser.parse() expects.
+        Instead it writes a raw one-byte-per-pixel occupancy grid (the same
+        pixel encoding ViomiImageParser already understands — 0x00 outside,
+        0xff wall, 0x7f undiscovered) immediately followed by a JSON object
+        carrying width/height/mapId/x_min/y_min/resolution, the charge dock
+        and robot pose, and virtual walls/no-go zones ("area").
+
+        Confirmed byte-for-byte on a real capture: header_len + width*height
+        lands exactly on the JSON's opening '{', and the JSON's one "area"
+        entry / absent room list matched the live device's one configured
+        virtual wall and zero rooms. Returns None (falls back to the normal
+        binary parser) if this frame doesn't look like this format.
+        """
+        brace = unpacked.find(b"{")
+        if brace < 0:
+            return None
+        try:
+            meta = json.loads(unpacked[brace:])
+        except (ValueError, UnicodeDecodeError):
+            return None
+        width, height = meta.get("width"), meta.get("height")
+        if not (
+            isinstance(width, int) and isinstance(height, int)
+            and width > 0 and height > 0
+        ):
+            return None
+        header_len = brace - width * height
+        # A real header here is a handful of bytes (feature flags + a magic/
+        # map-id word in every sample seen so far); anything larger means the
+        # '{' we found is coincidental and this isn't our format after all.
+        if not (0 <= header_len <= 64):
+            return None
+
+        from vacuum_map_parser_base.map_data import (
+            ImageData, MapData, Path, Point, Room, Wall,
+        )
+        from vacuum_map_parser_viomi.parsing_buffer import ParsingBuffer
+
+        pixel_grid = unpacked[header_len:brace]
+        buf = ParsingBuffer("image", pixel_grid, 0, len(pixel_grid))
+        image, _rooms_raw, cleaned_areas, cleaned_areas_layer = (
+            self._parser._image_parser.parse(buf, width, height)  # noqa: SLF001
+        )
+        if image is None:
+            return None
+
+        resolution = float(meta.get("resolution") or 0.05)
+        x_min = float(meta.get("x_min") or 0.0)
+        y_min = float(meta.get("y_min") or 0.0)
+
+        # map_vector.vector_map() emits charger/vacuum/walls/etc. by dividing
+        # by self._overlay_units, which is 1.0 for brand "viomi" (the binary
+        # protocol's own _parse_position already returns metres) — so every
+        # Point/Wall built below must be in METRES too, not this device's
+        # native millimetres, or the card receives e.g. charger.x = -449
+        # (metres!) instead of -0.449 and renders a wildly out-of-frame,
+        # giant icon with nothing else in the viewport (the bug this fixes).
+        mm_to_m = 1000.0
+
+        def to_image(p: Point) -> Point:
+            # p is already in metres (see mm_to_m above); x_min/y_min/
+            # resolution (also metres) place that frame on the pixel grid.
+            # Distinct from (and not to be confused with) the binary-protocol
+            # profiles' fixed *20+400 transform, a different coordinate
+            # convention for a different frame.
+            return Point((p.x - x_min) / resolution, (p.y - y_min) / resolution)
+
+        map_data = MapData(0, 1)
+        map_data.image = ImageData(
+            width * height, 0, 0, height, width,
+            self._parser._image_config, image, to_image,  # noqa: SLF001
+            additional_layers={Drawable.CLEANED_AREA: cleaned_areas_layer},
+        )
+        # "autoArea" is this device's room list: [{"id","name","pos":[x,y]}],
+        # millimetres. It's a label ANCHOR POINT only — no boundary/polygon —
+        # so each Room gets a zero-area bbox at that point. That's enough for
+        # the card's name label, and more importantly it feeds every room
+        # position into the card's auto-fit viewBox (map_vector's bbox-less
+        # fallback path builds one rectangle per room from x0/y0/x1/y1), so
+        # the view spans the whole explored house instead of just the
+        # charger — the only point it had with zero rooms configured.
+        auto_area = meta.get("autoArea") or []
+        raw_ids = [
+            e.get("id") for e in auto_area if isinstance(e.get("id"), int)
+        ]
+        # Map whatever this device's lowest id actually is onto 10 (the start
+        # of the card's room/colour band) rather than assuming it's always 1.
+        room_id_offset = (10 - min(raw_ids)) if raw_ids else 0
+
+        rooms = {}
+        for entry in auto_area:
+            pos = entry.get("pos")
+            rid = entry.get("id")
+            if not (isinstance(pos, list) and len(pos) == 2 and isinstance(rid, int)):
+                continue
+            rx, ry = pos[0] / mm_to_m, pos[1] / mm_to_m
+            # Custom (renamed) room names come through URL-percent-encoded
+            # for any non-ASCII character (confirmed: "Étkező" arrived as
+            # "%C3%89tkez%C5%91") — the auto-generated "RoomN" placeholders
+            # don't need it, but decoding is a no-op for plain ASCII anyway.
+            name = entry.get("name")
+            if isinstance(name, str):
+                name = urllib.parse.unquote(name)
+            # This device's native room ids are 1-9 — below the 10-59 band
+            # both ViomiImageParser's own raster colouring and the card's
+            # `_roomRaster`/`_mapSVG` hard-code for "this pixel/id is a room".
+            # Card code looks up a room's tint by indexing `rooms` with the
+            # SAME id the pixel grid carries (`idIndex[lab]` against `lab`
+            # read straight off a grid cell), so the shift has to be applied
+            # once, consistently, everywhere that id is used — the Room
+            # itself, the dict key, the grid pixel value AND the traced
+            # chain's id all have to agree or the colour lookup silently
+            # misses and every room falls back to the same tint (shape
+            # renders, but as one flat colour — exactly what an id-only
+            # shift on the grid, not on the exposed room id, produced).
+            card_id = rid + room_id_offset
+            rooms[card_id] = Room(rx, ry, rx, ry, card_id, name=name,
+                                   pos_x=rx, pos_y=ry)
+        map_data.rooms = rooms
+        map_data.cleaned_rooms = cleaned_areas
+
+        # The pixel grid encodes room membership too — confirmed values 1..9
+        # (exactly this map's room ids) alongside 0x00/0x7f/0xff (outside/
+        # undiscovered/wall) once rooms exist. Trace outlines with the same
+        # cell-mask tracer `extract_json_grid` uses, so the card gets real
+        # room fills/outlines instead of only the label points above.
+        # Stashed on map_data rather than threaded through vector_map's fixed
+        # ijai_grid/json_grid dispatch, which has no slot for "grid already
+        # computed by the caller" — fetch() picks this up below.
+        if rooms:
+            remapped = bytearray(pixel_grid)
+            masks: dict[int, set] = {}
+            for i, v in enumerate(pixel_grid):
+                card_id = v + room_id_offset
+                if card_id in rooms:
+                    remapped[i] = card_id
+                    masks.setdefault(card_id, set()).add((i % width, i // width))
+            map_data._viomi_grid_extra = {  # noqa: SLF001
+                "size": {"x": width, "y": height},
+                "bounds": {
+                    "minX": x_min, "minY": y_min,
+                    "maxX": x_min + width * resolution,
+                    "maxY": y_min + height * resolution,
+                },
+                "resolution": resolution,
+                "grid_rle": map_vector._rle(bytes(remapped)),  # noqa: SLF001
+                "room_chains": (
+                    map_vector._chains_from_masks(masks) if masks else []  # noqa: SLF001
+                ),
+            }
+
+        walls = []
+        for entry in meta.get("area") or []:
+            pts = entry.get("vertexs") or []
+            if len(pts) == 2:
+                (x0, y0), (x1, y1) = pts
+                walls.append(Wall(
+                    x0 / mm_to_m, y0 / mm_to_m, x1 / mm_to_m, y1 / mm_to_m
+                ))
+        map_data.walls = walls
+        map_data.no_go_areas = []
+        map_data.zones = []
+
+        charger = meta.get("chargeHandlePos")
+        if isinstance(charger, list) and len(charger) == 2:
+            map_data.charger = Point(charger[0] / mm_to_m, charger[1] / mm_to_m)
+        robot = meta.get("robotPos")
+        if isinstance(robot, list) and len(robot) == 2:
+            map_data.vacuum_position = Point(
+                robot[0] / mm_to_m, robot[1] / mm_to_m, meta.get("robotPhi")
+            )
+
+        # "posArray" is the travelled path: a JSON array *string* (double-
+        # encoded, like "posArray" itself being a string value) of [x, y]
+        # millimetre pairs, "pathSize" entries long.
+        pos_array = meta.get("posArray")
+        if isinstance(pos_array, str):
+            try:
+                points = json.loads(pos_array)
+            except (ValueError, TypeError):
+                points = None
+            if isinstance(points, list) and points:
+                path_points = [
+                    Point(p[0] / mm_to_m, p[1] / mm_to_m)
+                    for p in points
+                    if isinstance(p, list) and len(p) == 2
+                ]
+                if path_points:
+                    map_data.path = Path(len(path_points), 1, 0, [path_points])
+        return map_data
 
     def fetch(self, slot: str = "0") -> MapResult | None:
         """Fetch + decrypt + parse one cloud upload slot ("0" or "1").
@@ -249,7 +452,11 @@ class MapFetcher:
         carpets = parse_carpets(unpacked) if self._brand == "xiaomi" else []
         path_segments = parse_path(unpacked) if self._brand == "xiaomi" else []
         try:
-            md = self._parser.parse(unpacked)
+            md = None
+            if self._brand == "viomi":
+                md = self._parse_viomi_json_trailer(unpacked)
+            if md is None:
+                md = self._parser.parse(unpacked)
             vector = map_vector.vector_map(
                 md, unpacked, ijai_grid=self._ijai_grid,
                 json_grid=self._json_grid,
@@ -257,10 +464,17 @@ class MapFetcher:
                 carpets=carpets,
                 path_segments=path_segments,
             )
+            grid_extra = getattr(md, "_viomi_grid_extra", None)
+            if grid_extra is not None:
+                vector.update(grid_extra)
         except Exception as ex:  # noqa: BLE001
             # Decrypted fine but the parser rejected the frame (corrupt or
             # unexpected layout). The key material is good — keep the enckey.
-            _LOGGER.debug("Parser rejected map frame at slot %s: %s", slot, ex)
+            import traceback
+            _LOGGER.debug(
+                "Parser rejected map frame at slot %s: %r\n%s",
+                slot, ex, traceback.format_exc(),
+            )
             attempt.outcome = "parse_rejected"
             return None
         if md.image is None or md.image.is_empty:
