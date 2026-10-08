@@ -783,17 +783,20 @@ class XiaomiVacCard extends HTMLElement {
     // no-go / no-mop zones — same quadrilateral shape as carpets, styled as a
     // hazard area (red hatch-ish fill + dashed border) so it reads distinctly
     // from both carpets (tan, solid border) and virtual walls (a plain line).
+    // pointer-events:none: this is an annotation drawn over room polygons,
+    // never meant to be individually tappable — otherwise a zone covering
+    // most of a room would intercept taps meant to select that room.
     (m.no_go || []).forEach((zone) => {
       if (!Array.isArray(zone) || zone.length !== 8) return;
       const points = [[zone[0], zone[1]], [zone[2], zone[3]],
         [zone[4], zone[5]], [zone[6], zone[7]]];
-      s += `<path d="${ring(points)}" fill="#e2483d" fill-opacity="0.18" stroke="#e2483d" stroke-opacity="0.75" stroke-width="0.04" stroke-dasharray="0.12 0.1"/>`;
+      s += `<path d="${ring(points)}" fill="#e2483d" fill-opacity="0.18" stroke="#e2483d" stroke-opacity="0.75" stroke-width="0.04" stroke-dasharray="0.12 0.1" pointer-events="none"/>`;
     });
     (m.no_mop || []).forEach((zone) => {
       if (!Array.isArray(zone) || zone.length !== 8) return;
       const points = [[zone[0], zone[1]], [zone[2], zone[3]],
         [zone[4], zone[5]], [zone[6], zone[7]]];
-      s += `<path d="${ring(points)}" fill="#4696e8" fill-opacity="0.16" stroke="#4696e8" stroke-opacity="0.65" stroke-width="0.04" stroke-dasharray="0.1 0.08"/>`;
+      s += `<path d="${ring(points)}" fill="#4696e8" fill-opacity="0.16" stroke="#4696e8" stroke-opacity="0.65" stroke-width="0.04" stroke-dasharray="0.1 0.08" pointer-events="none"/>`;
     });
     if (this._enabled("show_room_labels")) rooms.forEach((r) => {
       if (r.cx == null || !r.name) return;
