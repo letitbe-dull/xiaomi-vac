@@ -405,6 +405,22 @@ class IjaiVacuumDevice:
                     payload = json.loads(out["value"])
                 except (ValueError, KeyError):
                     return []
+                # viomi.vacuum.v22 (and likely other v22-profile devices) wrap the
+                # list under {"curmapid", "map_list", "uid"} instead of returning
+                # it bare — unwrap it and translate curmapid into each entry's
+                # "cur" flag so _resolve_active_id's `m.get("cur")` lookup still
+                # finds the active map (issue: map-list payload has unsupported
+                # shape / gzip header errors downstream from a wrongly-derived key).
+                if (
+                    isinstance(payload, dict)
+                    and isinstance(payload.get("map_list"), list)
+                ):
+                    cur_id = payload.get("curmapid")
+                    payload = [
+                        {**m, "cur": m.get("id") == cur_id}
+                        for m in payload["map_list"]
+                        if isinstance(m, dict) and "id" in m
+                    ]
                 # viomi v15's map-list is an array-of-arrays, not a list of dicts
                 # (spec/profiles/viomi.py VIOMI_V15_MAP) — reject any shape whose
                 # items aren't {"id": ...} dicts rather than crashing fetch_all's

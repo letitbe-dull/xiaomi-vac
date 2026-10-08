@@ -37,6 +37,15 @@ class XiaomiVacuumMapCamera(CoordinatorEntity[XiaomiMapCoordinator], Camera):
     def __init__(self, coordinator: XiaomiMapCoordinator, entry: ConfigEntry) -> None:
         CoordinatorEntity.__init__(self, coordinator)
         Camera.__init__(self)
+        # Camera.__init__() unconditionally sets self.content_type to
+        # DEFAULT_CONTENT_TYPE ("image/jpeg") as a plain instance attribute —
+        # it never looks at _attr_content_type, so that class-level
+        # declaration above is dead code and every served frame was labelled
+        # image/jpeg despite being PNG bytes. Harmless in a lenient <img> tag,
+        # but HA's camera_proxy response also sends
+        # X-Content-Type-Options: nosniff, which makes strict clients refuse
+        # to decode the mislabelled image at all. Set it for real here.
+        self.content_type = "image/png"
         base = entry.unique_id or entry.entry_id
         self._attr_unique_id = f"{base}_map"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
