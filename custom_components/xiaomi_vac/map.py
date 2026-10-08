@@ -243,7 +243,7 @@ class MapFetcher:
             return None
 
         from vacuum_map_parser_base.map_data import (
-            ImageData, MapData, Path, Point, Room, Wall,
+            Area, ImageData, MapData, Path, Point, Room, Wall,
         )
         from vacuum_map_parser_viomi.parsing_buffer import ParsingBuffer
 
@@ -360,7 +360,15 @@ class MapFetcher:
                 ),
             }
 
+        # "area" entries are 2 vertices for a virtual wall (a line) or 4 for
+        # a no-go zone (a rectangle) — same convention the binary parser's
+        # own _parse_restricted_areas uses to tell them apart. Confirmed: a
+        # device-side auto-generated zone ("active":"depth", presumably its
+        # own fall/depth-sensor threshold area) shows up the same shape as a
+        # user-drawn no-go zone ("active":"forbid") — treated the same here,
+        # since the card has no separate rendering for it anyway.
         walls = []
+        no_go_areas = []
         for entry in meta.get("area") or []:
             pts = entry.get("vertexs") or []
             if len(pts) == 2:
@@ -368,8 +376,11 @@ class MapFetcher:
                 walls.append(Wall(
                     x0 / mm_to_m, y0 / mm_to_m, x1 / mm_to_m, y1 / mm_to_m
                 ))
+            elif len(pts) == 4:
+                coords = [c / mm_to_m for p in pts for c in p]
+                no_go_areas.append(Area(*coords))
         map_data.walls = walls
-        map_data.no_go_areas = []
+        map_data.no_go_areas = no_go_areas
         map_data.zones = []
 
         charger = meta.get("chargeHandlePos")
