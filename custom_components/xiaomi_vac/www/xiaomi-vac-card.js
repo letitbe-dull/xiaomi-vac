@@ -695,6 +695,10 @@ class XiaomiVacCard extends HTMLElement {
     });
 
     track.addEventListener("transitionend", (e) => {
+      // 'transitionend' bubbles — a descendant's OWN transform transition
+      // (e.g. the zoom layer's svg snapping back via .zoom-anim) must not be
+      // mistaken for the carousel track settling.
+      if (e.target !== track) return;
       if (e.propertyName && e.propertyName !== "transform") return;
       const n = N();
       if (this._pos <= 0) { track.classList.remove("anim"); this._pos = n; track.style.transform = `translateX(${-this._pos * this._w}px)`; }
@@ -705,7 +709,10 @@ class XiaomiVacCard extends HTMLElement {
       this._syncZoneBtn();
       this._syncZoomBtn();
       // a map refresh that arrived mid-gesture was deferred — apply it now
-      if (this._pendingRebuild && !down) { this._pendingRebuild = false; this._buildPages(true); }
+      if (this._pendingRebuild && !down) {
+        this._pendingRebuild = false;
+        setTimeout(() => this._buildPages(true), 0);
+      }
     });
     window.addEventListener("resize", () => { this._w = vp.clientWidth; if (!down) this._setX(false); });
     // window 'resize' misses layout changes that don't resize the window —
@@ -1056,20 +1063,25 @@ class XiaomiVacCard extends HTMLElement {
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       e.stopPropagation();
       this._zoomDown = true;
-      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+      // Capture is DEFERRED until the gesture actually moves (see onMove) —
+      // capturing on every press retargets the subsequent click to svg, so a
+      // stationary tap never reaches the room path underneath and room
+      // selection silently fails (same fix as _setupSwipe's own onDown).
       if (pts.size === 2) {
+        // two fingers down is unambiguously a pinch, not a tap — capture both
+        pts.forEach((_, id) => { try { svg.setPointerCapture(id); } catch (_) {} });
         pinchDist = dist();
         pinchScale0 = st.scale;
         panStart = null; drag = null;
       } else if (pts.size === 1) {
         if (st.scale > 1.001) {
-          panStart = { x: e.clientX, y: e.clientY, panX0: st.panX, panY0: st.panY };
+          panStart = { x: e.clientX, y: e.clientY, panX0: st.panX, panY0: st.panY, moved: false, pid: e.pointerId };
         } else {
           const track = this._root.querySelector(".track");
           // Grabbing during the snap settles to a real slot first, same as
           // _setupSwipe's own onDown — never start a drag from a clone.
           if (track.classList.contains("anim")) { track.classList.remove("anim"); this._pos = this._realPos(); }
-          drag = { x: e.clientX, y: e.clientY, t0: Date.now(), base: -this._pos * this._w, moved: false, vert: false };
+          drag = { x: e.clientX, y: e.clientY, t0: Date.now(), base: -this._pos * this._w, moved: false, vert: false, pid: e.pointerId };
         }
       }
     };
@@ -1093,16 +1105,22 @@ class XiaomiVacCard extends HTMLElement {
         this._clampPan(st, svg);
         this._applyZoomToPageIndex(mi, false);
       } else if (panStart) {
+        const dx = e.clientX - panStart.x, dy = e.clientY - panStart.y;
+        if (!panStart.moved) {
+          if (Math.hypot(dx, dy) < SWIPE_TH) return;
+          panStart.moved = true;
+          try { svg.setPointerCapture(panStart.pid); } catch (_) {}
+        }
         if (e.cancelable) e.preventDefault();
-        st.panX = panStart.panX0 + (e.clientX - panStart.x);
-        st.panY = panStart.panY0 + (e.clientY - panStart.y);
+        st.panX = panStart.panX0 + dx;
+        st.panY = panStart.panY0 + dy;
         this._clampPan(st, svg);
         this._applyZoomToPageIndex(mi, false);
       } else if (drag) {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         if (!drag.moved && !drag.vert) {
           if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_TH) { drag.vert = true; return; }
-          if (Math.abs(dx) > SWIPE_TH) drag.moved = true;
+          if (Math.abs(dx) > SWIPE_TH) { drag.moved = true; try { svg.setPointerCapture(drag.pid); } catch (_) {} }
         }
         if (drag.moved) {
           if (e.cancelable) e.preventDefault();
@@ -1117,9 +1135,11 @@ class XiaomiVacCard extends HTMLElement {
       if (pts.size < 2) pinchDist = 0;
       if (pts.size === 1) {
         // one finger lifted mid-pinch — let the remaining finger keep
-        // panning instead of going dead until it lifts too
-        const [[, p]] = pts;
-        panStart = { x: p.x, y: p.y, panX0: st.panX, panY0: st.panY };
+        // panning instead of going dead until it lifts too; already mid-
+        // gesture, so (unlike a fresh onDown) capture it immediately
+        const [[pid, p]] = pts;
+        try { svg.setPointerCapture(pid); } catch (_) {}
+        panStart = { x: p.x, y: p.y, panX0: st.panX, panY0: st.panY, moved: true, pid };
         drag = null;
       } else if (pts.size === 0) {
         if (drag && drag.moved) {
@@ -1130,12 +1150,30 @@ class XiaomiVacCard extends HTMLElement {
         }
         panStart = null; drag = null;
         this._zoomDown = false;
-        if (st.scale <= 1.001) { st.scale = 1; st.panX = 0; st.panY = 0; this._applyZoomToPageIndex(mi, true); }
+        // Only snap-reset (and thus touch the svg's transform/transition) when
+        // this gesture actually left scale/pan off their rest values — a plain
+        // click never touched them, so re-applying "scale(1) translate(0,0)"
+        // here was a no-op VALUE-wise most of the time, but the very first
+        // time it ran (transform going from unset to an explicit value) it
+        // was a real change, starting a transition whose transitionend then
+        // bubbled up into the carousel's own track handler and wrongly wiped
+        // room selection (see the track's transitionend listener).
+        if (st.scale <= 1.001 && (st.scale !== 1 || st.panX !== 0 || st.panY !== 0)) {
+          st.scale = 1; st.panX = 0; st.panY = 0; this._applyZoomToPageIndex(mi, true);
+        }
         this._syncZoomBtn();
         // a map refresh that arrived mid-gesture was deferred (see _rebuild) —
         // apply it now that the fingers are up, same as _setupSwipe's own
-        // transitionend flush
-        if (this._pendingRebuild && !this._down) { this._pendingRebuild = false; this._buildPages(true); }
+        // transitionend flush. Deferred one more tick, past the native
+        // 'click' this same pointerup is about to synthesize — rebuilding
+        // synchronously here would yank the just-tapped .rm out from under
+        // that click (room selection would silently double-toggle: the
+        // stale node's click still fires, then whatever's newly in its place
+        // if the browser re-targets to the live DOM).
+        if (this._pendingRebuild && !this._down) {
+          this._pendingRebuild = false;
+          setTimeout(() => this._buildPages(true), 0);
+        }
       }
     };
 
