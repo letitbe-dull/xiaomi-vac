@@ -91,7 +91,7 @@ const parseRGBA = (s) => {
 const MDI = {
   play: "mdi:play", pause: "mdi:pause", dock: "mdi:home-map-marker",
   locate: "mdi:map-marker-radius", fan: "mdi:fan", water: "mdi:water", map: "mdi:layers",
-  tools: "mdi:tools", zone: "mdi:vector-rectangle",
+  tools: "mdi:tools", zone: "mdi:vector-rectangle", zoomReset: "mdi:fit-to-screen-outline",
 };
 const ZONE_CLEAN_MODELS = new Set([
   "ijai.vacuum.v17",
@@ -109,6 +109,12 @@ const ZONE_CLEAN_MODELS = new Set([
   "xiaomi.vacuum.ov71gl",
   "xiaomi.vacuum.pv21cn",
 ]);
+// Shared page-swipe feel — used by both _setupSwipe (vacuum-image <-> map
+// pages) and _setupZoomDraw's own single-finger drag-to-page-swipe (a
+// zoomable map page owns every pointer that lands on it outright, so it
+// replicates this instead of handing the gesture off to _setupSwipe and
+// risking a race on whichever finger lands first in a pinch).
+const SWIPE_TH = 8, SWIPE_COMMIT = 0.16, SWIPE_VEL = 0.45;
 // Union across all models — `key` is the translation_key sensor.py assigns,
 // kept in sync with its XiaomiSensorDescription catalogue by hand.
 // _consumableRows() drops the ones a given device doesn't expose.
@@ -145,6 +151,8 @@ const TOGGLE_DEFAULTS = {
   allow_room_cleaning: true,
   allow_zone_cleaning: true,
   show_consumables: true,
+  show_zoom: true,
+  max_zoom: 6,
 };
 
 class XiaomiVacCard extends HTMLElement {
@@ -265,6 +273,13 @@ class XiaomiVacCard extends HTMLElement {
   _svc(d, s, data = {}) { this._hass.callService(d, s, data); }
   _enabled(name) { return this._config[name] !== false; }
   _mapOffset() { return this._enabled("show_vacuum_page") ? 1 : 0; }
+  // Settles a possibly-cloned carousel position (0 or N+1, the loop clones)
+  // to its real 1..N equivalent — shared by _setupSwipe's own grab-during-
+  // snap handling and _setupZoomDraw's replica of it.
+  _realPos() {
+    const n = this._pages.length;
+    return ((this._pos - 1) % n + n) % n + 1;
+  }
   _entryId() {
     const eid = this._config.map || this._config.vacuum;
     const ent = this._hass && this._hass.entities && this._hass.entities[eid];
@@ -299,10 +314,15 @@ class XiaomiVacCard extends HTMLElement {
     }
   }
   // Rebuilding the track resets the DOM; never do it mid-swipe (it would yank the
-  // carousel). Defer to the next settle, and keep the user on their current page.
+  // carousel) or mid-pinch/pan (it would yank the pointer capture out from under
+  // the user's fingers — the gesture would just silently stop responding).
+  // Defer to the next settle, and keep the user on their current page.
   _rebuild() {
     const track = this._root && this._root.querySelector(".track");
-    if (this._down || (track && track.classList.contains("anim"))) { this._pendingRebuild = true; return; }
+    if (this._down || this._zoomDown || (track && track.classList.contains("anim"))) {
+      this._pendingRebuild = true;
+      return;
+    }
     this._buildPages(true);
   }
 
@@ -352,7 +372,7 @@ class XiaomiVacCard extends HTMLElement {
            the status bar or the floating tray — the SVG scales to fit the inset */
         .pg-map{background:radial-gradient(120% 90% at 50% 0%,var(--xv-card),var(--xv-floor));
           box-sizing:border-box;padding:56px 14px 92px}
-        .pg-map svg{width:100%;height:100%;display:block}
+        .pg-map svg{width:100%;height:100%;display:block;transform-origin:0 0}
         .map-badge{position:absolute;top:64px;right:20px;z-index:4;background:var(--xv-accent);color:#fff;
           font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:5px 10px;
           border-radius:9px;box-shadow:0 4px 12px color-mix(in srgb,var(--xv-accent) 40%,transparent);
@@ -367,6 +387,15 @@ class XiaomiVacCard extends HTMLElement {
         .zone-btn:focus-visible{outline:2px solid var(--xv-accent);outline-offset:2px}
         .pg-map.zoning svg{cursor:crosshair;touch-action:none}
         .pg-map.zoning .rm{pointer-events:none}
+        .pg-map.zoomable svg{touch-action:none}
+        .pg-map svg.zoom-anim{transition:transform .25s ease}
+        .zoom-reset{position:absolute;bottom:110px;right:20px;z-index:5;width:36px;height:36px;border:0;border-radius:11px;
+          background:color-mix(in srgb,var(--xv-card) 88%,transparent);
+          backdrop-filter:blur(12px) saturate(180%);-webkit-backdrop-filter:blur(12px) saturate(180%);
+          color:var(--xv-ink);display:grid;place-items:center;cursor:pointer;
+          box-shadow:0 2px 10px rgba(0,0,0,.14)}
+        .zoom-reset ha-icon{--mdc-icon-size:20px}
+        .zoom-reset:focus-visible{outline:2px solid var(--xv-accent);outline-offset:2px}
         .zone-rect{fill:color-mix(in srgb,var(--xv-accent) 20%,transparent);stroke:var(--xv-accent);
           stroke-width:0.08;stroke-dasharray:0.22 0.14}
         .zonetag{position:absolute;left:50%;bottom:150px;z-index:6;transform:translateX(-50%);
@@ -446,6 +475,7 @@ class XiaomiVacCard extends HTMLElement {
         <div class="batt"><span class="btxt">—</span><span class="bicon"></span></div>
       </div>
       <button class="zone-btn" title="Draw a cleaning zone" aria-label="Draw a cleaning zone" aria-pressed="false" style="display:none"><ha-icon icon="${MDI.zone}"></ha-icon></button>
+      <button class="zoom-reset" title="Reset zoom" aria-label="Reset zoom" style="display:none"><ha-icon icon="${MDI.zoomReset}"></ha-icon></button>
       <div class="dots"></div>
       <div class="toast"></div>
       <button class="roomtag"></button>
@@ -480,6 +510,7 @@ class XiaomiVacCard extends HTMLElement {
       this._cycleSelect(this._config.water || `select.${this._base()}_water_level`);
     q(".cyc-map").onclick = () => this._cycleSelect(this._activeMapEid());
     q(".zone-btn").onclick = () => this._toggleZone();
+    q(".zoom-reset").onclick = () => this._resetZoom();
     q(".zonetag").onclick = () => this._confirmZone();
     q(".roomtag").onclick = () => this._cleanSelected();
     q(".act-consumables").onclick = () => {
@@ -567,10 +598,18 @@ class XiaomiVacCard extends HTMLElement {
     });
     this._root.querySelectorAll(".pg-map").forEach((pg) => {
       const svg = pg.querySelector("svg");
-      if (svg) this._wireZoneDraw(pg, svg);
+      if (svg) {
+        this._wireZoneDraw(pg, svg);
+        this._setupZoomDraw(pg, svg);
+      }
       pg.classList.toggle("zoning", !!this._zoneMode);
+      pg.classList.toggle("zoomable", this._enabled("show_zoom"));
     });
     this._syncZoneBtn();
+    this._syncZoomBtn();
+    // a live-data rebuild replaces every .pg-map/svg node from scratch —
+    // reapply whatever zoom/pan the user had set before the rebuild wiped it
+    if (this._zoomState) this._zoomState.forEach((_, mi) => this._applyZoomToPageIndex(mi, false));
   }
   _setX(anim) {
     const track = this._root.querySelector(".track");
@@ -584,13 +623,19 @@ class XiaomiVacCard extends HTMLElement {
     // Pointer Events (one stream for mouse + touch + pen) with pointer capture —
     // no global window listeners, and a drag can begin mid-animation.
     let down = false, sx = 0, sy = 0, base = 0, moved = false, vert = false, t0 = 0, pid = null;
-    const TH = 8, COMMIT = 0.16, VEL = 0.45;
+    const TH = SWIPE_TH, COMMIT = SWIPE_COMMIT, VEL = SWIPE_VEL;
     const N = () => this._pages.length;
     const realPos = () => { const n = N(); return ((this._pos - 1) % n + n) % n + 1; };
 
     const onDown = (e) => {
       if (N() <= 1) return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
+      // Normally never reached for a zoomable map page — _setupZoomDraw
+      // claims every pointer on it outright. Only relevant if show_zoom is
+      // off (or state is stale from before it was turned off): don't let a
+      // still-zoomed page swipe out from under the user.
+      const zst = this._zoomState && this._zoomState.get(String(this._real));
+      if (zst && zst.scale > 1.001) return;
       // Grabbing during the snap settles the in-flight swipe to a real slot first,
       // so we never start a drag from a clone (which would expose blank space).
       if (track.classList.contains("anim")) { track.classList.remove("anim"); this._pos = realPos(); }
@@ -621,6 +666,17 @@ class XiaomiVacCard extends HTMLElement {
       if (Math.abs(dx) > this._w * COMMIT || v > VEL) this._pos += dx < 0 ? 1 : -1;
       this._setX(true);
     };
+    // Vestigial under the current _setupZoomDraw design (which owns every
+    // pointer on a zoomable map page from the start, so this onDown is never
+    // reached for it) — kept as a defensive hook for the same stale-state
+    // edge case as the onDown guard above.
+    this._swipeCancel = () => {
+      if (!down) return;
+      down = false; this._down = false;
+      if (pid != null) { try { vp.releasePointerCapture(pid); } catch (_) {} pid = null; }
+      track.classList.remove("anim");
+      track.style.transform = `translateX(${-this._pos * this._w}px)`;
+    };
 
     vp.addEventListener("pointerdown", onDown);
     vp.addEventListener("pointermove", onMove);
@@ -639,6 +695,10 @@ class XiaomiVacCard extends HTMLElement {
     });
 
     track.addEventListener("transitionend", (e) => {
+      // 'transitionend' bubbles — a descendant's OWN transform transition
+      // (e.g. the zoom layer's svg snapping back via .zoom-anim) must not be
+      // mistaken for the carousel track settling.
+      if (e.target !== track) return;
       if (e.propertyName && e.propertyName !== "transform") return;
       const n = N();
       if (this._pos <= 0) { track.classList.remove("anim"); this._pos = n; track.style.transform = `translateX(${-this._pos * this._w}px)`; }
@@ -647,8 +707,12 @@ class XiaomiVacCard extends HTMLElement {
       this._real = ((this._pos - 1) % n + n) % n;
       this._sel.clear(); this._syncRooms(); this._renderDots();
       this._syncZoneBtn();
+      this._syncZoomBtn();
       // a map refresh that arrived mid-gesture was deferred — apply it now
-      if (this._pendingRebuild && !down) { this._pendingRebuild = false; this._buildPages(true); }
+      if (this._pendingRebuild && !down) {
+        this._pendingRebuild = false;
+        setTimeout(() => this._buildPages(true), 0);
+      }
     });
     window.addEventListener("resize", () => { this._w = vp.clientWidth; if (!down) this._setX(false); });
     // window 'resize' misses layout changes that don't resize the window —
@@ -915,6 +979,224 @@ class XiaomiVacCard extends HTMLElement {
     svg.addEventListener("pointerup", onUp);
     svg.addEventListener("pointercancel", onUp);
   }
+
+  /* ---------------- map zoom/pan ----------------
+   * Scale/pan live as a plain CSS transform on the page's own <svg> — the
+   * SVG's viewBox (computed in _mapSVG, auto-fit to content) stays untouched
+   * and IS "100%"/reset. State is kept per page (keyed by the same data-mi
+   * every .pg-map instance — including its carousel clone — already carries)
+   * in `this._zoomState`, a Map that survives `_buildPages()` rebuilds (which
+   * replace every .pg-map/svg node wholesale on each live poll) so a user's
+   * zoom/pan isn't wiped out from under them by the next map refresh.
+   */
+  _maxZoom() {
+    const v = Number(this._config.max_zoom);
+    return v > 1 ? v : 6;
+  }
+  _zoomStateFor(mi) {
+    if (!this._zoomState) this._zoomState = new Map();
+    let st = this._zoomState.get(mi);
+    if (!st) { st = { scale: 1, panX: 0, panY: 0 }; this._zoomState.set(mi, st); }
+    return st;
+  }
+  // Clamp pan so the scaled content always still covers the viewport — svg's
+  // own clientWidth/height is its LAYOUT size, unaffected by the transform
+  // applied to it, i.e. exactly the "w/h at scale 1" this math wants.
+  _clampPan(st, svg) {
+    const w = svg.clientWidth, h = svg.clientHeight;
+    if (!w || !h) return;
+    const minX = Math.min(0, w - w * st.scale), minY = Math.min(0, h - h * st.scale);
+    st.panX = Math.max(minX, Math.min(0, st.panX));
+    st.panY = Math.max(minY, Math.min(0, st.panY));
+  }
+  // `data-mi` is shared by a page and its carousel loop-clone (both need the
+  // same transform so the illusion holds up mid-swipe) — update every match.
+  _applyZoomToPageIndex(mi, animate) {
+    const st = this._zoomStateFor(mi);
+    this._root.querySelectorAll(`.pg-map[data-mi="${mi}"] svg`).forEach((svg) => {
+      svg.classList.toggle("zoom-anim", !!animate);
+      svg.style.transform = `translate(${st.panX}px,${st.panY}px) scale(${st.scale})`;
+    });
+    this._syncZoomBtn();
+  }
+  _syncZoomBtn() {
+    const btn = this._root && this._root.querySelector(".zoom-reset");
+    if (!btn) return;
+    const onMap = this._real >= this._mapOffset() && this._real < this._pages.length;
+    const st = onMap && this._zoomState && this._zoomState.get(String(this._real));
+    const show = this._enabled("show_zoom") && onMap && st && st.scale > 1.02;
+    btn.style.display = show ? "" : "none";
+  }
+  _resetZoom() {
+    const mi = String(this._real);
+    const st = this._zoomStateFor(mi);
+    st.scale = 1; st.panX = 0; st.panY = 0;
+    this._applyZoomToPageIndex(mi, true);
+  }
+  // Owns EVERY pointer gesture on a zoomable map page outright, from the very
+  // first finger — pinch zoom, pan-once-zoomed, AND (replicated here rather
+  // than handed off to _setupSwipe's separate .vp listener) the single-
+  // finger swipe-to-next-page at 100% zoom. A page and _setupSwipe's own
+  // listener both reacting to the SAME first finger (one deciding "maybe a
+  // swipe", the other "maybe a pinch") is exactly the kind of two-listener
+  // race that was intermittently eating pinches before this was unified.
+  _setupZoomDraw(pg, svg) {
+    const mi = pg.dataset.mi;
+    const pts = new Map(); // pointerId -> last {x,y}
+    let pinchDist = 0, pinchScale0 = 1;
+    let panStart = null; // {x,y,panX0,panY0} — panning once already zoomed in
+    let drag = null;     // {x,y,t0,base,moved,vert} — swipe-to-page replica
+
+    const dist = () => {
+      const [a, b] = [...pts.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const mid = () => {
+      const [a, b] = [...pts.values()];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+
+    const onDown = (e) => {
+      if (!this._enabled("show_zoom") || this._zoneMode) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const st = this._zoomStateFor(mi);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      e.stopPropagation();
+      this._zoomDown = true;
+      // Capture is DEFERRED until the gesture actually moves (see onMove) —
+      // capturing on every press retargets the subsequent click to svg, so a
+      // stationary tap never reaches the room path underneath and room
+      // selection silently fails (same fix as _setupSwipe's own onDown).
+      if (pts.size === 2) {
+        // two fingers down is unambiguously a pinch, not a tap — capture both
+        pts.forEach((_, id) => { try { svg.setPointerCapture(id); } catch (_) {} });
+        pinchDist = dist();
+        pinchScale0 = st.scale;
+        panStart = null; drag = null;
+      } else if (pts.size === 1) {
+        if (st.scale > 1.001) {
+          panStart = { x: e.clientX, y: e.clientY, panX0: st.panX, panY0: st.panY, moved: false, pid: e.pointerId };
+        } else {
+          const track = this._root.querySelector(".track");
+          // Grabbing during the snap settles to a real slot first, same as
+          // _setupSwipe's own onDown — never start a drag from a clone.
+          if (track.classList.contains("anim")) { track.classList.remove("anim"); this._pos = this._realPos(); }
+          drag = { x: e.clientX, y: e.clientY, t0: Date.now(), base: -this._pos * this._w, moved: false, vert: false, pid: e.pointerId };
+        }
+      }
+    };
+    const onMove = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const st = this._zoomStateFor(mi);
+      if (pts.size === 2) {
+        if (e.cancelable) e.preventDefault();
+        const prect = pg.getBoundingClientRect();
+        const m = mid();
+        const mx = m.x - prect.left, my = m.y - prect.top;
+        const s0 = st.scale;
+        const s1 = pinchDist > 0
+          ? Math.min(this._maxZoom(), Math.max(1, pinchScale0 * (dist() / pinchDist)))
+          : s0;
+        // keep the midpoint under the fingers fixed as scale steps s0 -> s1
+        st.panX = mx + (s1 / s0) * (st.panX - mx);
+        st.panY = my + (s1 / s0) * (st.panY - my);
+        st.scale = s1;
+        this._clampPan(st, svg);
+        this._applyZoomToPageIndex(mi, false);
+      } else if (panStart) {
+        const dx = e.clientX - panStart.x, dy = e.clientY - panStart.y;
+        if (!panStart.moved) {
+          if (Math.hypot(dx, dy) < SWIPE_TH) return;
+          panStart.moved = true;
+          try { svg.setPointerCapture(panStart.pid); } catch (_) {}
+        }
+        if (e.cancelable) e.preventDefault();
+        st.panX = panStart.panX0 + dx;
+        st.panY = panStart.panY0 + dy;
+        this._clampPan(st, svg);
+        this._applyZoomToPageIndex(mi, false);
+      } else if (drag) {
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (!drag.moved && !drag.vert) {
+          if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_TH) { drag.vert = true; return; }
+          if (Math.abs(dx) > SWIPE_TH) { drag.moved = true; try { svg.setPointerCapture(drag.pid); } catch (_) {} }
+        }
+        if (drag.moved) {
+          if (e.cancelable) e.preventDefault();
+          this._root.querySelector(".track").style.transform = `translateX(${drag.base + dx}px)`;
+        }
+      }
+    };
+    const onUp = (e) => {
+      pts.delete(e.pointerId);
+      try { svg.releasePointerCapture(e.pointerId); } catch (_) {}
+      const st = this._zoomStateFor(mi);
+      if (pts.size < 2) pinchDist = 0;
+      if (pts.size === 1) {
+        // one finger lifted mid-pinch — let the remaining finger keep
+        // panning instead of going dead until it lifts too; already mid-
+        // gesture, so (unlike a fresh onDown) capture it immediately
+        const [[pid, p]] = pts;
+        try { svg.setPointerCapture(pid); } catch (_) {}
+        panStart = { x: p.x, y: p.y, panX0: st.panX, panY0: st.panY, moved: true, pid };
+        drag = null;
+      } else if (pts.size === 0) {
+        if (drag && drag.moved) {
+          const dx = e.clientX - drag.x, dt = Date.now() - drag.t0, v = Math.abs(dx) / Math.max(dt, 1);
+          this._blockClick = true; clearTimeout(this._bcT); this._bcT = setTimeout(() => (this._blockClick = false), 300);
+          if (Math.abs(dx) > this._w * SWIPE_COMMIT || v > SWIPE_VEL) this._pos += dx < 0 ? 1 : -1;
+          this._setX(true);
+        }
+        panStart = null; drag = null;
+        this._zoomDown = false;
+        // Only snap-reset (and thus touch the svg's transform/transition) when
+        // this gesture actually left scale/pan off their rest values — a plain
+        // click never touched them, so re-applying "scale(1) translate(0,0)"
+        // here was a no-op VALUE-wise most of the time, but the very first
+        // time it ran (transform going from unset to an explicit value) it
+        // was a real change, starting a transition whose transitionend then
+        // bubbled up into the carousel's own track handler and wrongly wiped
+        // room selection (see the track's transitionend listener).
+        if (st.scale <= 1.001 && (st.scale !== 1 || st.panX !== 0 || st.panY !== 0)) {
+          st.scale = 1; st.panX = 0; st.panY = 0; this._applyZoomToPageIndex(mi, true);
+        }
+        this._syncZoomBtn();
+        // a map refresh that arrived mid-gesture was deferred (see _rebuild) —
+        // apply it now that the fingers are up, same as _setupSwipe's own
+        // transitionend flush. Deferred one more tick, past the native
+        // 'click' this same pointerup is about to synthesize — rebuilding
+        // synchronously here would yank the just-tapped .rm out from under
+        // that click (room selection would silently double-toggle: the
+        // stale node's click still fires, then whatever's newly in its place
+        // if the browser re-targets to the live DOM).
+        if (this._pendingRebuild && !this._down) {
+          this._pendingRebuild = false;
+          setTimeout(() => this._buildPages(true), 0);
+        }
+      }
+    };
+
+    svg.addEventListener("pointerdown", onDown);
+    svg.addEventListener("pointermove", onMove);
+    svg.addEventListener("pointerup", onUp);
+    svg.addEventListener("pointercancel", onUp);
+
+    svg.addEventListener("wheel", (e) => {
+      if (!this._enabled("show_zoom") || this._zoneMode) return;
+      e.preventDefault();
+      const st = this._zoomStateFor(mi);
+      const prect = pg.getBoundingClientRect();
+      const cx = e.clientX - prect.left, cy = e.clientY - prect.top;
+      const s0 = st.scale;
+      const s1 = Math.min(this._maxZoom(), Math.max(1, s0 * Math.exp(-e.deltaY * 0.0018)));
+      st.panX = cx + (s1 / s0) * (st.panX - cx);
+      st.panY = cy + (s1 / s0) * (st.panY - cy);
+      st.scale = s1;
+      this._clampPan(st, svg);
+      this._applyZoomToPageIndex(mi, false);
+    }, { passive: false });
+  }
   _updateZoneTag() {
     const tag = this._root && this._root.querySelector(".zonetag");
     if (!tag) return;
@@ -1062,6 +1344,8 @@ class XiaomiVacCardEditor extends HTMLElement {
           allow_room_cleaning: "Allow room cleaning",
           allow_zone_cleaning: "Allow zone (area) cleaning",
           show_consumables: "Show consumable status button",
+          show_zoom: "Allow pinch/wheel zoom on the map",
+          max_zoom: "Maximum zoom level",
         }[s.name] || s.name);
       this._form.addEventListener("value-changed", (e) =>
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: e.detail.value }, bubbles: true, composed: true })));
@@ -1085,6 +1369,8 @@ class XiaomiVacCardEditor extends HTMLElement {
       { name: "allow_room_cleaning", selector: { boolean: {} } },
       { name: "allow_zone_cleaning", selector: { boolean: {} } },
       { name: "show_consumables", selector: { boolean: {} } },
+      { name: "show_zoom", selector: { boolean: {} } },
+      { name: "max_zoom", selector: { number: { mode: "box", min: 1.5, max: 20, step: 0.5 } } },
     ];
   }
 }
