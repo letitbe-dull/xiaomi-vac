@@ -5,6 +5,7 @@ import re
 
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from miio import MiotDevice
@@ -301,7 +302,7 @@ class IjaiVacuumDevice:
         base = self.profile.base_station
         self._action(base.empty_dust_bin if base else None)
 
-    def clean_segments(self, room_ids: list[int | str]) -> None:
+    def clean_segments(self, room_ids: Sequence[int | str]) -> None:
         cap = self.profile.room_clean
         if cap is None:
             raise ValueError(f"{self.model} has no room-clean capability")
@@ -315,6 +316,13 @@ class IjaiVacuumDevice:
             action, params = preferred
             self._action(action, params)
             return
+        # start-custom: the only path that honours map room ids on models
+        # like dreame.vacuum.r2211o (2/3 silently no-ops there).
+        custom = self.room_clean_custom_params(room_ids)
+        if custom is not None:
+            action, params = custom
+            self._action(action, params)
+            return
         fallback = self.room_clean_start_params(room_ids)
         if fallback is not None:
             action, params = fallback
@@ -322,14 +330,35 @@ class IjaiVacuumDevice:
             return
         raise ValueError(f"{self.model} has no usable room-clean action")
 
-    def room_clean_start_params(self, room_ids: list[int | str]) -> tuple[object, list] | None:
+    def room_clean_custom_params(self, room_ids: Sequence[int | str]) -> tuple[object, list] | None:
+        """Return the start-custom action and structured params, when available.
+
+        The in-params are [{piid: work-mode, value: SEGMENT_CLEANING},
+        {piid: clean-extend-data, value: '{"selects":[[room,1,fan,water,1]]}'}]
+        — sent as named inputs so _action builds the {piid, value} list the
+        device expects. Fan/water default to standard/low; the device's own
+        per-room cleanset still applies its stored settings.
+        """
+        cap = self.profile.room_clean
+        if not (
+            cap is not None
+            and cap.start_custom is not None
+            and cap.start_custom_status is not None
+            and cap.start_custom_props is not None
+        ):
+            return None
+        selects = [[int(r), 1, 1, 1, 1] for r in room_ids]
+        payload = json.dumps({"selects": selects}, separators=(",", ":"))
+        return cap.start_custom, [cap.segment_cleaning_status, payload]
+
+    def room_clean_start_params(self, room_ids: Sequence[int | str]) -> tuple[object, list] | None:
         """Return the direct room-clean action and params, when available."""
         cap = self.profile.room_clean
         if cap is None or cap.start is None:
             return None
         return cap.start, [",".join(str(r) for r in room_ids)]
 
-    def room_clean_set_params(self, room_ids: list[int | str]) -> tuple[object, list] | None:
+    def room_clean_set_params(self, room_ids: Sequence[int | str]) -> tuple[object, list] | None:
         """Return the set-room-clean action and params, when available."""
         cap = self.profile.room_clean
         if not (

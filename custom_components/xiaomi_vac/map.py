@@ -3,6 +3,7 @@ attribute contract the card consumes. Synchronous; run in an executor."""
 from __future__ import annotations
 
 import hashlib
+import base64
 import io
 import json
 import logging
@@ -504,6 +505,43 @@ class MapFetcher:
                     map_data.path = Path(len(path_points), 1, 0, [path_points])
         return map_data
 
+    def _filter_dreame_stale_rooms(self, md, unpacked: bytes) -> None:
+        """Drop stale segment outlines from the dreame rooms list.
+
+        Dreame firmware keeps old segment rectangles in the map's RISM layer
+        after room edits; the device's own per-segment cleanset in the map
+        trailer lists only the segments it will actually clean. Intersecting
+        with it keeps the card's tap targets on real rooms (verified live on
+        dreame.vacuum.r2211o: the map carried junk segments 66-73 overlapping
+        the real 1-9, and the device silently no-ops cleans targeted at them).
+        """
+        if self._brand != "dreame" or not md.rooms:
+            return
+        try:
+            from vacuum_map_parser_dreame.map_data_parser import DreameMapDataParser
+            header = DreameMapDataParser._parse_header(unpacked)  # noqa: SLF001
+            trailer = unpacked[
+                DreameMapDataParser.HEADER_SIZE
+                + header.image_width * header.image_height:
+            ]
+            cleanset = json.loads(trailer.decode("utf8")).get("cleanset") or {}
+            if isinstance(cleanset, str):  # nested JSON string on r2211o
+                cleanset = json.loads(cleanset)
+            valid = {int(k) for k in cleanset}
+            if valid:
+                before = len(md.rooms)
+                md.rooms = {
+                    rid: room for rid, room in md.rooms.items() if int(rid) in valid
+                }
+                if len(md.rooms) != before:
+                    # Change the served content, so the cache's content-hash
+                    # dedupe doesn't keep serving the pre-filter result.
+                    md._dreame_filter_suffix = "|dreame_rooms:" + ",".join(
+                        str(r) for r in sorted(md.rooms)
+                    )  # noqa: SLF001
+        except (ValueError, KeyError, TypeError, AttributeError):
+            _LOGGER.debug("dreame stale-room filter skipped", exc_info=True)
+
     def fetch(self, slot: str = "0") -> MapResult | None:
         """Fetch + decrypt + parse one cloud upload slot ("0" or "1").
 
@@ -554,6 +592,40 @@ class MapFetcher:
             _LOGGER.debug("Could not decrypt map at slot %s (starts %r): %s", slot, raw[:16], ex)
             attempt.outcome = "undecryptable"
             return None
+        return self._result_from_unpacked(unpacked, attempt)
+
+    def decode_live_frame(self, value: str) -> bytes | None:
+        """Decode an MQTT live map frame: url-safe base64 wrapping zlib bytes.
+
+        MQTT frames are NOT AES-encrypted (unlike the cloud blobs) — verified
+        live on dreame.vacuum.r2211o. Returns None for anything undecodable.
+        """
+        try:
+            norm = value.replace("_", "/").replace("-", "+")
+            raw = base64.b64decode(norm + "=" * (-len(norm) % 4))
+            return zlib.decompress(raw)
+        except Exception:  # noqa: BLE001
+            return None
+
+    def with_vacuum_position(self, unpacked: bytes, pos: tuple[int, int, int]) -> bytes:
+        """Return a copy of the unpacked map with the header vacuum position
+        (offsets 5-9: x, y, angle — int16 LE signed) replaced by ``pos``.
+
+        The parser draws the position dot from these header bytes, so
+        patching them before parse moves the dot without touching anything
+        else (geometry, rooms, charger all come from the same blob).
+        """
+        b = bytearray(unpacked)
+        for off, val in zip((5, 7, 9), pos):
+            b[off:off + 2] = int(val).to_bytes(2, "little", signed=True)
+        return bytes(b)
+
+    def _result_from_unpacked(self, unpacked: bytes, attempt: SlotAttempt) -> MapResult | None:
+        """Parse + render an unpacked map frame into a MapResult.
+
+        Shared by the cloud fetch path and the MQTT live-map path. On success
+        remembers the unpacked bytes as the live-render base.
+        """
         carpets = parse_carpets(unpacked) if self._brand == "xiaomi" else []
         path_segments = parse_path(unpacked) if self._brand == "xiaomi" else []
         try:
@@ -562,6 +634,7 @@ class MapFetcher:
                 md = self._parse_viomi_json_trailer(unpacked)
             if md is None:
                 md = self._parser.parse(unpacked)
+                self._filter_dreame_stale_rooms(md, unpacked)
             vector = map_vector.vector_map(
                 md, _vector_source(self._parser, unpacked, self._ijai_grid),
                 ijai_grid=self._ijai_grid,
@@ -581,12 +654,12 @@ class MapFetcher:
             # Decrypted fine but the parser rejected the frame (corrupt or
             # unexpected layout). The key material is good — keep the enckey.
             _LOGGER.debug(
-                "Parser rejected map frame at slot %s: %r", slot, ex, exc_info=True,
+                "Parser rejected map frame (slot %s): %r", getattr(attempt, "slot", "?"), ex, exc_info=True,
             )
             attempt.outcome = "parse_rejected"
             return None
         if md.image is None or md.image.is_empty:
-            _LOGGER.debug("Parsed map at slot %s is empty", slot)
+            _LOGGER.debug("Parsed map at slot %s is empty", getattr(attempt, "slot", "?"))
             attempt.outcome = "empty_render"
             return None
 
@@ -620,13 +693,21 @@ class MapFetcher:
         }
         attempt.outcome = "rendered"
         attempt.key_type = self.last_key_type
+        # Remember the frame bytes as the MQTT live-render base; the live path
+        # re-renders these with a patched vacuum position (see
+        # with_vacuum_position).
+        self._last_unpacked = unpacked
+        hash_payload = (
+            unpacked.encode("utf-8") if isinstance(unpacked, str) else unpacked
+        )
+        filter_suffix = getattr(md, "_dreame_filter_suffix", None)
+        if filter_suffix:
+            hash_payload += filter_suffix.encode("utf-8")
         return MapResult(
             image_png=buf.getvalue(),
             attributes=attributes,
             vector=vector,
             map_id=vector.get("map_id"),
             # xiaomi's _unpack returns a str (JSON text), every other brand bytes.
-            content_hash=hashlib.sha256(
-                unpacked.encode("utf-8") if isinstance(unpacked, str) else unpacked
-            ).hexdigest(),
+            content_hash=hashlib.sha256(hash_payload).hexdigest(),
         )

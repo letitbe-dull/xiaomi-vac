@@ -1302,6 +1302,12 @@ DREAME_R2211O_MAP = DreameMapCapability(
 DREAME_R2211O_ROOM_CLEAN = RoomCleanCapability(
     room_ids=Prop(2, 4),  # room-ids — "Mi Home Room ID Parameter"
     start=Action(2, 3, in_piid=4),  # start-room-sweep — "Clean Room"
+    # 2/3 ACKs but silently no-ops with map ids on this model; the working
+    # path is start-custom (4/1) with the task status on work-mode (4/1)
+    # and the selects JSON on clean-extend-data (4/10). Verified live.
+    start_custom=Action(4, 1, in_piids=(1, 10), named_inputs=True),
+    start_custom_status=Prop(4, 1),
+    start_custom_props=Prop(4, 10),
 )
 
 

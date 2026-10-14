@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.vacuum import (
@@ -234,15 +235,21 @@ def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[i
         raise ValueError("Room cleaning cloud fallback requires a Xiaomi cloud session")
 
     # Same preference order as device.clean_segments: set-room-clean takes
-    # map room ids; start-room-sweep wants Mijia ids and fails with map ids.
-    attempts = [
-        params
-        for params in (
-            device.room_clean_set_params(segments),
-            device.room_clean_start_params(segments),
-        )
-        if params is not None
-    ]
+    # map room ids; start-custom honours map ids on models (r2211o) whose
+    # 2/3 start-room-sweep ACKs but silently ignores them; plain 2/3 is the
+    # last resort. start-custom must go through cloud_rpc_action —
+    # /miotspec/action rejects its structured in-params with -704220043.
+    attempts: list[tuple[str, Any, list]] = []
+    cap = device.profile.room_clean
+    preferred = device.room_clean_set_params(segments)
+    if preferred is not None:
+        attempts.append(("spec", preferred[0], preferred[1]))
+    custom = device.room_clean_custom_params(segments)
+    if custom is not None:
+        attempts.append(("rpc", custom[0], custom[1]))
+    fallback = device.room_clean_start_params(segments)
+    if fallback is not None:
+        attempts.append(("spec", fallback[0], fallback[1]))
     if not attempts:
         raise ValueError(f"{device.model} has no supported room-clean action")
 
@@ -253,14 +260,30 @@ def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[i
         data[CONF_SERVICE_TOKEN],
         data.get(CONF_PASS_TOKEN),
     )
-    for action, params in attempts:
-        response = cloud.cloud_action(
-            str(data[CONF_SERVER]),
-            str(data[CONF_DEVICE_ID]),
-            action.siid,
-            action.aiid,
-            params,
-        )
+    for transport, action, params in attempts:
+        if transport == "rpc":
+            # v2/home/rpc expects named {piid, value} inputs (the working
+            # shape — ordered values get -704220043).
+            in_params = (
+                [{"piid": piid, "value": value} for piid, value in zip(action.in_piids, params)]
+                if action.named_inputs and action.in_piids
+                else list(params)
+            )
+            response = cloud.cloud_rpc_action(
+                str(data[CONF_SERVER]),
+                str(data[CONF_DEVICE_ID]),
+                action.siid,
+                action.aiid,
+                in_params,
+            )
+        else:
+            response = cloud.cloud_action(
+                str(data[CONF_SERVER]),
+                str(data[CONF_DEVICE_ID]),
+                action.siid,
+                action.aiid,
+                params,
+            )
         if _cloud_action_ok(response):
             return
     raise ValueError("Xiaomi cloud rejected every room-clean action")

@@ -91,6 +91,15 @@ class RoomCleanCapability:
     clean_room_mode: Prop | None = None
     clean_room_oper: Prop | None = None
     set_room_clean: Action | None = None
+    # start-custom variant (dreame r2211o): the start-custom action carries
+    # the task status on the work-mode prop and a per-segment JSON payload
+    # ({"selects": [[room_id, repeat, fan, water, index], ...]}) on the
+    # clean-extend-data prop. The plain 2/3 start-room-sweep ACKs but
+    # silently ignores map room ids on this model (verified live 2026-10-14).
+    start_custom: Action | None = None
+    start_custom_status: Prop | None = None
+    start_custom_props: Prop | None = None
+    segment_cleaning_status: int = 18
 
 
 @dataclass(frozen=True)

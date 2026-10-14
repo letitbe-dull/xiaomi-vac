@@ -35,6 +35,7 @@ _RC_NOT_AUTHORIZED = 5
 # with: (client, userdata, flags, reason_code, properties).
 
 _TOPIC_PROPERTIES_CHANGED = "properties_changed"
+_RAW_SHAPE_LOGGED = False
 _TOPIC_EVENT_OCCURED = "event_occured"
 
 
@@ -230,6 +231,7 @@ class MiotMqttClient:
 
 
 def _parse_message(topic: str, payload: bytes) -> MqttMessage | None:
+    global _RAW_SHAPE_LOGGED
     """Turn a raw MIoT device topic + payload into a MqttMessage.
 
     Topic shapes (verified live in `.scripts/map_mqtt_probe.py`):
@@ -252,7 +254,27 @@ def _parse_message(topic: str, payload: bytes) -> MqttMessage | None:
             siid, piid = int(parts[4]), int(parts[5])
         except ValueError:
             return None
-        value = body.get("value") if isinstance(body, dict) else None
+        # Verified live (r2211o): the payload is
+        # {"params": {"siid": .., "piid": .., "properties": [{"piid": .., "value": ..}]}}
+        # — but MIoT also uses bare {"value": ..} bodies and list-shaped
+        # params; accept every shape, and dump the first unseen one so new
+        # shapes surface in the logs instead of silently yielding None.
+        value = None
+        if isinstance(body, dict):
+            value = body.get("value")
+            params = body.get("params")
+            candidates: list = []
+            if isinstance(params, dict):
+                candidates += [params.get("properties"), params.get("events"), [params]]
+            elif isinstance(params, list):
+                candidates.append(params)
+            for cand in candidates:
+                if isinstance(cand, list) and cand and isinstance(cand[0], dict) and "value" in cand[0]:
+                    value = cand[0].get("value")
+                    break
+            if value is None and siid == 6 and not _RAW_SHAPE_LOGGED:
+                _RAW_SHAPE_LOGGED = True
+                _LOGGER.debug("siid6 property payload with no value: %s", str(body)[:500])
         return MqttMessage(
             kind="property", topic=topic, siid=siid, piid=piid, value=value,
         )

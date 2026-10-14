@@ -33,6 +33,7 @@ from .const import (
 from .coordinator import XiaomiVacuumCoordinator
 from .device import IjaiVacuumDevice
 from .map import MapFetcher, MapResult, SessionExpired
+from .map_diagnostics import SlotAttempt
 from .map_cache import MapCache
 from .map_diagnostics import (
     MapCycleRecord,
@@ -57,6 +58,9 @@ _PIID_CUR_MAP = 2      # properties_changed/10/2 = curMapId
 _DEBOUNCE_SECONDS = 2.0
 _MAP_UPLOAD_THROTTLE_SECONDS = 30.0
 _MAP_REFRESH_WAIT_SECONDS = 120.0
+# MQTT live frames arrive every ~3s while cleaning; a full re-render costs
+# ~1-2s in an executor, so render at most this often.
+_LIVE_RENDER_MIN_INTERVAL = 8.0
 _MAP_REFRESH_POLL_SECONDS = 3.0
 _REFRESH_READY_ACTIVITIES = {"docked", "idle"}
 
@@ -125,6 +129,13 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._last_live_at: float | None = None
         self._refresh_map_lock = asyncio.Lock()
         self._pending_entry_updates: dict[str, str] = {}
+        # MQTT live-map state: latest vacuum position from the map-frame
+        # headers (x, y, angle — map mm), and render throttling. Frames
+        # arrive every ~3s while cleaning; re-rendering the PNG costs
+        # ~1-2s, so we render at most every _LIVE_RENDER_MIN_INTERVAL s.
+        self._live_position: tuple[int, int, int] | None = None
+        self._last_live_render: float = 0.0
+        self._live_render_lock = asyncio.Lock()
         # What the most recent cycle did; replaced at the start of every cycle.
         self.last_cycle: MapCycleRecord | None = None
         entry.async_on_unload(control.async_add_listener(self._on_control_update))
@@ -178,6 +189,63 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             _LOGGER.debug("MQTT map upload event — scheduling map refresh")
             self._notify_mqtt_upload_waiters()
             self._schedule_mqtt_refresh()
+        elif msg.kind == "property" and msg.siid == 6 and msg.piid == 1 and isinstance(msg.value, str):
+            # Live map frame (siid 6 / piid 1 map-data). Streams every ~3s
+            # while cleaning; carries the current vacuum position in its
+            # header and, periodically, the full updated map.
+            self.hass.async_create_task(self._async_on_live_frame(msg.value))
+
+    async def _async_on_live_frame(self, value: str) -> None:
+        """Update the live vacuum position (and map, on I-frames) from an
+        MQTT map-data frame, then push the re-rendered map to listeners."""
+        fetcher = self._fetcher
+        if fetcher is None or fetcher._brand != "dreame":  # noqa: SLF001
+            return
+        unpacked = await self.hass.async_add_executor_job(fetcher.decode_live_frame, value)
+        if unpacked is None or len(unpacked) < 27:
+            _LOGGER.debug("live frame undecodable (len=%s)", len(value))
+            return
+        frame_type = unpacked[4]
+        _LOGGER.debug("live frame received (type=%s, %d bytes)", chr(frame_type), len(unpacked))
+        pos = (
+            int.from_bytes(unpacked[5:7], "little", signed=True),
+            int.from_bytes(unpacked[7:9], "little", signed=True),
+            int.from_bytes(unpacked[9:11], "little", signed=True),
+        )
+        self._live_position = pos
+        if frame_type == 73:  # I_FRAME: full current map — new render base
+            fetcher._last_unpacked = unpacked  # noqa: SLF001
+        now = time.monotonic()
+        if now - self._last_live_render < _LIVE_RENDER_MIN_INTERVAL:
+            return
+        async with self._live_render_lock:
+            if now - self._last_live_render < _LIVE_RENDER_MIN_INTERVAL:
+                return
+            self._last_live_render = now
+            await self._async_render_live()
+
+    async def _async_render_live(self) -> None:
+        """Re-render the cached base map with the live position and push it."""
+        fetcher = self._fetcher
+        if fetcher is None:
+            return
+        base = getattr(fetcher, "_last_unpacked", None)
+        if base is None or self.data is None or self._live_position is None:
+            return
+        patched = fetcher.with_vacuum_position(base, self._live_position)
+        try:
+            result = await self.hass.async_add_executor_job(
+                fetcher._result_from_unpacked, patched, SlotAttempt(slot="live"),
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("live map render failed", exc_info=True)
+            return
+        if result is None or self.data is None:
+            return
+        self.data.image_png = result.image_png
+        self.data.attributes["vacuum_position"] = result.attributes.get("vacuum_position")
+        self.async_update_listeners()
+        _LOGGER.debug("live map pushed (pos=%s)", self._live_position[:2])
 
     def _new_mqtt_upload_waiter(self) -> asyncio.Future[None]:
         waiter: asyncio.Future[None] = self.hass.loop.create_future()

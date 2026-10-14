@@ -500,6 +500,16 @@ class XiaomiCloud:
         body = {"params": {"did": str(did), "siid": siid, "aiid": aiid, "in": list(in_params)}}
         return self._call(url, {"data": json.dumps(body)})
 
+    def cloud_rpc_action(self, server: str, did: str, siid: int, aiid: int, in_params: list):
+        """Call a MIoT action via v2/home/rpc (dreame-vacuum's transport).
+
+        /miotspec/action rejects structured {piid, value} in-params with
+        -704220043; the v2/home/rpc endpoint accepts them (verified live on
+        dreame.vacuum.r2211o: segment clean only works through here).
+        """
+        body = {"method": "action", "params": {"did": str(did), "siid": siid, "aiid": aiid, "in": list(in_params)}}
+        return self._call(self._api_url(server) + f"/v2/home/rpc/{did}", {"data": json.dumps(body)})
+
     def cloud_get_prop(self, server: str, did: str, siid: int, piid: int):
         url = self._api_url(server) + "/miotspec/prop/get"
         body = {"params": [{"did": str(did), "siid": siid, "piid": piid}]}
