@@ -277,12 +277,16 @@ class MapFetcher:
         binary parser) if this frame doesn't look like this format.
         """
         # A bare 0x7b can sit anywhere in the header (a map id of 123, say)
-        # or in the pixel grid, so look for the object's opening '{"' and
-        # keep trying later candidates until one actually parses as JSON.
+        # or in the pixel grid, so keep trying later '{' candidates until one
+        # actually parses as JSON. Match on '{' alone, not '{"' — confirmed
+        # live during an active clean that this device pretty-prints the
+        # trailer ('{\n\t"width" : ...', not '{"width":...'), so anchoring on
+        # the opening quote missed every candidate on that payload while a
+        # compact idle-snapshot capture happened to still match.
         meta = None
         search_from = 0
         while True:
-            brace = unpacked.find(b'{"', search_from)
+            brace = unpacked.find(b"{", search_from)
             if brace < 0:
                 return None
             try:
