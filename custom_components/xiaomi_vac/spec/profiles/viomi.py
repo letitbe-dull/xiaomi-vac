@@ -297,6 +297,7 @@ VIOMI_V15_CORE = CoreCapability(
     fan_speed=Prop(4, 17),  # suction-grade — "Suction Power"
     water_level=Prop(4, 18),  # water-grade — "Water Output Level"
     repeat=Prop(4, 1),  # repeat-state — "Second Cleaning Switch"
+    volume=Prop(2, 17),  # mute — "Mute" (0-10 range per spec, modeled as voice volume)
     start=Action(2, 1),  # start-sweep — "Start Work"
     stop=Action(2, 2),  # stop-sweeping — "Stop Work"
     pause=Action(2, 3),  # pause — "Pause Work"
@@ -359,6 +360,7 @@ VIOMI_V15_SCHEDULE = ScheduleCapability(
 VIOMI_V15_SETTINGS = SettingsCapability(
     mop_route=Prop(4, 6),  # mop-route — "Mopping/Sweep-Mop Route"
     direction=Prop(4, 16),  # direction — "Remote Control Method Parameters"
+    language=Prop(4, 31),  # cur-lang — "Device current language"
 )
 
 

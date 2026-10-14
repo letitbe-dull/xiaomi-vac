@@ -80,6 +80,8 @@ class VacuumStatus:
     sewage_tank_status: int | None = None
     water_tank_status: int | None = None
     auto_mop_dry: bool | None = None
+    language_raw: str | None = None
+    voice_pack_raw: str | None = None
 
 
 class IjaiVacuumDevice:
@@ -173,6 +175,10 @@ class IjaiVacuumDevice:
         c = self.core
         cons = self.profile.consumables
         base = self.profile.base_station
+        settings = self.profile.settings
+        language_prop = getattr(settings, "language", None) if settings is not None else None
+        voice = self.profile.voice
+        cur_voice_prop = getattr(voice, "cur_voice", None) if voice is not None else None
         life_props = consumable_life_props(cons)
         door_state = (
             getattr(cons, "door_state", None)
@@ -184,7 +190,7 @@ class IjaiVacuumDevice:
         poll = [p for p in (
             c.status, c.battery, c.fault, c.fan_speed, c.water_level,
             c.mode, c.sweep_type, c.repeat, c.alarm, c.volume,
-            *life_props.values(), door_state,
+            *life_props.values(), door_state, language_prop, cur_voice_prop,
             base.working_status if base is not None else None,
             base.drying_progress if base is not None else None,
             base.dry_left_time if base is not None else None,
@@ -215,6 +221,16 @@ class IjaiVacuumDevice:
             alarm_raw=_as_int(vals.get(c.alarm)),
             volume_raw=_as_int(vals.get(c.volume)),
             door_state_raw=_as_int(vals.get(door_state)),
+            language_raw=(
+                str(vals[language_prop])
+                if language_prop is not None and vals.get(language_prop) is not None
+                else None
+            ),
+            voice_pack_raw=(
+                str(vals[cur_voice_prop])
+                if cur_voice_prop is not None and vals.get(cur_voice_prop) is not None
+                else None
+            ),
             main_brush_life=_as_int(vals.get(life_props.get("main_brush_life"))),
             side_brush_life=_as_int(vals.get(life_props.get("side_brush_life"))),
             filter_life=_as_int(vals.get(life_props.get("filter_life"))),
@@ -268,6 +284,11 @@ class IjaiVacuumDevice:
 
     def set_repeat(self, on: bool) -> None:
         self._set(self.core.repeat, 1 if on else 0)
+
+    def set_language(self, code: str) -> None:
+        settings = self.profile.settings
+        prop = getattr(settings, "language", None) if settings is not None else None
+        self._set(prop, code)
 
     def set_alarm(self, on: bool) -> None:
         self._set(self.core.alarm, on)

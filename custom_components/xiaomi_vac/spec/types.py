@@ -129,6 +129,7 @@ class SettingsCapability:
     dirt_recognize: Prop | None = None
     pet_recognize: Prop | None = None
     ai_recognize: Prop | None = None
+    language: Prop | None = None
     carpet_booster: Prop | None = None
     carpet_avoid: Prop | None = None
     map_encrypt: Prop | None = None

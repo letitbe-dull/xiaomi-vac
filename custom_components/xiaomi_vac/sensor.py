@@ -67,6 +67,11 @@ _ALL_SENSORS: tuple[XiaomiSensorDescription, ...] = (
         supported_fn=lambda p: p.core is not None and p.core.battery is not None,
     ),
     XiaomiSensorDescription(
+        key="voice_pack", translation_key="voice_pack", icon="mdi:volume-high",
+        entity_category=EntityCategory.DIAGNOSTIC, value_fn=lambda s: s.voice_pack_raw,
+        supported_fn=lambda p: p.voice is not None and getattr(p.voice, "cur_voice", None) is not None,
+    ),
+    XiaomiSensorDescription(
         key="door_state", translation_key="door_state", icon="mdi:cube-outline",
         device_class=SensorDeviceClass.ENUM,
         options=["none", "dust_box", "water_box", "two_in_one"],

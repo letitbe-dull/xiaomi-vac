@@ -14,8 +14,15 @@ from . import XiaomiConfigEntry
 from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
 from .map_coordinator import XiaomiMapCoordinator
-from .spec.types import BaseStationCapability, MapCapability
+from .spec.types import BaseStationCapability, MapCapability, SettingsCapability
 from .vacuum import _cloud_set_current_map, _has_cloud_session
+
+# cur-lang (settings.language) is the device's SYSTEM/UI language, not the
+# voice-pack language — the public MIoT spec restricts it to exactly these
+# four codes. The app's "Voice packet" screen is a separate feature (the
+# Voice service's target-voice/download-voice), not writable through this
+# property; see VoicePack sensor in sensor.py for the read-only equivalent.
+_SYSTEM_LANGUAGE_OPTIONS = ["de", "en", "ru", "zh"]
 
 # Serialise commands to the device (one MIoT write at a time).
 PARALLEL_UPDATES = 1
@@ -61,6 +68,10 @@ async def async_setup_entry(
         and cap.get_map_list is not None
     ):
         entities.append(XiaomiActiveMapSelect(map_coordinator, entry))
+
+    settings = coordinator.device.profile.settings
+    if isinstance(settings, SettingsCapability) and settings.language is not None:
+        entities.append(SystemLanguageSelect(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -195,4 +206,28 @@ class XiaomiActiveMapSelect(CoordinatorEntity[XiaomiMapCoordinator], SelectEntit
                 self.coordinator.device.model,
             )
         await self.coordinator.async_request_map_upload(map_id)
+        await self.coordinator.async_request_refresh()
+
+
+class SystemLanguageSelect(CoordinatorEntity[XiaomiVacuumCoordinator], SelectEntity):
+    """Device system/UI language (settings.language / cur-lang)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "system_language"
+    _attr_options = _SYSTEM_LANGUAGE_OPTIONS
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator)
+        base = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{base}_language"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.data.language_raw
+
+    async def async_select_option(self, option: str) -> None:
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_language, option
+        )
         await self.coordinator.async_request_refresh()

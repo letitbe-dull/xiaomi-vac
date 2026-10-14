@@ -259,9 +259,15 @@
       },
       "dry_left_time": {
         "name": "Mop drying time remaining"
+      },
+      "voice_pack": {
+        "name": "Voice pack"
       }
     },
     "select": {
+      "system_language": {
+        "name": "System language"
+      },
       "drying_time": {
         "name": "Mop drying duration",
         "state": {
