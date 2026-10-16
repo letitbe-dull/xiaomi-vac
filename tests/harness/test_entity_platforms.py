@@ -768,7 +768,7 @@ async def test_ijai_clean_zone_still_sets_zone_then_starts_via_cloud(
         await vac.async_clean_zone(zone=[-1.5, 2.25, -0.5, 3.0])
 
     assert cloud.cloud_action.call_args_list == [
-        call("sg", "did123", 9, 8, ["[-1500,2250,-500,3000,1]"]),
+        call("sg", "did123", 9, 8, ["-1.5000,2.2500,-1.5000,3.0000,-0.5000,3.0000,-0.5000,2.2500"]),
         call("sg", "did123", 9, 3, []),
     ]
     local.call_action_by.assert_not_called()

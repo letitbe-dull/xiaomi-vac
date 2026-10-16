@@ -159,7 +159,12 @@ def test_clean_zone_sets_piid_keyed_zone_then_starts(monkeypatch, model):
     device.clean_zone(-1.5, 2.25, -0.5, 3.0)
 
     assert _last_calls() == [
-        ("action", 9, 8, [{"piid": 2, "value": "[-1500,2250,-500,3000,1]"}]),
+        (
+            "action",
+            9,
+            8,
+            [{"piid": 2, "value": "-1.5000,2.2500,-1.5000,3.0000,-0.5000,3.0000,-0.5000,2.2500"}],
+        ),
         ("action", 9, 3, []),
     ]
 

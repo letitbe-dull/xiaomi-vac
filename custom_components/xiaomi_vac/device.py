@@ -379,7 +379,15 @@ class IjaiVacuumDevice:
             region = [left, top, left, bottom, right, bottom, right, top]
             zones = [{"blocks_region": region, "blocks_attr": 0}]
             return [json.dumps(zones, separators=(",", ":"))]
-        return [f"[{mm[0]},{mm[1]},{mm[2]},{mm[3]},1]"]
+        # ijai point-zone firmware (verified on a Xiaomi Robot Vacuum S10):
+        # eight comma-separated metres with four decimals, no brackets, corners
+        # in Viomi/3irobotix order (x0,y0) (x0,y1) (x1,y1) (x1,y0). The earlier
+        # "[x0,y0,x1,y1,1]" millimetre form only ever worked within ~1 m of the
+        # dock; anything further ended in "unable to reach the target area".
+        left, right = sorted((x0, x1))
+        bottom, top = sorted((y0, y1))
+        corners = (left, bottom, left, top, right, top, right, bottom)
+        return [",".join(f"{c:.4f}" for c in corners)]
 
     def clean_zone(self, x0: float, y0: float, x1: float, y1: float) -> None:
         """Start a verified zone clean."""
