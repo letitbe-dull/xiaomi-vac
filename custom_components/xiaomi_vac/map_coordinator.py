@@ -28,6 +28,7 @@ from .const import (
     CONF_WIFI_SN,
     DOMAIN,
     MAP_IDLE_INTERVAL,
+    MAP_ON_DEMAND_MAX_AGE,
     MAP_SCAN_INTERVAL,
 )
 from .coordinator import XiaomiVacuumCoordinator
@@ -108,6 +109,13 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self.entry = entry
         self._device = device
         self._control = control
+        # User-configurable via the idle-refresh switch/number entities
+        # (switch.py / number.py). Defaults preserve issue #76's intent: while
+        # docked/idle nothing changes on its own, so don't re-fetch just
+        # because something's being viewed — only the safety net does, on its
+        # own (configurable) long interval.
+        self.idle_on_demand_refresh: bool = False
+        self.idle_safety_net_seconds: float = MAP_IDLE_INTERVAL
         self._cloud: XiaomiCloud | None = None
         self._fetcher: MapFetcher | None = None
         # ijai: owner uid the vacuum reported in siid 7/piid 45 at build time.
@@ -142,6 +150,9 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._last_live_render: float = 0.0
         self._live_render_lock = asyncio.Lock()
         self._last_fast_push: float = 0.0
+        # Only read when idle_on_demand_refresh is on — see ensure_fresh.
+        self._last_fetch_monotonic: float = 0.0
+        self._background_refresh_task: asyncio.Task | None = None
         # What the most recent cycle did; replaced at the start of every cycle.
         self.last_cycle: MapCycleRecord | None = None
         entry.async_on_unload(control.async_add_listener(self._on_control_update))
@@ -165,9 +176,9 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         return bool(data and data.activity in _ACTIVE)
 
     def _tune_interval(self) -> None:
-        """Poll fast while the vacuum is moving, slowly when docked/idle."""
+        """Poll fast while the vacuum is moving, slowly (safety-net) when docked/idle."""
         active = self._is_active()
-        secs = MAP_SCAN_INTERVAL if active else MAP_IDLE_INTERVAL
+        secs = MAP_SCAN_INTERVAL if active else self.idle_safety_net_seconds
         new = timedelta(seconds=secs)
         if self.update_interval != new:
             self.update_interval = new
@@ -178,6 +189,35 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._tune_interval()
         if self.update_interval != before:
             self._schedule_refresh()
+
+    def ensure_fresh(self) -> None:
+        """On-demand refresh for the camera/http read paths.
+
+        While the vacuum is active, the scheduled MAP_SCAN_INTERVAL timer
+        already keeps data fresh — this is a no-op then. While docked/idle,
+        nothing changes on its own for most setups (the vacuum isn't moving,
+        so a stale cache is just as correct as a fresh one), so by default
+        this only triggers a refresh for the genuine cold-start case — no
+        cache yet at all. The idle_on_demand_refresh switch (off by default,
+        switch.py) opts into refreshing on every view instead, throttled to
+        once per MAP_ON_DEMAND_MAX_AGE, for a model/account where something
+        about the map can change while docked/idle. Either way,
+        idle_safety_net_seconds' own scheduled refresh (number.py; defaults
+        to MAP_IDLE_INTERVAL) is what eventually catches changes for viewers
+        and non-viewer consumers alike (diagnostics, the room list).
+        """
+        if self._is_active():
+            return
+        if self.data is not None:
+            if not self.idle_on_demand_refresh:
+                return
+            if time.monotonic() - self._last_fetch_monotonic < MAP_ON_DEMAND_MAX_AGE:
+                return
+        if self._background_refresh_task is not None and not self._background_refresh_task.done():
+            return
+        self._background_refresh_task = self.hass.async_create_task(
+            self.async_request_refresh()
+        )
 
     async def async_on_mqtt_message(self, msg: MqttMessage) -> None:
         """Handle an MQTT message routed from the integration setup.
@@ -786,6 +826,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 active_id, "live+cached" if decoded else "from cache",
                 len(cache.all()),
             )
+            self._last_fetch_monotonic = time.monotonic()
             return result
         except (UpdateFailed, ConfigEntryAuthFailed):
             raise

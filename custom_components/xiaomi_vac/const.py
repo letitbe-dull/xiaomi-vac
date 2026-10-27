@@ -26,7 +26,14 @@ CONF_OAUTH_REDIRECT_URI = "oauth_redirect_uri"
 
 DEFAULT_SCAN_INTERVAL = 10  # seconds, local MIoT polling
 MAP_SCAN_INTERVAL = 30      # seconds, cloud map refresh while cleaning
-MAP_IDLE_INTERVAL = 300     # seconds, cloud map refresh while docked/idle
+# While docked/idle the coordinator no longer polls on a short fixed clock —
+# camera/http reads trigger an on-demand refresh instead (see
+# XiaomiMapCoordinator.ensure_fresh). This is now just the safety-net
+# interval for consumers that read coordinator.data without ever calling
+# ensure_fresh themselves (diagnostics, the room list).
+MAP_IDLE_INTERVAL = 900     # seconds, default safety-net cloud map refresh while docked/idle (user-configurable via number.py)
+MAP_ON_DEMAND_MAX_AGE = 30  # seconds, idle on-demand refresh throttle when the idle_on_demand_refresh switch is on
+
 
 # Servers accepted by the Xiaomi cloud.
 SERVERS = ["cn", "de", "us", "ru", "tw", "sg", "in", "i2"]
