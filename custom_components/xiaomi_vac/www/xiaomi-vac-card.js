@@ -646,6 +646,7 @@ class XiaomiVacCard extends HTMLElement {
   }
   _setX(anim) {
     const track = this._root.querySelector(".track");
+    if (!anim && track.classList.contains("anim")) this._settle();   // a resize interrupting a slide still settles it
     track.classList.toggle("anim", !!anim);
     if (anim) void track.offsetWidth;        // commit the class so the transition runs
     track.style.transform = `translateX(${-this._pos * this._w}px)`;
