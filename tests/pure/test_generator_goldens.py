@@ -42,6 +42,7 @@ _DEVIATIONS: dict[tuple[str, str | None], tuple[tuple[str, ...], str]] = {
     ("xiaomi.d109gl", "core"): (("status_map",), "keeps ov21gl's codes 22-24 its spec doesn't declare (d6f017f)"),
     ("xiaomi.ov21gl", "consumables"): ((), "hardware-confirmed by an ov21gl owner, mop pad not detergent (5e5076a)"),
     ("xiaomi.ov51gl", "consumables"): ((), "inherits ov21gl's hardware-confirmed block, same services in its spec (b9ad50a)"),
+    ("xiaomi.ov51gl", "core"): (("water_levels",), "H40 offers levels 1-3 only in Xiaomi Home; writing 0 (Off) is ignored and reads back 1 (#88)"),
     ("viomi.v15", "core"): (
         ("repeat", "volume"),
         "repeat-state wired by a v22 owner (PR #63), volume is the 2/17 mute prop (PR #74), neither in the generator's table",

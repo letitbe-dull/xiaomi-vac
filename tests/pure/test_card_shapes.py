@@ -81,6 +81,7 @@ def test_zone_clean_models_match_verified_profile_family() -> None:
         "xiaomi.vacuum.ov51gl",
         "xiaomi.vacuum.ov71gl",
         "xiaomi.vacuum.pv21cn",
+        "xiaomi.vacuum.pv32cn",
     }
 
 
@@ -102,6 +103,7 @@ def test_zone_sweep_profiles_are_exactly_the_x20_family_and_all_in_the_card() ->
         "xiaomi.vacuum.ov51gl",
         "xiaomi.vacuum.ov71gl",
         "xiaomi.vacuum.pv21cn",
+        "xiaomi.vacuum.pv32cn",
     }
     assert zone_sweep_models <= _zone_clean_models()
     assert "xiaomi.vacuum.b108gl" not in _zone_clean_models()

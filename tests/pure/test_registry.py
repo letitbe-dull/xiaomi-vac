@@ -122,15 +122,15 @@ def test_registry_counts_match_card_baseline() -> None:
     supported = [model for model in MODEL_PROFILES if is_supported(model)]
     rejected = [model for model in MODEL_PROFILES if not is_supported(model)]
 
-    assert len(MODEL_PROFILES) == 100
-    assert len(supported) == 86
+    assert len(MODEL_PROFILES) == 101
+    assert len(supported) == 87
     assert len(rejected) == 14
 
 
 def test_distinct_core_count_matches_promoted_profiles() -> None:
     cores = {repr(profile.core) for profile in MODEL_PROFILES.values() if profile.core}
 
-    assert len(cores) == 26
+    assert len(cores) == 28
 
 
 def test_registered_profiles_include_spec_notes() -> None:
