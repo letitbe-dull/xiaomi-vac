@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from homeassistant.components.vacuum import VacuumEntityFeature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.xiaomi_vac.button import (
@@ -14,7 +14,11 @@ from custom_components.xiaomi_vac.button import (
     async_setup_entry as button_setup,
 )
 from custom_components.xiaomi_vac.device import IjaiVacuumDevice, VacuumStatus
-from custom_components.xiaomi_vac.number import VolumeNumber, async_setup_entry as number_setup
+from custom_components.xiaomi_vac.number import (
+    MapIdleSafetyNetNumber,
+    VolumeNumber,
+    async_setup_entry as number_setup,
+)
 from custom_components.xiaomi_vac.const import (
     CONF_DEVICE_ID,
     CONF_PASS_TOKEN,
@@ -23,6 +27,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_SSECURITY,
     CONF_USER_ID,
     CONF_USERNAME,
+    MAP_IDLE_INTERVAL,
 )
 from custom_components.xiaomi_vac.select import (
     DryingTimeSelect,
@@ -39,6 +44,7 @@ from custom_components.xiaomi_vac.spec.types import (
 from custom_components.xiaomi_vac.switch import (
     AlarmSwitch,
     AutoMopDrySwitch,
+    MapIdleOnDemandRefreshSwitch,
     MopDryingSwitch,
     RepeatSwitch,
     async_setup_entry as switch_setup,
@@ -244,10 +250,50 @@ async def test_switch_setup_no_entities_when_absent(hass: HomeAssistant) -> None
     coord = _make_coordinator({"repeat": None, "alarm": None})
     entry = _make_entry()
     entry.runtime_data.control = coord
+    entry.runtime_data.map = None
 
     added: list = []
     await switch_setup(hass, entry, lambda entities: added.extend(entities))
     assert added == []
+
+
+async def test_switch_setup_adds_map_idle_refresh_switch_with_map(
+    hass: HomeAssistant,
+) -> None:
+    coord = _make_coordinator({"repeat": None, "alarm": None})
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+    entry.runtime_data.map = _make_map_coordinator()
+
+    added: list = []
+    await switch_setup(hass, entry, lambda entities: added.extend(entities))
+    assert [type(e) for e in added] == [MapIdleOnDemandRefreshSwitch]
+    assert added[0].unique_id == "AA:BB:CC:DD:EE:FF_map_idle_on_demand_refresh"
+
+
+@pytest.mark.parametrize(("last", "expected"), [("on", True), ("off", False), (None, False)])
+async def test_map_idle_refresh_switch_restores_state(
+    hass: HomeAssistant, last: str | None, expected: bool
+) -> None:
+    coord = _make_map_coordinator()
+    coord.idle_on_demand_refresh = not expected
+    switch = MapIdleOnDemandRefreshSwitch(coord, _make_entry())
+    last_state = State("switch.map_idle", last) if last else None
+    with patch.object(switch, "async_get_last_state", new=AsyncMock(return_value=last_state)):
+        await switch.async_added_to_hass()
+    assert coord.idle_on_demand_refresh is expected
+    assert switch.is_on is expected
+
+
+async def test_map_idle_refresh_switch_turn_on_off(hass: HomeAssistant) -> None:
+    coord = _make_map_coordinator()
+    coord.idle_on_demand_refresh = False
+    switch = MapIdleOnDemandRefreshSwitch(coord, _make_entry())
+    with patch.object(switch, "async_write_ha_state"):
+        await switch.async_turn_on()
+        assert coord.idle_on_demand_refresh is True
+        await switch.async_turn_off()
+        assert coord.idle_on_demand_refresh is False
 
 
 async def test_switch_setup_creates_base_drying_switches(
@@ -317,6 +363,7 @@ async def test_number_setup_creates_volume_when_supported(hass: HomeAssistant) -
     coord = _make_coordinator()
     entry = _make_entry()
     entry.runtime_data.control = coord
+    entry.runtime_data.map = None
 
     added: list = []
     await number_setup(hass, entry, lambda entities: added.extend(entities))
@@ -328,10 +375,48 @@ async def test_number_setup_no_entity_when_no_volume(hass: HomeAssistant) -> Non
     coord = _make_coordinator({"volume": None})
     entry = _make_entry()
     entry.runtime_data.control = coord
+    entry.runtime_data.map = None
 
     added: list = []
     await number_setup(hass, entry, lambda entities: added.extend(entities))
     assert added == []
+
+
+async def test_number_setup_adds_map_idle_interval_with_map(hass: HomeAssistant) -> None:
+    coord = _make_coordinator({"volume": None})
+    entry = _make_entry()
+    entry.runtime_data.control = coord
+    entry.runtime_data.map = _make_map_coordinator()
+
+    added: list = []
+    await number_setup(hass, entry, lambda entities: added.extend(entities))
+    assert [type(e) for e in added] == [MapIdleSafetyNetNumber]
+    assert added[0].unique_id == "AA:BB:CC:DD:EE:FF_map_idle_safety_net"
+
+
+@pytest.mark.parametrize(
+    ("last", "expected_seconds"),
+    [("7", 420), ("7.0", 420), ("unavailable", MAP_IDLE_INTERVAL), (None, MAP_IDLE_INTERVAL)],
+)
+async def test_map_idle_interval_number_restores_minutes(
+    hass: HomeAssistant, last: str | None, expected_seconds: float
+) -> None:
+    coord = _make_map_coordinator()
+    number = MapIdleSafetyNetNumber(coord, _make_entry())
+    last_state = State("number.map_idle", last) if last else None
+    with patch.object(number, "async_get_last_state", new=AsyncMock(return_value=last_state)):
+        await number.async_added_to_hass()
+    coord.set_idle_safety_net_seconds.assert_called_once_with(expected_seconds)
+
+
+async def test_map_idle_interval_number_set_value(hass: HomeAssistant) -> None:
+    coord = _make_map_coordinator()
+    coord.idle_safety_net_seconds = 900
+    number = MapIdleSafetyNetNumber(coord, _make_entry())
+    assert number.native_value == 15
+    with patch.object(number, "async_write_ha_state"):
+        await number.async_set_native_value(5)
+    coord.set_idle_safety_net_seconds.assert_called_once_with(300)
 
 
 def test_c107_volume_uses_full_hardware_range() -> None:

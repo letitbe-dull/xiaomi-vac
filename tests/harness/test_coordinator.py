@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -24,6 +25,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_USER_ID,
     CONF_USERNAME,
     CONF_WIFI_SN,
+    MAP_SCAN_INTERVAL,
 )
 from custom_components.xiaomi_vac.cloud.connector import CloudUnreachable
 from custom_components.xiaomi_vac.coordinator import XiaomiVacuumCoordinator
@@ -1339,3 +1341,130 @@ async def test_p_frame_inside_throttle_moves_position_without_full_render_and_ne
         await coord._async_on_live_frame("p2")
         assert fetcher._result_from_unpacked.call_count == 2
         assert coord.data.vector["vacuum"] == {"x": 31.0, "y": 41.0, "a": 0}
+
+
+# ---------------------------------------------------------------------------
+# Map coordinator: on-demand refresh while docked/idle (#76, PR #96)
+# ---------------------------------------------------------------------------
+
+
+def _docked_map_coord(hass: HomeAssistant, activity: str = "docked") -> XiaomiMapCoordinator:
+    coord = _map_coord(hass)
+    coord._control.data = SimpleNamespace(activity=activity)
+    coord.async_request_refresh = AsyncMock()
+    return coord
+
+
+@pytest.mark.parametrize("activity", ["cleaning", "returning"])
+async def test_ensure_fresh_is_a_no_op_while_active(
+    hass: HomeAssistant, activity: str
+) -> None:
+    coord = _docked_map_coord(hass, activity)
+    coord.data = None
+    coord.ensure_fresh()
+    await hass.async_block_till_done()
+    coord.async_request_refresh.assert_not_awaited()
+
+
+async def test_ensure_fresh_fetches_on_cold_start_and_throttles_repeats(
+    hass: HomeAssistant,
+) -> None:
+    coord = _docked_map_coord(hass)
+    coord.data = None
+    clock = [1000.0]
+    fake_time = SimpleNamespace(monotonic=lambda: clock[0])
+    with patch("custom_components.xiaomi_vac.map_coordinator.time", fake_time):
+        coord.ensure_fresh()
+        await hass.async_block_till_done()
+        assert coord.async_request_refresh.await_count == 1
+
+        # Still no data (the fetch failed): a quick second view doesn't kick again.
+        clock[0] += 5
+        coord.ensure_fresh()
+        await hass.async_block_till_done()
+        assert coord.async_request_refresh.await_count == 1
+
+        clock[0] += 30
+        coord.ensure_fresh()
+        await hass.async_block_till_done()
+        assert coord.async_request_refresh.await_count == 2
+
+
+async def test_ensure_fresh_does_not_stack_concurrent_refreshes(
+    hass: HomeAssistant,
+) -> None:
+    coord = _docked_map_coord(hass)
+    coord.data = None
+    gate = asyncio.Event()
+    calls = 0
+
+    async def _slow_refresh() -> None:
+        nonlocal calls
+        calls += 1
+        await gate.wait()
+
+    coord.async_request_refresh = _slow_refresh
+    coord._last_on_demand_kick = None
+    coord.ensure_fresh()
+    await asyncio.sleep(0)
+    coord._last_on_demand_kick = None  # rule the throttle out; only the in-flight guard is left
+    coord.ensure_fresh()
+    await asyncio.sleep(0)
+    assert calls == 1
+    gate.set()
+    await hass.async_block_till_done()
+
+
+async def test_ensure_fresh_serves_cache_when_switch_off(hass: HomeAssistant) -> None:
+    coord = _docked_map_coord(hass)
+    coord.data = _fake_result()
+    coord.idle_on_demand_refresh = False
+    coord.ensure_fresh()
+    await hass.async_block_till_done()
+    coord.async_request_refresh.assert_not_awaited()
+
+
+async def test_ensure_fresh_refreshes_stale_cache_when_switch_on(
+    hass: HomeAssistant,
+) -> None:
+    coord = _docked_map_coord(hass)
+    coord.data = _fake_result()
+    coord.idle_on_demand_refresh = True
+    clock = [1000.0]
+    fake_time = SimpleNamespace(monotonic=lambda: clock[0])
+    with patch("custom_components.xiaomi_vac.map_coordinator.time", fake_time):
+        coord._last_fetch_monotonic = 990.0  # fetched 10s ago: fresh enough
+        coord.ensure_fresh()
+        await hass.async_block_till_done()
+        coord.async_request_refresh.assert_not_awaited()
+
+        coord._last_fetch_monotonic = 960.0  # 40s ago: stale
+        coord.ensure_fresh()
+        await hass.async_block_till_done()
+        coord.async_request_refresh.assert_awaited_once()
+
+
+async def test_set_idle_safety_net_seconds_reschedules_when_docked(
+    hass: HomeAssistant,
+) -> None:
+    coord = _docked_map_coord(hass)
+    with patch.object(coord, "_schedule_refresh") as schedule:
+        coord.set_idle_safety_net_seconds(120)
+        assert coord.update_interval == timedelta(seconds=120)
+        schedule.assert_called_once()
+
+        # Same value again: nothing to reschedule.
+        coord.set_idle_safety_net_seconds(120)
+        schedule.assert_called_once()
+
+
+async def test_set_idle_safety_net_seconds_keeps_fast_poll_while_cleaning(
+    hass: HomeAssistant,
+) -> None:
+    coord = _docked_map_coord(hass, "cleaning")
+    coord._tune_interval()
+    with patch.object(coord, "_schedule_refresh") as schedule:
+        coord.set_idle_safety_net_seconds(120)
+    assert coord.update_interval == timedelta(seconds=MAP_SCAN_INTERVAL)
+    assert coord.idle_safety_net_seconds == 120
+    schedule.assert_not_called()
