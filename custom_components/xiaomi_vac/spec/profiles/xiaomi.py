@@ -1006,6 +1006,10 @@ XIAOMI_OV51GL = replace(
     XIAOMI_OV21GL,
     profile_id='xiaomi.ov51gl',
     notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-ov51gl:1",),
+    core=replace(
+        XIAOMI_CORE_OV21GL,
+        water_levels={'level1': 1, 'level2': 2, 'level3': 3},
+    ),
     zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
 )
 

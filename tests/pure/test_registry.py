@@ -55,6 +55,9 @@ def test_ov51gl_resolves_card_baseline_with_ov21gl_consumables() -> None:
     assert profile.room_clean is not None
     assert profile.room_clean.room_ids == Prop(2, 15)
     assert profile.room_clean.start == Action(2, 16, in_piid=15)
+    assert profile.core.water_levels == {"level1": 1, "level2": 2, "level3": 3}
+    assert get_profile("xiaomi.vacuum.ov21gl").core.water_levels["off"] == 0
+    assert get_profile("xiaomi.vacuum.ov21cn").core.water_levels["off"] == 0
 
 
 def test_e101gb_resolves_card_baseline_without_consumables() -> None:
