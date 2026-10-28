@@ -117,14 +117,12 @@ class MapIdleSafetyNetNumber(
             minutes = None
         if minutes is None:
             minutes = MAP_IDLE_INTERVAL / 60
-        self.coordinator.idle_safety_net_seconds = minutes * 60
-        self.coordinator._tune_interval()
+        self.coordinator.set_idle_safety_net_seconds(minutes * 60)
 
     @property
     def native_value(self) -> float:
         return self.coordinator.idle_safety_net_seconds / 60
 
     async def async_set_native_value(self, value: float) -> None:
-        self.coordinator.idle_safety_net_seconds = value * 60
-        self.coordinator._tune_interval()
+        self.coordinator.set_idle_safety_net_seconds(value * 60)
         self.async_write_ha_state()

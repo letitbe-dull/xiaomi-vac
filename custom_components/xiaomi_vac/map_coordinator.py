@@ -190,6 +190,11 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         if self.update_interval != before:
             self._schedule_refresh()
 
+    def set_idle_safety_net_seconds(self, seconds: float) -> None:
+        """Change the docked/idle refresh interval and reschedule the pending poll."""
+        self.idle_safety_net_seconds = seconds
+        self._on_control_update()
+
     def ensure_fresh(self) -> None:
         """On-demand refresh for the camera/http read paths.
 
