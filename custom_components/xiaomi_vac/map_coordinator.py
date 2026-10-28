@@ -159,11 +159,12 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._last_fetch_monotonic: float = 0.0
         self._background_refresh_task: asyncio.Task | None = None
         self._last_on_demand_kick: float | None = None
-        self._was_active = False
+        self._was_active = self._is_active()
         self._cancel_post_clean: CALLBACK_TYPE | None = None
         # What the most recent cycle did; replaced at the start of every cycle.
         self.last_cycle: MapCycleRecord | None = None
         entry.async_on_unload(control.async_add_listener(self._on_control_update))
+        entry.async_on_unload(self._cancel_post_clean_fetch)
 
     @property
     def device(self) -> IjaiVacuumDevice:
@@ -216,11 +217,6 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         """Fetch the finished map once, after the final upload has had time to land."""
         self._cancel_post_clean = None
         await self.async_refresh()
-
-    async def async_shutdown(self) -> None:
-        """Cancel the pending post-clean fetch, then shut down the coordinator."""
-        self._cancel_post_clean_fetch()
-        await super().async_shutdown()
 
     def set_idle_safety_net_seconds(self, seconds: float) -> None:
         """Change the docked/idle refresh interval and reschedule the pending poll."""
