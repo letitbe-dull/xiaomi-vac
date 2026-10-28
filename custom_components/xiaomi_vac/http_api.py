@@ -35,7 +35,13 @@ class VectorMapView(HomeAssistantView):
         )
         runtime = getattr(entry, "runtime_data", None) if entry else None
         coordinator = runtime.map if runtime else None
-        if coordinator is None or coordinator.data is None:
+        if coordinator is None:
+            return self.json_message("no map available", HTTPStatus.NOT_FOUND)
+        # Idle/docked: serve whatever's cached right now and kick a background
+        # refresh if it's stale, rather than blocking this request on a cloud
+        # round-trip (no-op while cleaning — the scheduled timer covers it).
+        coordinator.ensure_fresh()
+        if coordinator.data is None:
             return self.json_message("no map available", HTTPStatus.NOT_FOUND)
         data = coordinator.data
         # `maps` is the list-based contract (one entry per physical map, each a

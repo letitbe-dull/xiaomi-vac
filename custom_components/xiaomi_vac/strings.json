@@ -404,6 +404,9 @@
       },
       "mop_drying": {
         "name": "Dry mops"
+      },
+      "map_idle_on_demand_refresh": {
+        "name": "Refresh map on view while idle"
       }
     },
     "button": {
@@ -417,6 +420,9 @@
     "number": {
       "volume": {
         "name": "Volume"
+      },
+      "map_idle_safety_net": {
+        "name": "Map idle refresh interval"
       }
     }
   },

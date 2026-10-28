@@ -53,6 +53,10 @@ class XiaomiVacuumMapCamera(CoordinatorEntity[XiaomiMapCoordinator], Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
+        # Idle/docked: serve the cached frame immediately and kick a background
+        # refresh if it's stale, rather than blocking this request on a cloud
+        # round-trip (no-op while cleaning — the scheduled timer covers it).
+        self.coordinator.ensure_fresh()
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.image_png

@@ -6,11 +6,13 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import XiaomiConfigEntry
 from .const import DOMAIN
 from .coordinator import XiaomiVacuumCoordinator
+from .map_coordinator import XiaomiMapCoordinator
 from .spec.types import BaseStationCapability
 
 # Serialise commands to the device (one MIoT write at a time).
@@ -37,6 +39,9 @@ async def async_setup_entry(
         and base.working_status is not None
     ):
         entities.append(MopDryingSwitch(coordinator, entry))
+    map_coordinator = entry.runtime_data.map
+    if map_coordinator is not None:
+        entities.append(MapIdleOnDemandRefreshSwitch(map_coordinator, entry))
     async_add_entities(entities)
 
 
@@ -142,3 +147,50 @@ class MopDryingSwitch(CoordinatorEntity[XiaomiVacuumCoordinator], SwitchEntity):
     async def async_turn_off(self, **kwargs) -> None:
         await self.hass.async_add_executor_job(self.coordinator.device.stop_drying)
         await self.coordinator.async_request_refresh()
+
+
+class MapIdleOnDemandRefreshSwitch(
+    RestoreEntity, CoordinatorEntity[XiaomiMapCoordinator], SwitchEntity
+):
+    """Whether idle/docked camera & map-API reads trigger a cloud refresh.
+
+    Off by default (issue #76): the vacuum isn't moving while docked, so a
+    stale cached map is just as correct as a fresh one for most setups, and
+    refreshing on every view would reintroduce the background cloud traffic
+    the on-demand design set out to avoid. Turn this on for a model/account
+    where something about the map (zones, room edits, etc.) can genuinely
+    change while docked/idle — reads are then throttled, not refreshed on
+    literally every poll. Purely a local preference, not a device property,
+    so its state is restored across restarts rather than read from the
+    vacuum.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "map_idle_on_demand_refresh"
+    _attr_icon = "mdi:cloud-refresh"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: XiaomiMapCoordinator, entry) -> None:
+        super().__init__(coordinator)
+        base = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{base}_map_idle_on_demand_refresh"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, base)})
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        self.coordinator.idle_on_demand_refresh = (
+            last_state is not None and last_state.state == "on"
+        )
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.idle_on_demand_refresh
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self.coordinator.idle_on_demand_refresh = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self.coordinator.idle_on_demand_refresh = False
+        self.async_write_ha_state()
