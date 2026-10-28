@@ -106,6 +106,33 @@ def resolve_region_from_code(code: str, fallback: str | None = None) -> str | No
     return None
 
 
+def candidate_regions(code: str, fallback: str | None = None) -> list[str]:
+    """Regions to try for a code, most likely first.
+
+    Newer codes (e.g. ``KSMOSCLOUDSRV_...`` for ru) no longer carry the ``AL``
+    region prefix, so every OAuth region stays a candidate after the hints.
+    """
+    ordered = [resolve_region_from_code(code, fallback), fallback, *OAUTH_REGIONS]
+    return list(dict.fromkeys(r for r in ordered if r in OAUTH_REGIONS))
+
+
+def exchange_code_any_region(
+    code: str,
+    device_id: str,
+    regions: list[str],
+    *,
+    redirect_uri: str = OAUTH_REDIRECT_URI,
+) -> OAuthTokenSet:
+    """Exchange a code against each region in turn; first success wins."""
+    last: XiaomiOAuthError | None = None
+    for region in regions:
+        try:
+            return exchange_code(code, device_id, region, redirect_uri=redirect_uri)
+        except XiaomiOAuthError as err:
+            last = err
+    raise last or XiaomiOAuthError("No OAuth region to try")
+
+
 def exchange_code(
     code: str,
     device_id: str,
