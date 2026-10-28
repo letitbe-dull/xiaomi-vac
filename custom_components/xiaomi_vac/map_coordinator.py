@@ -153,6 +153,7 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         # Only read when idle_on_demand_refresh is on — see ensure_fresh.
         self._last_fetch_monotonic: float = 0.0
         self._background_refresh_task: asyncio.Task | None = None
+        self._last_on_demand_kick: float | None = None
         # What the most recent cycle did; replaced at the start of every cycle.
         self.last_cycle: MapCycleRecord | None = None
         entry.async_on_unload(control.async_add_listener(self._on_control_update))
@@ -220,6 +221,15 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
                 return
         if self._background_refresh_task is not None and not self._background_refresh_task.done():
             return
+        # A failing cold start leaves data None, so without this every camera
+        # poll would kick another cloud fetch.
+        now = time.monotonic()
+        if (
+            self._last_on_demand_kick is not None
+            and now - self._last_on_demand_kick < MAP_ON_DEMAND_MAX_AGE
+        ):
+            return
+        self._last_on_demand_kick = now
         self._background_refresh_task = self.hass.async_create_task(
             self.async_request_refresh()
         )
