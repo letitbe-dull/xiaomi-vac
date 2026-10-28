@@ -27,11 +27,11 @@ from .cloud.oauth import (
     OAUTH_REDIRECT_URI,
     XiaomiOAuthError,
     build_authorize_url,
-    exchange_code,
+    candidate_regions,
+    exchange_code_any_region,
     extract_oauth_code,
     generate_oauth_device_id,
     oauth_entry_updates,
-    resolve_region_from_code,
 )
 from .const import (
     CONF_DEVICE_ID,
@@ -87,15 +87,12 @@ async def _async_exchange_linked_oauth(
     device_id: str,
 ) -> dict[str, Any]:
     result = await link.async_wait_code()
-    region = resolve_region_from_code(result.code, data.get(CONF_SERVER))
-    if region is None:
-        raise XiaomiOAuthError("Could not resolve OAuth region")
     tokens = await hass.async_add_executor_job(
         partial(
-            exchange_code,
+            exchange_code_any_region,
             result.code,
             device_id,
-            region,
+            candidate_regions(result.code, data.get(CONF_SERVER)),
             redirect_uri=result.redirect_uri,
         )
     )
@@ -108,15 +105,12 @@ async def _async_exchange_manual_oauth(
     data: Mapping[str, Any],
     device_id: str,
 ) -> dict[str, Any]:
-    region = resolve_region_from_code(code, data.get(CONF_SERVER))
-    if region is None:
-        raise XiaomiOAuthError("Could not resolve OAuth region")
     tokens = await hass.async_add_executor_job(
         partial(
-            exchange_code,
+            exchange_code_any_region,
             code,
             device_id,
-            region,
+            candidate_regions(code, data.get(CONF_SERVER)),
             redirect_uri=OAUTH_REDIRECT_URI,
         )
     )

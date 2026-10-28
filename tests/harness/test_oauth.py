@@ -16,6 +16,7 @@ from custom_components.xiaomi_vac.cloud.oauth import (
     exchange_code,
     extract_oauth_code,
     refreshed_oauth_entry_updates,
+    candidate_regions,
     resolve_region_from_code,
 )
 from custom_components.xiaomi_vac.const import (
@@ -74,6 +75,15 @@ def test_resolve_region_from_code_prefix() -> None:
     assert resolve_region_from_code("ALSG_example", "tw") == "sg"
     assert resolve_region_from_code("unknown", "de") == "de"
     assert resolve_region_from_code("unknown", "tw") is None
+
+
+def test_candidate_regions_for_unprefixed_code() -> None:
+    """Codes like KSMOSCLOUDSRV_... carry no region; try the hint, then all."""
+    regions = candidate_regions("KSMOSCLOUDSRV_8A28", "ru")
+    assert regions[0] == "ru"
+    assert set(regions) == {"cn", "de", "us", "ru", "sg", "in", "i2"}
+    assert candidate_regions("ALSG_x", "tw")[0] == "sg"
+    assert "tw" not in candidate_regions("x", "tw")
 
 
 def test_extract_oauth_code_accepts_code_or_redirect_url() -> None:

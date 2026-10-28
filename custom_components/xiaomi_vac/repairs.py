@@ -13,11 +13,11 @@ from homeassistant.helpers import issue_registry as ir
 from .cloud.oauth import (
     XiaomiOAuthError,
     build_authorize_url,
-    exchange_code,
+    candidate_regions,
+    exchange_code_any_region,
     extract_oauth_code,
     generate_oauth_device_id,
     oauth_entry_updates,
-    resolve_region_from_code,
 )
 from .const import CONF_OAUTH_DEVICE_ID, CONF_SERVER, DOMAIN
 
@@ -65,24 +65,23 @@ class MiotOAuthRepairFlow(RepairsFlow):
 
         if user_input is not None:
             code = extract_oauth_code(user_input["code"])
-            region = resolve_region_from_code(code, data.get(CONF_SERVER))
-            if region is None:
-                errors["base"] = "oauth_region_failed"
+            try:
+                tokens = await self.hass.async_add_executor_job(
+                    exchange_code_any_region,
+                    code,
+                    device_id,
+                    candidate_regions(code, data.get(CONF_SERVER)),
+                )
+            except XiaomiOAuthError:
+                errors["base"] = "oauth_failed"
             else:
-                try:
-                    tokens = await self.hass.async_add_executor_job(
-                        exchange_code, code, device_id, region
-                    )
-                except XiaomiOAuthError:
-                    errors["base"] = "oauth_failed"
-                else:
-                    data.update(oauth_entry_updates(tokens, device_id))
-                    self.hass.config_entries.async_update_entry(entry, data=data)
-                    ir.async_delete_issue(
-                        self.hass, DOMAIN, oauth_missing_issue_id(self._entry_id)
-                    )
-                    await self.hass.config_entries.async_reload(self._entry_id)
-                    return self.async_create_entry(title="", data={})
+                data.update(oauth_entry_updates(tokens, device_id))
+                self.hass.config_entries.async_update_entry(entry, data=data)
+                ir.async_delete_issue(
+                    self.hass, DOMAIN, oauth_missing_issue_id(self._entry_id)
+                )
+                await self.hass.config_entries.async_reload(self._entry_id)
+                return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="link",
