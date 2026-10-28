@@ -60,6 +60,7 @@ class FakeCloud:
         self.url = url
         self.blob = blob
         self.prop_calls = 0
+        self.minted_object = None
 
     def get_user_device_data(self, server, did, siid, piid, limit=2, time_start=0):
         return None
@@ -69,7 +70,8 @@ class FakeCloud:
         assert (siid, piid) == (6, 3)
         return {"result": [{"value": self.prop_value}]}
 
-    def map_url(self, server, did, slot, endpoint):
+    def map_url(self, server, did, slot, endpoint, obj_name=None):
+        self.minted_object = obj_name or f"1/{did}/{slot}"
         return self.url
 
     def download(self, url):
@@ -209,6 +211,17 @@ def test_fetch_repolls_enckey_after_decrypt_failure():
     assert f._enckey_polled is False    # will re-poll
     assert f.fetch() is None
     assert cloud.prop_calls == 2        # polled again on the second fetch
+
+
+# --- MH1: map URL is minted for the object the robot reports ----------------
+@pytest.mark.parametrize("prop_value, minted", [
+    ("1/2/device_reported_obj,KEY", "1/2/device_reported_obj"),  # path reported
+    (",KEY", "1/2/0"),                                            # no path: guessed user_id/did/slot
+])
+def test_dreame_map_url_minted_for_reported_object(prop_value, minted):
+    cloud = FakeCloud(prop_value=prop_value, blob=b"")
+    _fetcher(cloud).fetch()
+    assert cloud.minted_object == minted
 
 
 # --- r2211o stale-room filter / outlines / map id ---------------------------

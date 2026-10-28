@@ -25,6 +25,16 @@ def dreame_extract_enckey(prop_value: str) -> str | None:
     return (parts[1] or None) if len(parts) > 1 else None
 
 
+def dreame_extract_object_name(prop_value: str) -> str | None:
+    """Extract the cloud object path from MIoT property siid=6/piid=3 value `<object_path>,<enckey>`.
+
+    Returns None when the value has no comma or an empty path.
+    """
+    if not prop_value or "," not in prop_value:
+        return None
+    return prop_value.split(",")[0] or None
+
+
 def dreame_decrypt_cloud_blob(raw: bytes, enckey: str) -> bytes:
     """Decrypt and decompress a dreame cloud map blob.
 

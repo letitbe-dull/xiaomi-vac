@@ -25,6 +25,7 @@ from .map_diagnostics import SlotAttempt
 from .map_parsers import (
     dreame_decrypt_cloud_blob,
     dreame_extract_enckey,
+    dreame_extract_object_name,
     has_ijai_grid,
     has_json_grid,
     ijai_hex_key_first,
@@ -193,6 +194,8 @@ class MapFetcher:
         # Dreame cloud enckey polled from siid=6/piid=3 on first fetch; None for
         # unencrypted models or until the property is successfully read.
         self._enckey: str | None = None
+        # Cloud object path polled alongside the enckey; None means use the guessed name.
+        self._object_name: str | None = None
         self._enckey_polled = False
         # What the most recent fetch() call did; overwritten by every call.
         self.last_attempt: SlotAttempt | None = None
@@ -208,8 +211,8 @@ class MapFetcher:
         # one render paired with another render's calibration.
         self._live_base: tuple | None = None
 
-    def _get_dreame_enckey(self) -> str | None:
-        """Fetch the dreame cloud map encryption key (siid=6/piid=3).
+    def _get_dreame_object(self) -> tuple[str | None, str | None]:
+        """Fetch the dreame cloud map object path and encryption key (siid=6/piid=3).
 
         Prefers the /user/get_user_device_data property-history endpoint:
         several dreame models (verified live: dreame.vacuum.r2211o) reject
@@ -225,16 +228,16 @@ class MapFetcher:
                 val = json.loads(history[0]["value"])[0]
                 enckey = dreame_extract_enckey(val)
                 if enckey:
-                    return enckey
+                    return dreame_extract_object_name(val), enckey
         except (ValueError, KeyError, TypeError, IndexError):
             _LOGGER.debug("dreame enckey history read failed; falling back to miotspec")
         resp = self._cloud.cloud_get_prop(
             self._server, self._device_id, _DREAME_ENCKEY_SIID, _DREAME_ENCKEY_PIID)
         try:
             val = resp["result"][0]["value"]
-            return dreame_extract_enckey(val)
+            return dreame_extract_object_name(val), dreame_extract_enckey(val)
         except (TypeError, KeyError, IndexError):
-            return None
+            return None, None
 
     def _unpack(self, raw: bytes) -> bytes:
         """Brand-dispatch: return decompressed map bytes ready for parser.parse().
@@ -576,19 +579,28 @@ class MapFetcher:
         (token likely dead) — the coordinator handles renewal.
         """
         if self._brand == "dreame" and not self._enckey_polled:
-            self._enckey = self._get_dreame_enckey()
+            self._object_name, self._enckey = self._get_dreame_object()
             self._enckey_polled = True
             _LOGGER.debug("dreame enckey poll: %s",
                           "found" if self._enckey else "not found (unencrypted or unavailable)")
         attempt = self.last_attempt = SlotAttempt(slot=slot)
         self.last_key_type = None
         try:
-            url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
+            if self._object_name is not None:
+                url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint,
+                                          obj_name=self._object_name)
+            else:
+                url = self._cloud.map_url(self._server, self._device_id, slot, self._endpoint)
         except CloudUnreachable:
             attempt.outcome = "unreachable"
             raise
         attempt.url_obtained = bool(url)
         if not url:
+            if self._object_name is not None:
+                # A stale reported path: drop it with the enckey so the next fetch re-polls.
+                self._object_name = None
+                self._enckey = None
+                self._enckey_polled = False
             # No URL usually means the cloud session expired; let the
             # coordinator try a token refresh.
             attempt.outcome = "no_url"
@@ -623,9 +635,11 @@ class MapFetcher:
                 # Never crash the coordinator — it falls back to the other slot or
                 # the cache. A stale dreame enckey also lands here: drop it so the
                 # next fetch re-polls siid=6/piid=3.
-                if self._brand == "dreame" and self._enckey is not None:
+                if self._brand == "dreame" and (
+                        self._enckey is not None or self._object_name is not None):
                     _LOGGER.debug("dreame decrypt failed; will re-poll enckey next fetch: %s", ex)
                     self._enckey = None
+                    self._object_name = None
                     self._enckey_polled = False
                 _LOGGER.debug("Could not decrypt map at slot %s (starts %r): %s", slot, raw[:16], ex)
                 attempt.outcome = "undecryptable"

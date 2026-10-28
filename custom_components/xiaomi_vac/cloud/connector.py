@@ -535,8 +535,9 @@ class XiaomiCloud:
             return None
 
     def map_url(self, server: str, did: str, map_name: str = "0",
-                endpoint: str = "get_interim_file_url_pro") -> str | None:
-        """Mint a signed download URL for one map object.
+                endpoint: str = "get_interim_file_url_pro",
+                obj_name: str | None = None) -> str | None:
+        """Mint a signed download URL for one map object (`obj_name` overrides the guessed name).
 
         Tries the alternate endpoint (get_interim_file_url vs. _pro) on ANY
         failure, not just code -8 — some brands (observed live: 3irobotic-
@@ -546,7 +547,7 @@ class XiaomiCloud:
         endpoint" vs. an actual dead object/session. Always trying both is
         more robust than chasing individual error codes.
         """
-        obj = f"{self.user_id}/{did}/{map_name}"
+        obj = obj_name or f"{self.user_id}/{did}/{map_name}"
         resp = self._try_map_url(server, obj, endpoint)
         if resp is not None:
             return resp
