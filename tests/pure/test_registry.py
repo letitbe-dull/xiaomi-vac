@@ -105,6 +105,18 @@ def test_ov21cn_resolves_card_baseline_without_consumables() -> None:
     assert profile.room_clean.start == Action(2, 16, in_piid=15)
 
 
+@pytest.mark.parametrize(
+    ("model", "supported"),
+    [
+        ("viomi.vacuum.v8", False),
+    ],
+)
+def test_requested_model_support_matches_its_spec(model: str, supported: bool) -> None:
+    assert is_supported(model) is supported
+    if supported:
+        assert card_baseline_gaps(get_profile(model)) == ()
+
+
 def test_registry_counts_match_card_baseline() -> None:
     supported = [model for model in MODEL_PROFILES if is_supported(model)]
     rejected = [model for model in MODEL_PROFILES if not is_supported(model)]
