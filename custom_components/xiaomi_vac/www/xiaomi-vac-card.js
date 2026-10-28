@@ -649,6 +649,26 @@ class XiaomiVacCard extends HTMLElement {
     track.classList.toggle("anim", !!anim);
     if (anim) void track.offsetWidth;        // commit the class so the transition runs
     track.style.transform = `translateX(${-this._pos * this._w}px)`;
+    clearTimeout(this._settleT);
+    if (anim) this._settleT = setTimeout(() => { if (track.classList.contains("anim")) this._settle(); }, 500);
+  }
+  // Ends a slide: clears .anim, wraps clones to a real slot, updates _real and the dots.
+  _settle() {
+    clearTimeout(this._settleT);
+    const track = this._root.querySelector(".track");
+    const n = this._pages.length;
+    if (this._pos <= 0) { track.classList.remove("anim"); this._pos = n; track.style.transform = `translateX(${-this._pos * this._w}px)`; }
+    else if (this._pos >= n + 1) { track.classList.remove("anim"); this._pos = 1; track.style.transform = `translateX(${-this._pos * this._w}px)`; }
+    else track.classList.remove("anim");
+    this._real = ((this._pos - 1) % n + n) % n;
+    this._sel.clear(); this._syncRooms(); this._renderDots();
+    this._syncZoneBtn();
+    this._syncZoomBtn();
+    // a map refresh that arrived mid-gesture was deferred — apply it now
+    if (this._pendingRebuild && !this._down) {
+      this._pendingRebuild = false;
+      setTimeout(() => this._buildPages(true), 0);
+    }
   }
   _setupSwipe() {
     const vp = this._root.querySelector(".vp");
@@ -721,19 +741,7 @@ class XiaomiVacCard extends HTMLElement {
       // mistaken for the carousel track settling.
       if (e.target !== track) return;
       if (e.propertyName && e.propertyName !== "transform") return;
-      const n = N();
-      if (this._pos <= 0) { track.classList.remove("anim"); this._pos = n; track.style.transform = `translateX(${-this._pos * this._w}px)`; }
-      else if (this._pos >= n + 1) { track.classList.remove("anim"); this._pos = 1; track.style.transform = `translateX(${-this._pos * this._w}px)`; }
-      else track.classList.remove("anim");
-      this._real = ((this._pos - 1) % n + n) % n;
-      this._sel.clear(); this._syncRooms(); this._renderDots();
-      this._syncZoneBtn();
-      this._syncZoomBtn();
-      // a map refresh that arrived mid-gesture was deferred — apply it now
-      if (this._pendingRebuild && !down) {
-        this._pendingRebuild = false;
-        setTimeout(() => this._buildPages(true), 0);
-      }
+      this._settle();
     });
     window.addEventListener("resize", () => { this._w = vp.clientWidth; if (!down) this._setX(false); });
     // window 'resize' misses layout changes that don't resize the window —
