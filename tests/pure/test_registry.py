@@ -109,6 +109,7 @@ def test_ov21cn_resolves_card_baseline_without_consumables() -> None:
     ("model", "supported"),
     [
         ("viomi.vacuum.v8", False),
+        ("xiaomi.vacuum.pv32cn", True),
     ],
 )
 def test_requested_model_support_matches_its_spec(model: str, supported: bool) -> None:

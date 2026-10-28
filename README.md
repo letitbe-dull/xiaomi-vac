@@ -170,16 +170,16 @@ map attributes).
 | `entity_id` | The vacuum entity. | `vacuum.xiaomi_robot_vacuum_s10` |
 | `zone` | Rectangle as `[x0, y0, x1, y1]` in metres. | `[-1.5, 2.2, -0.4, 3.1]` |
 
-Zone cleaning is available for `ijai.vacuum.v17`, `ijai.vacuum.v18`, and `ijai.vacuum.v19`, which share the same command set, and for `xiaomi.vacuum.c107`, `d101`, `d102ev`, `d102gl`, `d109gl`, `e101gb`, `ov21cn`, `ov21gl`, `ov43gb`, `ov51gl`, `ov71gl`, and `pv21cn`, which share another. It was tested on an ijai v19 and a `xiaomi.vacuum.d102gl`, and an `ov21gl` owner confirmed the same command cleans a drawn zone on theirs. On the ijai models, zones several metres from the dock were also confirmed on a Xiaomi Robot Vacuum S10. A Xiaomi S20 (`xiaomi.vacuum.d106gl`) owner confirmed it too. The S20 refuses zones smaller than about 0.7 m. The other models are expected to behave the same but are unconfirmed, so please open an issue if yours doesn't. The bundled card shows a draw tool for those models on the map page unless `allow_zone_cleaning: false`: tap it, drag a rectangle, then tap **Clean this area**.
+Zone cleaning is available for `ijai.vacuum.v17`, `ijai.vacuum.v18`, and `ijai.vacuum.v19`, which share the same command set, and for `xiaomi.vacuum.c107`, `d101`, `d102ev`, `d102gl`, `d109gl`, `e101gb`, `ov21cn`, `ov21gl`, `ov43gb`, `ov51gl`, `ov71gl`, `pv21cn`, and `pv32cn`, which share another. It was tested on an ijai v19 and a `xiaomi.vacuum.d102gl`, and an `ov21gl` owner confirmed the same command cleans a drawn zone on theirs. On the ijai models, zones several metres from the dock were also confirmed on a Xiaomi Robot Vacuum S10. A Xiaomi S20 (`xiaomi.vacuum.d106gl`) owner confirmed it too. The S20 refuses zones smaller than about 0.7 m. The other models are expected to behave the same but are unconfirmed, so please open an issue if yours doesn't. The bundled card shows a draw tool for those models on the map page unless `allow_zone_cleaning: false`: tap it, drag a rectangle, then tap **Clean this area**.
 
 ## Supported models
 
-These are the [86 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
+These are the [87 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
 
 | Brand | Models |
 |-------|--------|
 | **ijai** | v1, v2, v3, v10, v13, v14, v15, v16, v17, v18, v19 |
-| **Xiaomi** | b106bk/eu, b108gl, c101/eu, c102cn/gl, c103, c104, c107, d101, d102ev/gl, d103cn, d106gl, d109gl, d110ch, e101gb, ov21cn/gl, ov31gl, ov42gl, ov43gb, ov51gl, ov71gl, pv21cn |
+| **Xiaomi** | b106bk/eu, b108gl, c101/eu, c102cn/gl, c103, c104, c107, d101, d102ev/gl, d103cn, d106gl, d109gl, d110ch, e101gb, ov21cn/gl, ov31gl, ov42gl, ov43gb, ov51gl, ov71gl, pv21cn, pv32cn |
 | **Viomi** | v12, v13, v15, v17, v18, v19, v22, v23, v24, v35, v38, v40, v45 |
 | **Dreame** | p2008, p2009, p2027/28/28a/29/36, p2114a/o, p2140/a/p, p2148o, p2149o, p2150a/b/o, p2157, p2187, p2259, r2104, r2205, r2209, r2210, r2211o, r2215, r2216o, r2228/o/z, r2232a, r2233, r2235, r2246, r2247, r2254 |
 

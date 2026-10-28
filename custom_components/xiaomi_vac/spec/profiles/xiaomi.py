@@ -1060,6 +1060,24 @@ XIAOMI_PV21CN = replace(
     ),
 )
 
+# xiaomi.vacuum.pv32cn (Mijia Sweeping and Mopping Robot 6) — same wired
+# siid/piid/aiid as ov21gl (specs v1 and v2 compared). siid 2 piid 4 has no
+# "Mop" (2) value and siid 2 piid 2 (status) has no 22/23 (it has 24, no 25/26).
+# Consumables unverified (see ov71gl note above).
+XIAOMI_CORE_PV32CN = replace(
+    XIAOMI_CORE_PV21CN,
+    status_map={code: activity for code, activity in XIAOMI_CORE_OV21GL.status_map.items() if code not in (22, 23)},
+)
+
+XIAOMI_PV32CN = replace(
+    XIAOMI_OV21GL,
+    profile_id='xiaomi.pv32cn',
+    notes=("urn:miot-spec-v2:device:vacuum:0000A006:xiaomi-pv32cn:2",),
+    core=XIAOMI_CORE_PV32CN,
+    zone_sweep=ZoneSweepCapability(start=Action(2, 37, in_piid=12)),  # start-zone-sweep / zone-ids
+    consumables=None,
+)
+
 # xiaomi.vacuum.ov42gl (Xiaomi Robot Vacuum H50 Pro) — identical spec layout
 # to ov21gl. Unlike ov71gl/ov43gb (unverified aliases), this one is confirmed
 # against a real device's spec cache AND the public MIoT spec DB: every
