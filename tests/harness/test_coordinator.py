@@ -25,6 +25,7 @@ from custom_components.xiaomi_vac.const import (
     CONF_USER_ID,
     CONF_USERNAME,
     CONF_WIFI_SN,
+    MAP_IDLE_INTERVAL,
     MAP_SCAN_INTERVAL,
 )
 from custom_components.xiaomi_vac.cloud.connector import CloudUnreachable
@@ -1185,7 +1186,7 @@ async def test_map_interval_drops_to_30s_when_a_clean_starts_without_a_map_poll(
     hass: HomeAssistant,
 ) -> None:
     coord = _map_coord(hass)
-    assert coord.update_interval.total_seconds() == 300
+    assert coord.update_interval.total_seconds() == MAP_IDLE_INTERVAL
     on_control_update = coord._control.async_add_listener.call_args.args[0]
 
     coord._control.data = SimpleNamespace(activity="cleaning")
@@ -1544,6 +1545,8 @@ async def test_map_is_fetched_once_about_a_minute_after_the_vacuum_leaves_a_clea
     with (
         patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
         patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+        # Take the regular poll timer out so only the post-clean fetch is counted.
+        patch.object(coord, "_schedule_refresh"),
     ):
         _become("cleaning")
         _become("returning")
