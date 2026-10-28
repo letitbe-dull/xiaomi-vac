@@ -185,3 +185,14 @@ def test_status_maps_use_home_assistant_activities(model: str, profile) -> None:
 
     assert core.status_map, model
     assert set(core.status_map.values()) <= _ACTIVITIES
+
+
+@pytest.mark.parametrize(
+    ("model", "zone_sweep"),
+    [
+        ("xiaomi.vacuum.c102gl", None),
+        ("xiaomi.vacuum.c102cn", None),
+    ],
+)
+def test_c102_zone_clean_follows_its_spec(model: str, zone_sweep) -> None:
+    assert get_profile(model).zone_sweep == zone_sweep
