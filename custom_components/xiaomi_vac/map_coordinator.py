@@ -5,11 +5,12 @@ import asyncio
 import contextlib
 import logging
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .cloud.connector import CloudUnreachable, XiaomiCloud
@@ -67,6 +68,7 @@ _LIVE_RENDER_MIN_INTERVAL = 8.0
 _LIVE_FAST_MIN_INTERVAL = 1.0
 _MAP_REFRESH_POLL_SECONDS = 3.0
 _REFRESH_READY_ACTIVITIES = {"docked", "idle"}
+_POST_CLEAN_FETCH_DELAY = 60.0
 
 # Cloud upload slots tried every cycle for the active map (per map-reliability
 # Phase 0: divergence between them is real but not gated on any local state,
@@ -157,6 +159,8 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._last_fetch_monotonic: float = 0.0
         self._background_refresh_task: asyncio.Task | None = None
         self._last_on_demand_kick: float | None = None
+        self._was_active = False
+        self._cancel_post_clean: CALLBACK_TYPE | None = None
         # What the most recent cycle did; replaced at the start of every cycle.
         self.last_cycle: MapCycleRecord | None = None
         entry.async_on_unload(control.async_add_listener(self._on_control_update))
@@ -193,6 +197,30 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         self._tune_interval()
         if self.update_interval != before:
             self._schedule_refresh()
+        active = self._is_active()
+        if active:
+            self._cancel_post_clean_fetch()
+        elif self._was_active:
+            self._cancel_post_clean_fetch()
+            self._cancel_post_clean = async_call_later(
+                self.hass, _POST_CLEAN_FETCH_DELAY, self._async_post_clean_fetch
+            )
+        self._was_active = active
+
+    def _cancel_post_clean_fetch(self) -> None:
+        if self._cancel_post_clean is not None:
+            self._cancel_post_clean()
+            self._cancel_post_clean = None
+
+    async def _async_post_clean_fetch(self, _now: datetime) -> None:
+        """Fetch the finished map once, after the final upload has had time to land."""
+        self._cancel_post_clean = None
+        await self.async_refresh()
+
+    async def async_shutdown(self) -> None:
+        """Cancel the pending post-clean fetch, then shut down the coordinator."""
+        self._cancel_post_clean_fetch()
+        await super().async_shutdown()
 
     def set_idle_safety_net_seconds(self, seconds: float) -> None:
         """Change the docked/idle refresh interval and reschedule the pending poll."""

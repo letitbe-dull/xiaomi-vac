@@ -1515,3 +1515,55 @@ async def test_set_idle_safety_net_seconds_keeps_fast_poll_while_cleaning(
     assert coord.update_interval == timedelta(seconds=MAP_SCAN_INTERVAL)
     assert coord.idle_safety_net_seconds == 120
     schedule.assert_not_called()
+
+
+async def test_map_is_fetched_once_about_a_minute_after_the_vacuum_leaves_a_clean(
+    hass: HomeAssistant,
+) -> None:
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+    from homeassistant.util import dt as dt_util
+
+    coord = _map_coord(hass)
+    assert coord.idle_on_demand_refresh is False
+    fetcher = MagicMock()
+    fetcher.fetch.side_effect = lambda slot: _fake_result(map_id=7) if slot == "0" else None
+    coord._fetcher = fetcher
+    on_control_update = coord._control.async_add_listener.call_args.args[0]
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    def _become(activity: str) -> None:
+        coord._control.data = SimpleNamespace(activity=activity)
+        on_control_update()
+
+    async def _after(seconds: float) -> None:
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=seconds))
+        await hass.async_block_till_done()
+
+    with (
+        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=_FakeCache())),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        _become("cleaning")
+        _become("returning")
+        await asyncio.sleep(0)
+        await _after(600)
+        assert fetcher.fetch.call_count == 0  # active: no extra fetch
+
+        _become("docked")
+        await asyncio.sleep(0)
+        assert fetcher.fetch.call_count == 0  # not immediate
+
+        await _after(61)
+        assert fetcher.fetch.call_count == 2  # one cycle reads both slots
+
+        _become("docked")
+        _become("idle")
+        _become("docked")
+        await asyncio.sleep(0)
+        await _after(120)
+        await _after(600)
+        assert fetcher.fetch.call_count == 2  # repeated idle polls add nothing
+
+    await coord.async_shutdown()
