@@ -437,7 +437,7 @@ class XiaomiVacCard extends HTMLElement {
           box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transition:opacity .18s,transform .18s;
           pointer-events:none;white-space:nowrap;cursor:pointer;border:0}
         .zonetag.show{opacity:1;transform:translateX(-50%) translateY(-5px);pointer-events:auto}
-        .zonetag.show:not(.ready){opacity:.92;background:var(--xv-ink);color:var(--xv-card);cursor:default}
+        .zonetag.show:not(.ready){opacity:.92;background:#2b2f36;color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.22),0 6px 18px rgba(0,0,0,.25);cursor:default}
         .rm{cursor:pointer;transition:stroke-width .12s}
         /* a mouse click triggers :focus (not :focus-visible), so the UA default
            outline paints a near-black ring hugging the path — kill it on tap */
@@ -454,8 +454,8 @@ class XiaomiVacCard extends HTMLElement {
         .dots button:focus-visible{outline:2px solid var(--xv-accent);outline-offset:3px;border-radius:6px}
         /* transient pill: fan/water level feedback (uniform tray has no inline labels) */
         .toast{position:absolute;left:50%;bottom:108px;z-index:6;transform:translateX(-50%) translateY(4px);
-          background:var(--xv-ink);color:var(--xv-card);font-size:12px;font-weight:600;padding:7px 13px;border-radius:11px;
-          opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+          background:#2b2f36;color:#fff;font-size:12px;font-weight:600;padding:7px 13px;border-radius:11px;
+          opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;white-space:nowrap;box-shadow:0 0 0 1px rgba(255,255,255,.22),0 6px 18px rgba(0,0,0,.25)}
         .toast.show{opacity:.96;transform:translateX(-50%) translateY(-2px)}
         .roomtag{position:absolute;left:50%;bottom:108px;z-index:6;transform:translateX(-50%);
           background:var(--xv-accent);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:12px;
