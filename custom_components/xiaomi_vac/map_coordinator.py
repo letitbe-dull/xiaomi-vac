@@ -138,6 +138,9 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
         # The upload request sent since the last cycle began; the next cycle's record takes it.
         self._pending_upload_request: UploadRequest | None = None
         self._last_live_at: float | None = None
+        # Map ids whose slot-0 render has been served since the vacuum last
+        # docked; cleared whenever it is docked or idle.
+        self._slot0_served_ids: set[int] = set()
         self._refresh_map_lock = asyncio.Lock()
         self._pending_entry_updates: dict[str, str] = {}
         # MQTT live-map state: latest vacuum position from the map-frame
@@ -787,6 +790,14 @@ class XiaomiMapCoordinator(DataUpdateCoordinator[MapResult]):
             # this map id; both slots being None just means both were Key B this
             # cycle — normal, not an error, and handled by serving from cache.
             live = decoded[0] if decoded else None
+            status = self._control.data
+            if status is None or status.activity in _REFRESH_READY_ACTIVITIES:
+                self._slot0_served_ids.clear()
+            elif slot_results[0] is not None:
+                if active_id is not None:
+                    self._slot0_served_ids.add(active_id)
+            elif active_id in self._slot0_served_ids:
+                live = None
             if live is not None and active_id is not None:
                 live_at = time.time()
                 self._last_live_at = live_at

@@ -732,6 +732,53 @@ async def test_map_coordinator_serves_from_cache_when_both_slots_key_b(
     assert result.image_png == b"ground-floor-prior-render"
     assert result.attributes == {"rooms": 3}
     assert result.content_hash == "hash-prior"
+
+
+@pytest.mark.parametrize(
+    ("activity", "slot1_map_id", "expected_png"),
+    [
+        ("cleaning", 7, b"slot0-render"),
+        ("returning", 7, b"slot0-render"),
+        ("docked", 7, b"slot1-render"),
+        ("cleaning", 8, b"slot1-render"),
+    ],
+    ids=["cleaning-keeps-slot0", "returning-keeps-slot0", "docked-follows-slots", "new-map-id-follows-slots"],
+)
+async def test_slot1_only_cycle_keeps_last_slot0_render_mid_clean(
+    hass: HomeAssistant, activity: str, slot1_map_id: int, expected_png: bytes,
+) -> None:
+    """MH1: during a clean, a slot-1-only cycle keeps serving the last slot-0 map for that map id; docked or on a new map id the served map follows the slots."""
+    coord = _map_coord(hass)
+    slot0 = MapResult(
+        image_png=b"slot0-render", attributes={}, vector={"map_id": 7, "trail": "slot0"},
+        map_id=7, content_hash="hash-slot0",
+    )
+    slot1 = MapResult(
+        image_png=b"slot1-render", attributes={}, vector={"map_id": slot1_map_id, "trail": "slot1"},
+        map_id=slot1_map_id, content_hash="hash-slot1",
+    )
+    fetcher = MagicMock()
+    fetcher.fetch.side_effect = [slot0, None, None, slot1]  # cycle 1: slot 0 opens; cycle 2: only slot 1 opens
+    coord._fetcher = fetcher
+    fake_cache = _FakeCache()
+
+    async def _exec(fn, *a):
+        return fn(*a)
+
+    with (
+        patch.object(coord, "_ensure_cache", new=AsyncMock(return_value=fake_cache)),
+        patch.object(hass, "async_add_executor_job", new=AsyncMock(side_effect=_exec)),
+    ):
+        coord._control.data = SimpleNamespace(activity="cleaning")
+        await coord._async_update_data()
+        coord._control.data = SimpleNamespace(activity=activity)
+        result = await coord._async_update_data()
+
+    assert result.map_id == slot1_map_id
+    assert result.image_png == expected_png
+    assert result.vector["trail"] == expected_png.decode().removesuffix("-render")
+
+
 # ---------------------------------------------------------------------------
 # Map refresh movement action
 # ---------------------------------------------------------------------------
