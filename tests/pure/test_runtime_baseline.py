@@ -77,6 +77,14 @@ def test_viomi_v15_family_maps_volume_and_system_language():
         assert profile.voice.cur_voice == Prop(8, 4)
 
 
+def test_viomi_v15_family_maps_clean_way():
+    for model in ("v15", "v17", "v22", "v40"):
+        core = get_profile(f"viomi.vacuum.{model}").core
+        assert core.clean_way == Prop(4, 30)
+        assert core.clean_way_set == Prop(2, 11)
+        assert core.clean_ways == {"sweep": 0, "sweep_and_mop": 1, "mop": 2}
+
+
 def test_trimmed_dreame_layout_is_not_onboardable():
     profile = get_profile("dreame.vacuum.r2235a")
 
@@ -145,6 +153,15 @@ def test_device_clean_segments_uses_viomi_set_room_clean(monkeypatch):
     assert _FakeMiotDevice.instances[-1].calls == [
         ("action", 4, 13, [0, 1, "101,102"])
     ]
+
+
+def test_device_set_clean_way_writes_the_setter_prop(monkeypatch):
+    device_mod = _load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "viomi.vacuum.v22")
+
+    device.set_clean_way("sweep_and_mop")
+
+    assert _FakeMiotDevice.instances[-1].calls == [("set", 2, 11, 1)]
 
 
 def test_device_rejects_profiles_below_card_baseline(monkeypatch):

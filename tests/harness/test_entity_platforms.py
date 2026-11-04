@@ -91,6 +91,7 @@ def _make_coordinator(core_overrides: dict | None = None) -> MagicMock:
     core.water_levels = {"off": 0, "low": 1}
     core.modes = None              # no mode select
     core.sweep_types = None        # no sweep_type select
+    core.clean_ways = None         # no clean_way select
 
     if core_overrides:
         for k, v in core_overrides.items():
@@ -194,7 +195,8 @@ async def test_select_setup_creates_only_backed_selects(hass: HomeAssistant) -> 
 
 
 async def test_select_setup_creates_nothing_when_all_absent(hass: HomeAssistant) -> None:
-    overrides = {"fan_speeds": None, "water_levels": None, "modes": None, "sweep_types": None}
+    overrides = {"fan_speeds": None, "water_levels": None, "modes": None, "sweep_types": None,
+                 "clean_ways": None}
     coord = _make_coordinator(overrides)
     entry = _make_entry()
     entry.runtime_data.control = coord

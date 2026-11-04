@@ -44,8 +44,9 @@ _DEVIATIONS: dict[tuple[str, str | None], tuple[tuple[str, ...], str]] = {
     ("xiaomi.ov51gl", "consumables"): ((), "inherits ov21gl's hardware-confirmed block, same services in its spec (b9ad50a)"),
     ("xiaomi.ov51gl", "core"): (("water_levels",), "H40 offers levels 1-3 only in Xiaomi Home; writing 0 (Off) is ignored and reads back 1 (#88)"),
     ("viomi.v15", "core"): (
-        ("repeat", "volume"),
-        "repeat-state wired by a v22 owner (PR #63), volume is the 2/17 mute prop (PR #74), neither in the generator's table",
+        ("repeat", "volume", "clean_way", "clean_way_set", "clean_ways"),
+        "repeat-state wired by a v22 owner (PR #63), volume is the 2/17 mute prop (PR #74), "
+        "clean-way read 4/30 / written via 2/11 verified on a v22, none in the generator's table",
     ),
     ("viomi.v15", "settings"): (("language",), "cur-lang 4/31 wired by a v22 owner (PR #74), not in the generator's table"),
     ("xiaomi.pv21cn", "core"): (("status_map",), "status 25 SelfChecking and 26 Summoning mapped by hand, not in the generator's table"),
