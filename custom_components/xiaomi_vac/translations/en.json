@@ -390,6 +390,14 @@
       },
       "active_map": {
         "name": "Active map"
+      },
+      "clean_way": {
+        "name": "Clean way",
+        "state": {
+          "sweep": "Sweep",
+          "sweep_and_mop": "Sweep and mop",
+          "mop": "Mop"
+        }
       }
     },
     "switch": {

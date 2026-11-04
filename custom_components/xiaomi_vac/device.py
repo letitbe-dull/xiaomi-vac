@@ -83,6 +83,7 @@ class VacuumStatus:
     auto_mop_dry: bool | None = None
     language_raw: str | None = None
     voice_pack_raw: str | None = None
+    clean_way_raw: int | None = None
 
 
 class IjaiVacuumDevice:
@@ -190,7 +191,7 @@ class IjaiVacuumDevice:
         # profile.max_properties is set — e.g. IJAI_CORE_LEGACY devices).
         poll = [p for p in (
             c.status, c.battery, c.fault, c.fan_speed, c.water_level,
-            c.mode, c.sweep_type, c.repeat, c.alarm, c.volume,
+            c.mode, c.sweep_type, c.repeat, c.alarm, c.volume, c.clean_way,
             *life_props.values(), door_state, language_prop, cur_voice_prop,
             base.working_status if base is not None else None,
             base.drying_progress if base is not None else None,
@@ -218,6 +219,7 @@ class IjaiVacuumDevice:
             water_level_raw=_as_int(vals.get(c.water_level)),
             mode_raw=_as_int(vals.get(c.mode)),
             sweep_type_raw=_as_int(vals.get(c.sweep_type)),
+            clean_way_raw=_as_int(vals.get(c.clean_way)),
             repeat_raw=_as_int(vals.get(c.repeat)),
             alarm_raw=_as_int(vals.get(c.alarm)),
             volume_raw=_as_int(vals.get(c.volume)),
@@ -282,6 +284,9 @@ class IjaiVacuumDevice:
 
     def set_sweep_type(self, preset: str) -> None:
         self._set(self.core.sweep_type, self.core.sweep_types[preset])
+
+    def set_clean_way(self, preset: str) -> None:
+        self._set(self.core.clean_way_set, self.core.clean_ways[preset])
 
     def set_repeat(self, on: bool) -> None:
         self._set(self.core.repeat, 1 if on else 0)

@@ -35,6 +35,7 @@ SELECTS = (
     ("water_level", "water_levels", "water_level_raw", "set_water_level"),
     ("mode", "modes", "mode_raw", "set_mode"),
     ("sweep_type", "sweep_types", "sweep_type_raw", "set_sweep_type"),
+    ("clean_way", "clean_ways", "clean_way_raw", "set_clean_way"),
 )
 
 

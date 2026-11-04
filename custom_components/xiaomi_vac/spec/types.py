@@ -391,6 +391,8 @@ class CoreCapability:
     repeat: Prop | None = None
     alarm: Prop | None = None
     volume: Prop | None = None
+    clean_way: Prop | None = None        # current sweep / sweep+mop / mop (read)
+    clean_way_set: Prop | None = None    # prop written to change clean_way
     # actions
     start: Action | None = None
     stop: Action | None = None
@@ -403,6 +405,7 @@ class CoreCapability:
     water_levels: dict[str, int] = field(default_factory=dict)
     modes: dict[str, int] = field(default_factory=dict)
     sweep_types: dict[str, int] = field(default_factory=dict)
+    clean_ways: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
