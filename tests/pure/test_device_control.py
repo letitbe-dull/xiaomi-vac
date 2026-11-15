@@ -174,6 +174,30 @@ def test_r2211o_room_clean_uses_start_custom_selects(monkeypatch):
     ]
 
 
+def test_c102gl_room_clean_uses_start_custom_selects(monkeypatch):
+    """Dreame-built like r2211o: 2/3 no-ops with map ids, start-custom cleans (PR #110)."""
+    device_mod = load_device_module(monkeypatch)
+    device = device_mod.IjaiVacuumDevice("host", "token", "xiaomi.vacuum.c102gl")
+
+    device.clean_segments([8])
+
+    assert _last_calls() == [
+        (
+            "send",
+            "action",
+            {
+                "did": "call-4-1",
+                "siid": 4,
+                "aiid": 1,
+                "in": [
+                    {"piid": 1, "value": 18},
+                    {"piid": 10, "value": '{"selects":[[8,1,1,1,1]]}'},
+                ],
+            },
+        )
+    ]
+
+
 @pytest.mark.parametrize(
     "model",
     ["ijai.vacuum.v17", "ijai.vacuum.v18", "ijai.vacuum.v19", "xiaomi.vacuum.d106gl"],
