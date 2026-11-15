@@ -172,6 +172,25 @@ map attributes).
 
 Zone cleaning is available for `ijai.vacuum.v17`, `ijai.vacuum.v18`, and `ijai.vacuum.v19`, which share the same command set, and for `xiaomi.vacuum.c107`, `d101`, `d102ev`, `d102gl`, `d109gl`, `e101gb`, `ov21cn`, `ov21gl`, `ov43gb`, `ov51gl`, `ov71gl`, `pv21cn`, and `pv32cn`, which share another. It was tested on an ijai v19 and a `xiaomi.vacuum.d102gl`, and an `ov21gl` owner confirmed the same command cleans a drawn zone on theirs. On the ijai models, zones several metres from the dock were also confirmed on a Xiaomi Robot Vacuum S10. A Xiaomi S20 (`xiaomi.vacuum.d106gl`) owner confirmed it too. The S20 refuses zones smaller than about 0.7 m. The other models are expected to behave the same but are unconfirmed, so please open an issue if yours doesn't. The bundled card shows a draw tool for those models on the map page unless `allow_zone_cleaning: false`: tap it, drag a rectangle, then tap **Clean this area**.
 
+### `xiaomi_vac.clean_point`
+
+Starts point cleaning on the Xiaomi Robot Vacuum T12 (`xiaomi.vacuum.b106bk`).
+Pass a quoted `x,y` string in metres using the active map's coordinate system.
+With a Mi Account session, the action tries Xiaomi's cloud first and falls back
+to local MIoT if the cloud call fails. With local-token setup, it uses local
+MIoT directly.
+
+```yaml
+action: xiaomi_vac.clean_point
+target:
+  entity_id: vacuum.xiaomi_robot_vacuum_t12
+data:
+  point: "-1.5,2.2"
+```
+
+For a timed stop, follow this action with a delay and `vacuum.stop` in a
+Home Assistant script.
+
 ## Supported models
 
 These are the [87 models](SUPPORTED-MODELS.md) onboardable today. If yours misbehaves or is missing, please open an issue with the exact model string and what did or did not work.
