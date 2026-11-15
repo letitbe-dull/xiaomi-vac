@@ -108,6 +108,24 @@ _XIAOMI_JSON_MAP_PROFILES = frozenset({
 })
 
 
+# Xiaomi-branded models built by Dreame: their MIoT siid 6 is the Dreame map
+# service (object-name "<uid>/<did>/<n>,<enckey>"), so the blob is a Dreame
+# map (AES-CBC, key sha256(enckey), then zlib) and the ijai key never matches.
+# c102gl is hardware-confirmed: the ijai fallback failed every cycle with
+# "Data must be aligned to block boundary in ECB mode"; routed to the dreame
+# parser the live map renders rooms, path, no-go zones and the robot.
+_DREAME_MAP_PROFILES = frozenset({
+    "xiaomi.c102cn",  # c102gl confirmed
+})
+
+# Per-model IVs vacuum_map_parser_dreame does not know about, from Tasshack's
+# dreame-vacuum DEVICE_INFO (same IV for c102cn and c102gl).
+_DREAME_EXTRA_IVS = {
+    "xiaomi.vacuum.c102cn": "OFULk9To37qRdXY3",
+    "xiaomi.vacuum.c102gl": "OFULk9To37qRdXY3",
+}
+
+
 def map_url_endpoint(key: str) -> str:
     """Cloud endpoint path segment for fetching a map blob.
 
@@ -126,6 +144,8 @@ def parser_key(profile) -> str:
     module standalone without pulling in `spec.types.ModelProfile`.
     """
     if profile.brand == "xiaomi":
+        if profile.profile_id in _DREAME_MAP_PROFILES:
+            return "dreame"
         return "xiaomi" if profile.profile_id in _XIAOMI_JSON_MAP_PROFILES else "ijai"
     return profile.brand
 
@@ -291,6 +311,8 @@ def make_parser(brand: str, model: str, palette, sizes, drawables, image_config,
         return XiaomiMapDataParser(palette, sizes, drawables, image_config, texts)
     if brand == "dreame":
         from vacuum_map_parser_dreame.map_data_parser import DreameMapDataParser
+        for extra_model, iv in _DREAME_EXTRA_IVS.items():
+            DreameMapDataParser.IVs.setdefault(extra_model, iv)
         # dreame needs the model to select its per-model decryption IV.
         return DreameMapDataParser(palette, sizes, drawables, image_config, texts, model)
     if brand == "viomi":

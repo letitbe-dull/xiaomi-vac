@@ -409,6 +409,7 @@ def _profile(brand: str, profile_id: str):
         ("xiaomi", "xiaomi.ov71gl", "xiaomi"),
         ("xiaomi", "xiaomi.ov81gl", "xiaomi"),
         ("dreame", "dreame.p2008", "dreame"),
+        ("xiaomi", "xiaomi.c102cn", "dreame"),
         ("viomi", "viomi.v12", "viomi"),
         ("roidmi", "roidmi.s10", "roidmi"),
     ],
@@ -457,6 +458,22 @@ def test_d109gl_family_routes_to_xiaomi_json_parser(model):
     profile = get_profile(model)
     assert profile is not None
     assert map_parsers.parser_key(profile) == "xiaomi"
+
+@pytest.mark.parametrize("model", ["xiaomi.vacuum.c102cn", "xiaomi.vacuum.c102gl"])
+def test_dreame_built_xiaomi_routes_to_dreame_parser_with_its_iv(model):
+    from spec.registry import get_profile
+    from vacuum_map_parser_base.config.color import ColorsPalette
+    from vacuum_map_parser_base.config.image_config import ImageConfig
+    from vacuum_map_parser_base.config.size import Sizes
+    from vacuum_map_parser_dreame.map_data_parser import DreameMapDataParser
+
+    key = map_parsers.parser_key(get_profile(model))
+    assert key == "dreame"
+    parser = map_parsers.make_parser(
+        key, model, ColorsPalette(), Sizes(), [], ImageConfig(), [])
+    assert type(parser).__name__ == "DreameMapDataParser"
+    assert DreameMapDataParser.IVs[model] == "OFULk9To37qRdXY3"
+
 
 def test_has_ijai_grid_only_ijai():
     assert map_parsers.has_ijai_grid("ijai") is True
