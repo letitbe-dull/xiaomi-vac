@@ -701,6 +701,12 @@ XIAOMI_C102CN = ModelProfile(
     room_clean=RoomCleanCapability(
         room_ids=Prop(2, 4),
         start=Action(2, 3, in_piid=4),
+        # Dreame-built like dreame.r2211o: 2/3 ACKs but ignores map room ids;
+        # start-custom (4/1) with the selects JSON on 4/10 cleans. Verified on
+        # a c102gl (PR #110).
+        start_custom=Action(4, 1, in_piids=(1, 10), named_inputs=True),
+        start_custom_status=Prop(4, 1),
+        start_custom_props=Prop(4, 10),
     ),
 )
 
