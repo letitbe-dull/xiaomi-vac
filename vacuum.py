@@ -1,0 +1,406 @@
+"""Vacuum entity for Xiaomi (ijai-family) vacuums."""
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import voluptuous as vol
+from homeassistant.components.vacuum import (
+    StateVacuumEntity,
+    VacuumActivity,
+    VacuumEntityFeature,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv, entity_platform
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from . import XiaomiConfigEntry
+from .cloud.connector import XiaomiCloud
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_PASS_TOKEN,
+    CONF_SERVER,
+    CONF_SERVICE_TOKEN,
+    CONF_SSECURITY,
+    CONF_USER_ID,
+    CONF_USERNAME,
+    DOMAIN,
+)
+from .coordinator import XiaomiVacuumCoordinator
+from .device import IjaiVacuumDevice
+from .spec.types import Action, MapCapability
+
+# Serialise commands to the device (one MIoT write at a time).
+PARALLEL_UPDATES = 1
+
+_LOGGER = logging.getLogger(__name__)
+
+_ACTIVITY = {
+    "cleaning": VacuumActivity.CLEANING,
+    "paused": VacuumActivity.PAUSED,
+    "idle": VacuumActivity.IDLE,
+    "returning": VacuumActivity.RETURNING,
+    "docked": VacuumActivity.DOCKED,
+    "error": VacuumActivity.ERROR,
+}
+
+_BASE_SUPPORT = (
+    VacuumEntityFeature.START
+    | VacuumEntityFeature.PAUSE
+    | VacuumEntityFeature.STOP
+    | VacuumEntityFeature.STATE
+)
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: XiaomiConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    coordinator = entry.runtime_data.control
+    async_add_entities([XiaomiVacuum(coordinator, entry)])
+
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "clean_segment",
+        {vol.Required("segments"): vol.All(cv.ensure_list, [vol.Coerce(int)])},
+        "async_clean_segment",
+    )
+    platform.async_register_entity_service(
+        "clean_zone",
+        {vol.Required("zone"): vol.All(
+            cv.ensure_list, [vol.Coerce(float)], vol.Length(min=4, max=4)
+        )},
+        "async_clean_zone",
+    )
+    platform.async_register_entity_service(
+        "clean_point",
+        {
+            vol.Required("point"): vol.All(
+                cv.string,
+                vol.Match(r"[+-]?[0-9]+(?:\.[0-9]+)?,[+-]?[0-9]+(?:\.[0-9]+)?\Z"),
+            )
+        },
+        "async_clean_point",
+    )
+    platform.async_register_entity_service(
+        "refresh_map",
+        {vol.Required("confirm_movement"): vol.All(cv.boolean, vol.Equal(True))},
+        "async_refresh_map",
+    )
+
+
+class XiaomiVacuum(CoordinatorEntity[XiaomiVacuumCoordinator], StateVacuumEntity):
+    _attr_has_entity_name = True
+    _attr_name = None
+
+    def __init__(self, coordinator: XiaomiVacuumCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._device = coordinator.device
+        core = self._device.core
+        support = _BASE_SUPPORT
+        if core.charge is not None:
+            support |= VacuumEntityFeature.RETURN_HOME
+        if core.locate is not None or core.alarm is not None:
+            support |= VacuumEntityFeature.LOCATE
+        self._attr_supported_features = support
+        base = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{base}_vacuum"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, base)},
+            manufacturer="Xiaomi",
+            model=self._device.model,
+            name=entry.title,
+        )
+
+    @property
+    def activity(self) -> VacuumActivity:
+        return _ACTIVITY.get(self.coordinator.data.activity, VacuumActivity.IDLE)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"fault": self.coordinator.data.fault, "model": self._device.model}
+
+    async def async_start(self) -> None:
+        await self.hass.async_add_executor_job(self._device.start)
+        await self.coordinator.async_request_refresh()
+
+    async def async_stop(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self._device.stop)
+        await self.coordinator.async_request_refresh()
+
+    async def async_return_to_base(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self._device.return_home)
+        await self.coordinator.async_request_refresh()
+
+    async def async_refresh_map(self, confirm_movement: bool) -> None:
+        data = self._entry.runtime_data
+        if data.map is None:
+            raise HomeAssistantError("Refresh map requires a cloud map session")
+        await data.map.async_refresh_map_with_movement(
+            confirm_movement=confirm_movement,
+            use_mqtt=data.mqtt is not None,
+        )
+
+    async def async_pause(self) -> None:
+        await self.hass.async_add_executor_job(self._device.pause)
+        await self.coordinator.async_request_refresh()
+
+    async def async_locate(self, **kwargs) -> None:
+        await self.hass.async_add_executor_job(self._device.locate)
+
+    async def async_clean_segment(self, segments: list[int]) -> None:
+        """Clean one or more rooms by their map room id (tap-to-clean)."""
+        data = self._entry.data
+        if _has_cloud_session(data):
+            # ijai proven, xiaomi inferred, viomi/dreame/roidmi best-effort-unverified — plan v1.2.2
+            try:
+                await self.hass.async_add_executor_job(
+                    _cloud_clean_segments, data, self._device, segments
+                )
+                _LOGGER.debug("%s: room-clean served via cloud", self._device.model)
+                await self.coordinator.async_request_refresh()
+                return
+            except Exception as cloud_err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "%s: cloud room-clean failed, falling back to local (may no-op on ijai): %s",
+                    self._device.model,
+                    cloud_err,
+                )
+        # Local fallback — also used when no cloud session is configured.
+        try:
+            await self.hass.async_add_executor_job(self._device.clean_segments, segments)
+            _LOGGER.debug("%s: room-clean served via local", self._device.model)
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(f"Room cleaning failed: {err}") from err
+        await self.coordinator.async_request_refresh()
+
+    async def async_clean_point(self, point: str) -> None:
+        """Start the T12's point-cleaning action at x,y."""
+        action = self._device.point_clean_action()
+        if action is None:
+            raise HomeAssistantError(
+                f"{self._device.model} does not support point cleaning"
+            )
+
+        data = self._entry.data
+        if _has_cloud_session(data):
+            try:
+                await self.hass.async_add_executor_job(
+                    _cloud_clean_point, data, action, point
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug(
+                    "%s: cloud point cleaning failed, trying local control: %s",
+                    self._device.model,
+                    err,
+                )
+            else:
+                await self.coordinator.async_request_refresh()
+                return
+
+        try:
+            response = await self.hass.async_add_executor_job(
+                self._device.clean_point, point
+            )
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(f"Point cleaning failed: {err}") from err
+        if not response or not _cloud_action_ok({"result": response}):
+            raise HomeAssistantError("The vacuum rejected the point-cleaning action")
+        await self.coordinator.async_request_refresh()
+
+    async def async_clean_zone(self, zone: list[float]) -> None:
+        """Clean a rectangular zone in map coordinates."""
+        if self._device.zone_clean_action() is None:
+            raise HomeAssistantError(
+                f"{self._device.model} has no verified zone-clean capability"
+            )
+        x0, y0, x1, y1 = (float(value) for value in zone)
+        data = self._entry.data
+        if _has_cloud_session(data):
+            try:
+                await self.hass.async_add_executor_job(
+                    _cloud_clean_zone, data, self._device, x0, y0, x1, y1
+                )
+                _LOGGER.debug("%s: zone-clean served via cloud", self._device.model)
+                await self.coordinator.async_request_refresh()
+                return
+            except Exception as cloud_err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "%s: cloud zone-clean failed, falling back to local: %s",
+                    self._device.model,
+                    cloud_err,
+                )
+        try:
+            await self.hass.async_add_executor_job(
+                self._device.clean_zone, x0, y0, x1, y1
+            )
+            _LOGGER.debug("%s: zone-clean served via local", self._device.model)
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(f"Zone cleaning failed: {err}") from err
+        await self.coordinator.async_request_refresh()
+
+
+def _has_cloud_session(data: dict) -> bool:
+    return all(
+        data.get(k)
+        for k in (
+            CONF_USERNAME, CONF_USER_ID, CONF_SSECURITY,
+            CONF_SERVICE_TOKEN, CONF_SERVER, CONF_DEVICE_ID,
+        )
+    )
+
+
+def _cloud_action_ok(response: object) -> bool:
+    if not isinstance(response, dict):
+        return False
+    if response.get("code", 0) != 0:
+        return False
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("code", 0) != 0:
+        return False
+    if isinstance(result, list):
+        return all(not isinstance(item, dict) or item.get("code", 0) == 0 for item in result)
+    return True
+
+
+def _cloud_clean_segments(data: dict, device: IjaiVacuumDevice, segments: list[int]) -> None:
+    required = (
+        data.get(CONF_USERNAME),
+        data.get(CONF_USER_ID),
+        data.get(CONF_SSECURITY),
+        data.get(CONF_SERVICE_TOKEN),
+        data.get(CONF_SERVER),
+        data.get(CONF_DEVICE_ID),
+    )
+    if not all(required):
+        raise ValueError("Room cleaning cloud fallback requires a Xiaomi cloud session")
+
+    # Same preference order as device.clean_segments: set-room-clean takes
+    # map room ids; start-custom honours map ids on models (r2211o) whose
+    # 2/3 start-room-sweep ACKs but silently ignores them; plain 2/3 is the
+    # last resort. start-custom must go through cloud_rpc_action —
+    # /miotspec/action rejects its structured in-params with -704220043.
+    attempts: list[tuple[str, Any, list]] = []
+    preferred = device.room_clean_set_params(segments)
+    if preferred is not None:
+        attempts.append(("spec", preferred[0], preferred[1]))
+    custom = device.room_clean_custom_params(segments)
+    if custom is not None:
+        attempts.append(("rpc", custom[0], custom[1]))
+    fallback = device.room_clean_start_params(segments)
+    if fallback is not None:
+        attempts.append(("spec", fallback[0], fallback[1]))
+    if not attempts:
+        raise ValueError(f"{device.model} has no supported room-clean action")
+
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    for transport, action, params in attempts:
+        if transport == "rpc":
+            # v2/home/rpc expects named {piid, value} inputs (the working
+            # shape — ordered values get -704220043).
+            in_params = (
+                [{"piid": piid, "value": value} for piid, value in zip(action.in_piids, params)]
+                if action.named_inputs and action.in_piids
+                else list(params)
+            )
+            response = cloud.cloud_rpc_action(
+                str(data[CONF_SERVER]),
+                str(data[CONF_DEVICE_ID]),
+                action.siid,
+                action.aiid,
+                in_params,
+            )
+        else:
+            response = cloud.cloud_action(
+                str(data[CONF_SERVER]),
+                str(data[CONF_DEVICE_ID]),
+                action.siid,
+                action.aiid,
+                params,
+            )
+        if _cloud_action_ok(response):
+            return
+    raise ValueError("Xiaomi cloud rejected every room-clean action")
+
+
+def _cloud_clean_point(data: dict, action: Action, point: str) -> None:
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    response = cloud.cloud_action(
+        str(data[CONF_SERVER]),
+        str(data[CONF_DEVICE_ID]),
+        action.siid,
+        action.aiid,
+        [{"piid": action.in_piid, "value": point}],
+    )
+    if not _cloud_action_ok(response) or not response.get("result"):
+        raise ValueError("Xiaomi cloud rejected the point-cleaning action")
+
+
+def _cloud_clean_zone(
+    data: dict, device: IjaiVacuumDevice,
+    x0: float, y0: float, x1: float, y1: float,
+) -> None:
+    action = device.zone_clean_action()
+    params = device.zone_clean_params(x0, y0, x1, y1)
+    if action is None or params is None:
+        raise ValueError(f"{device.model} has no supported zone-clean action")
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    server, did = str(data[CONF_SERVER]), str(data[CONF_DEVICE_ID])
+    response = cloud.cloud_action(server, did, action.siid, action.aiid, params)
+    if not _cloud_action_ok(response):
+        raise ValueError(f"Xiaomi cloud rejected zone-clean: {response}")
+    start = device.zone_clean_start_action()
+    if start is None and device.profile.zone_sweep is not None:
+        return
+    if start is None:
+        raise ValueError(f"{device.model} has no supported start-zone-clean action")
+    response = cloud.cloud_action(server, did, start.siid, start.aiid, [])
+    if not _cloud_action_ok(response):
+        raise ValueError(f"Xiaomi cloud rejected start-zone-clean: {response}")
+
+
+def _cloud_set_current_map(data: dict, device: IjaiVacuumDevice, map_id: int) -> None:
+    # ijai proven, xiaomi inferred, viomi/dreame/roidmi best-effort-unverified — plan v1.2.2
+    cap = device.profile.map
+    if not isinstance(cap, MapCapability):
+        raise ValueError(f"{device.model} has no cloud-mappable map capability")
+    action = cap.set_current_map
+    if action is None:
+        raise ValueError(f"{device.model} has no set-current-map action")
+    cloud = XiaomiCloud(str(data[CONF_USERNAME]))
+    cloud.restore_session(
+        data[CONF_USER_ID],
+        data[CONF_SSECURITY],
+        data[CONF_SERVICE_TOKEN],
+        data.get(CONF_PASS_TOKEN),
+    )
+    response = cloud.cloud_action(
+        str(data[CONF_SERVER]),
+        str(data[CONF_DEVICE_ID]),
+        action.siid,
+        action.aiid,
+        [int(map_id)],
+    )
+    if not _cloud_action_ok(response):
+        raise ValueError(f"Xiaomi cloud rejected map-switch: {response}")

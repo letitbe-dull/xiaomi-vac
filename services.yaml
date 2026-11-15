@@ -1,0 +1,64 @@
+clean_segment:
+  name: Clean room(s)
+  description: Start cleaning one or more rooms by their map room id.
+  target:
+    entity:
+      domain: vacuum
+      integration: xiaomi_vac
+  fields:
+    segments:
+      name: Rooms
+      description: List of room ids to clean (from the map camera's "rooms" attribute).
+      required: true
+      example: "[11, 12]"
+      selector:
+        object:
+
+clean_zone:
+  name: Clean area (zone)
+  description: Start cleaning a rectangular area. Coordinates are in the map's
+    metre space — the same space the map camera/vector endpoint uses.
+  target:
+    entity:
+      domain: vacuum
+      integration: xiaomi_vac
+  fields:
+    zone:
+      name: Zone
+      description: The rectangle as [x0, y0, x1, y1] in metres.
+      required: true
+      example: "[-1.5, 2.2, -0.4, 3.1]"
+      selector:
+        object:
+
+clean_point:
+  name: Clean at a point (T12)
+  description: Start point cleaning on a Xiaomi Robot Vacuum T12 at map coordinates in metres.
+  target:
+    entity:
+      domain: vacuum
+      integration: xiaomi_vac
+  fields:
+    point:
+      name: Coordinates
+      description: Two decimal coordinates separated by a comma, in x,y order.
+      required: true
+      example: "-1.5,2.2"
+      selector:
+        text:
+
+refresh_map:
+  name: Refresh map
+  description: Briefly starts the vacuum so it leaves the dock and uploads a fresh map, then sends it back to dock.
+  target:
+    entity:
+      domain: vacuum
+      integration: xiaomi_vac
+  fields:
+    confirm_movement:
+      name: Confirm movement
+      description: Must be true. The vacuum will briefly leave the dock and return.
+      required: true
+      example: true
+      selector:
+        boolean:
