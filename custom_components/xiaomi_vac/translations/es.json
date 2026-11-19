@@ -34,7 +34,7 @@
       },
       "twofa": {
         "title": "Ingrese el código",
-        "description": "Xiaomi le acaba de enviar un código por correo electrónico. Ingresarlo a continuación.",
+        "description": "Xiaomi le acaba de enviar un código por correo electrónico. Ingréselo a continuación.",
         "data": {
           "code": "Código de verificación"
         }
@@ -45,6 +45,41 @@
         "data": {
           "device": "Aspiradora"
         }
+      },
+      "miot_oauth": {
+        "title": "Activar la autorización del mapa en tiempo real",
+        "description": "Opcional. Prepara el mapa en directo por MQTT. Omita este paso para mantener el mapa actual, que se actualiza mediante consultas periódicas.",
+        "data": {
+          "enable_miot_oauth": "Activar OAuth para actualizar el mapa en tiempo real"
+        }
+      },
+      "miot_oauth_method": {
+        "title": "Vincular OAuth de Xiaomi",
+        "description": "Cuando apruebe el acceso, Xiaomi enviará su navegador a homeassistant.local:8123. Elija cómo terminar.",
+        "menu_options": {
+          "miot_oauth_auth": "Vincular automáticamente (este dispositivo puede abrir homeassistant.local:8123)",
+          "miot_oauth_code": "Pegar el código"
+        }
+      },
+      "miot_oauth_auth": {
+        "title": "Vincular OAuth de Xiaomi",
+        "description": "Abra el enlace de OAuth de Xiaomi. Home Assistant continuará automáticamente cuando Xiaomi le redirija de vuelta.",
+        "data": {}
+      },
+      "miot_oauth_code": {
+        "title": "Pegar el código OAuth de Xiaomi",
+        "description": "Abra este enlace y apruebe el acceso. Después, Xiaomi le enviará a homeassistant.local:8123. No pasa nada si esa página no carga. Copie la dirección completa de la barra de direcciones y péguela aquí.\n\n{authorize_url}",
+        "data": {
+          "code": "Código OAuth"
+        }
+      },
+      "miot_oauth_finish": {
+        "title": "OAuth de Xiaomi vinculado",
+        "description": "La autorización del mapa en tiempo real está lista."
+      },
+      "reconfigure": {
+        "title": "Actualizar desde la nube de Xiaomi",
+        "description": "Busca de nuevo esta aspiradora en su cuenta de Xiaomi y actualiza su dirección IP, token y región. Úselo si la aspiradora dejó de responder tras un cambio de IP o tras volver a emparejarla en Mi Home. No se cambia nada más."
       },
       "reauth_confirm": {
         "title": "Inicie sesión en Xiaomi nuevamente",
@@ -57,14 +92,86 @@
     },
     "error": {
       "unsupported_model": "Este modelo aún no es compatible.",
-      "cannot_connect": "No se pudo comunicar con la aspiradora en esa IP con ese token."
+      "cannot_connect": "No se pudo comunicar con la aspiradora en esa IP con ese token.",
+      "invalid_auth": "Correo electrónico/teléfono o contraseña incorrectos. Si está seguro de que son correctos, inicie sesión una vez en account.xiaomi.com para superar cualquier comprobación de seguridad y vuelva a intentarlo.",
+      "oauth_failed": "La autorización OAuth de Xiaomi ha fallado. Vuelva a probar el enlace o pegue el código manualmente.",
+      "oauth_region_failed": "No se pudo determinar la región de OAuth de Xiaomi a partir de ese código."
+    },
+    "progress": {
+      "miot_oauth_auth": "Abra [OAuth de Xiaomi]({authorize_url}) en una pestaña nueva. Tras la aprobación, Xiaomi debería volver a Home Assistant y este paso continuará automáticamente."
     },
     "abort": {
       "already_configured": "Esta aspiradora ya está configurada.",
       "reauth_successful": "Ha iniciado sesión de nuevo. El mapa en directo ha sido restaurado.",
-      "login_failed": "Xiaomi rechazó eso ({reason}). Verifique su correo electrónico y contraseña, luego intente de nuevo.",
+      "reconfigure_successful": "Listo. La dirección IP, el token y la región de la aspiradora ya coinciden con su cuenta de Xiaomi.",
+      "reconfigure_device_not_found": "Esta aspiradora no está en su cuenta de Xiaomi, así que no se ha cambiado nada.",
+      "reconfigure_reauth_required": "Su sesión de Xiaomi ha caducado y no se pudo renovar automáticamente. Vuelva a autenticar esta integración e inténtelo de nuevo. No se ha cambiado nada.",
+      "reconfigure_local_only": "Esta aspiradora se agregó solo con una dirección IP y un token, así que no hay ninguna cuenta de Xiaomi desde la que actualizarla. No se ha cambiado nada.",
+      "login_failed": "No se pudo iniciar sesión en la nube de Xiaomi ({reason}). Verifique su correo electrónico y contraseña, luego intente de nuevo.",
+      "no_server_response": "No se pudo contactar con ningún servidor de Xiaomi. Verifique su conexión a Internet y vuelva a intentarlo en unos minutos.",
       "no_devices": "No hay aspiradoras compatibles en esta cuenta.",
-      "unsupported_model": "Este modelo aún no es compatible ({model})."
+      "unsupported_model": "Se ha encontrado {model}, que aún no es compatible. Abra una solicitud de modelo en la página de GitHub de la integración e incluya ese nombre de modelo."
+    }
+  },
+  "options": {
+    "step": {
+      "miot_oauth_method": {
+        "title": "Vincular OAuth de Xiaomi",
+        "description": "Cuando apruebe el acceso, Xiaomi enviará su navegador a homeassistant.local:8123. Elija cómo terminar.",
+        "menu_options": {
+          "miot_oauth_auth": "Vincular automáticamente (este dispositivo puede abrir homeassistant.local:8123)",
+          "miot_oauth_code": "Pegar el código"
+        }
+      },
+      "miot_oauth_auth": {
+        "title": "Vincular OAuth de Xiaomi",
+        "description": "Abra el enlace de OAuth de Xiaomi. Home Assistant continuará automáticamente cuando Xiaomi le redirija de vuelta.",
+        "data": {}
+      },
+      "miot_oauth_code": {
+        "title": "Pegar el código OAuth de Xiaomi",
+        "description": "Abra este enlace y apruebe el acceso. Después, Xiaomi le enviará a homeassistant.local:8123. No pasa nada si esa página no carga. Copie la dirección completa de la barra de direcciones y péguela aquí.\n\n{authorize_url}",
+        "data": {
+          "code": "Código OAuth"
+        }
+      },
+      "miot_oauth_finish": {
+        "title": "OAuth de Xiaomi vinculado",
+        "description": "La autorización del mapa en tiempo real está lista."
+      }
+    },
+    "error": {
+      "oauth_failed": "La autorización OAuth de Xiaomi ha fallado. Vuelva a probar el enlace o pegue el código manualmente.",
+      "oauth_region_failed": "No se pudo determinar la región de OAuth de Xiaomi a partir de ese código."
+    },
+    "progress": {
+      "miot_oauth_auth": "Abra [OAuth de Xiaomi]({authorize_url}) en una pestaña nueva. Tras la aprobación, Xiaomi debería volver a Home Assistant y este paso continuará automáticamente."
+    },
+    "abort": {
+      "oauth_local_only": "Esta aspiradora se agregó solo en modo local, así que no tiene ninguna sesión en la nube de Xiaomi a la que vincular OAuth."
+    }
+  },
+  "issues": {
+    "oauth_missing": {
+      "title": "Active el mapa en directo en tiempo real",
+      "fix_flow": {
+        "step": {
+          "link": {
+            "title": "Vincular OAuth de Xiaomi",
+            "description": "Su aspiradora funciona, pero el mapa se actualiza lentamente. Vincule OAuth de Xiaomi para obtener el mapa en directo en tiempo real (MQTT). Abra este enlace y apruebe el acceso. Después, Xiaomi le enviará a homeassistant.local:8123. No pasa nada si esa página no carga. Copie la dirección completa de la barra de direcciones y péguela aquí.\n\n{authorize_url}",
+            "data": {
+              "code": "Código OAuth"
+            }
+          }
+        },
+        "error": {
+          "oauth_failed": "La autorización OAuth de Xiaomi ha fallado. Vuelva a abrir el enlace y pegue el código nuevo.",
+          "oauth_region_failed": "No se pudo determinar la región de OAuth de Xiaomi a partir de ese código."
+        },
+        "abort": {
+          "entry_gone": "Esa aspiradora ya no está configurada."
+        }
+      }
     }
   },
   "entity": {
@@ -85,8 +192,43 @@
           "error": "Error"
         }
       },
+      "base_station_status": {
+        "name": "Estado de la estación base",
+        "state": {
+          "idle": "En reposo",
+          "drying": "Secando las mopas",
+          "washing_mops": "Lavando las mopas",
+          "dust_collection": "Recogiendo el polvo",
+          "unknown": "Desconocido"
+        }
+      },
+      "sewage_tank_status": {
+        "name": "Depósito de agua sucia",
+        "state": {
+          "not_full": "No lleno",
+          "full": "Lleno",
+          "unknown": "Desconocido"
+        }
+      },
+      "water_tank_status": {
+        "name": "Depósito de agua limpia",
+        "state": {
+          "not_empty": "No vacío",
+          "empty": "Vacío",
+          "unknown": "Desconocido"
+        }
+      },
       "battery": {
         "name": "Batería"
+      },
+      "door_state": {
+        "name": "Depósito de polvo/agua",
+        "state": {
+          "none": "Ninguno",
+          "dust_box": "Depósito de polvo",
+          "water_box": "Depósito de agua",
+          "two_in_one": "Dos en uno"
+        }
       },
       "clean_area": {
         "name": "Área limpiada"
@@ -105,9 +247,35 @@
       },
       "mop_life": {
         "name": "Vida útil de la mopa"
+      },
+      "dust_bag_life": {
+        "name": "Vida útil de la bolsa de polvo"
+      },
+      "detergent_life": {
+        "name": "Detergente restante"
+      },
+      "drying_progress": {
+        "name": "Progreso del secado de mopas"
+      },
+      "dry_left_time": {
+        "name": "Tiempo restante de secado de mopas"
+      },
+      "voice_pack": {
+        "name": "Paquete de voz"
       }
     },
     "select": {
+      "system_language": {
+        "name": "Idioma del sistema"
+      },
+      "drying_time": {
+        "name": "Duración del secado de mopas",
+        "state": {
+          "2_hours": "2 horas",
+          "3_hours": "3 horas",
+          "4_hours": "4 horas"
+        }
+      },
       "fan_speed": {
         "name": "Velocidad del ventilador",
         "state": {
@@ -130,7 +298,7 @@
           "1": "Ahorro de energía",
           "2": "Estándar",
           "3": "Potente",
-          "close": "Cerrar",
+          "close": "Apagado",
           "one": "Uno",
           "two": "Dos",
           "three": "Tres",
@@ -150,7 +318,7 @@
           "medium": "Medio",
           "high": "Alto",
           "middle": "Medio",
-          "height": "Altura",
+          "height": "Alto",
           "mid": "Medio",
           "1": "1",
           "2": "2",
@@ -158,7 +326,7 @@
           "gear_1": "Velocidad 1",
           "gear_2": "Velocidad 2",
           "gear_3": "Velocidad 3",
-          "close": "Cerrar",
+          "close": "Apagado",
           "one": "Uno",
           "two": "Dos",
           "three": "Tres",
@@ -230,11 +398,31 @@
       },
       "alarm": {
         "name": "Encontrar aspiradora (bip)"
+      },
+      "auto_mop_dry": {
+        "name": "Secado automático de mopas"
+      },
+      "mop_drying": {
+        "name": "Secar mopas"
+      },
+      "map_idle_on_demand_refresh": {
+        "name": "Actualizar el mapa al verlo en reposo"
+      }
+    },
+    "button": {
+      "wash_mops": {
+        "name": "Lavar mopas"
+      },
+      "empty_dust_bin": {
+        "name": "Vaciar depósito de polvo"
       }
     },
     "number": {
       "volume": {
         "name": "Volumen"
+      },
+      "map_idle_safety_net": {
+        "name": "Intervalo de actualización del mapa en reposo"
       }
     }
   },
@@ -246,6 +434,16 @@
         "segments": {
           "name": "Salas",
           "description": "Lista de IDs de sala a limpiar (del atributo \"rooms\" de la cámara del mapa)."
+        }
+      }
+    },
+    "refresh_map": {
+      "name": "Actualizar mapa",
+      "description": "Pone en marcha la aspiradora brevemente para que salga de la estación y suba un mapa nuevo; después, la envía de vuelta a la estación.",
+      "fields": {
+        "confirm_movement": {
+          "name": "Confirmar movimiento",
+          "description": "Debe ser verdadero. La aspiradora saldrá brevemente de la estación y volverá."
         }
       }
     }
